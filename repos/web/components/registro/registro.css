@@ -219,6 +219,7 @@
 .registro .auth-link-btn { margin-top: 16px; display: inline-block; color: var(--r-ink); font-size: 13px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; border: 0; background: transparent; cursor: pointer; }
 .registro .auth-switch-method { margin-top: 16px; text-align: center; color: var(--r-muted); font-size: 13px; }
 .registro .auth-switch-method button { padding: 0; margin-left: 4px; color: var(--r-ink); font-size: 13px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; border: 0; background: transparent; cursor: pointer; }
+.registro .auth-mobile-alternate { display: none; }
 
 @media (max-width: 1080px) {
   .registro .onboarding-layout { grid-template-columns: 230px minmax(460px,1fr); }
@@ -232,6 +233,8 @@
   .registro .auth-form-panel { padding: 36px 20px 50px; }
   .registro .auth-form h1 { font-size: 34px; }
   .registro .auth-story { display: none; }
+  .registro .auth-mobile-alternate { margin-top: 20px; display: block; color: var(--r-muted); text-align: center; font-size: 13px; }
+  .registro .auth-mobile-alternate a { color: var(--r-ink); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
   .registro .onboarding-progress-mobile { position: sticky; z-index: 19; top: 64px; height: 3px; display: block; background: var(--r-line); }
   .registro .onboarding-progress-mobile span { height: 100%; display: block; background: var(--r-ink); transition: width .25s; }
   .registro .onboarding-layout { min-height: calc(100vh - 67px); display: block; }

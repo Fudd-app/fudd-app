@@ -8,13 +8,17 @@ import UpgradeModal from "./UpgradeModal";
 function QRCanvas({ token, mesaNumero }: { token: string; mesaNumero: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [publicUrl, setPublicUrl] = useState('');
+  const [usaOrigenLocal, setUsaOrigenLocal] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
     if (!canvasRef.current) return;
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const url = `${origin}/mesa/${token}`;
+    const configuredOrigin = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, '');
+    const origin = configuredOrigin || window.location.origin;
+    const url = new URL(`/mesa/${encodeURIComponent(token)}`, `${origin}/`).toString();
     setPublicUrl(url);
+    const hostname = new URL(url).hostname;
+    setUsaOrigenLocal(hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1');
     QRCode.toCanvas(canvasRef.current, url, { width: 180, margin: 1 });
   }, [token]);
 
@@ -43,20 +47,28 @@ function QRCanvas({ token, mesaNumero }: { token: string; mesaNumero: number }) 
         <canvas ref={canvasRef} className="h-auto w-full max-w-[180px] rounded-lg bg-white" />
       </div>
       {publicUrl && (
-        <div className="flex h-40 w-full items-center gap-8 rounded-lg border border-ghost-fog bg-[#F7F8F8] px-10">
-          <span className="min-w-0 flex-1 truncate text-10 font-mono text-sage-green" title={publicUrl}>
-            {publicUrl}
-          </span>
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="flex h-32 w-32 shrink-0 items-center justify-center rounded-md text-sage-green transition-colors hover:bg-canvas-white hover:text-ash-graphite"
-            aria-label={`Copiar enlace de Mesa ${mesaNumero}`}
-            title="Copiar enlace"
-          >
-            <span className="material-symbols-outlined text-16">content_copy</span>
-          </button>
-        </div>
+        <>
+          <div className="flex h-40 w-full items-center gap-8 rounded-lg border border-ghost-fog bg-[#F7F8F8] px-10">
+            <span className="min-w-0 flex-1 truncate text-10 font-mono text-sage-green" title={publicUrl}>
+              {publicUrl}
+            </span>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="flex h-32 w-32 shrink-0 items-center justify-center rounded-md text-sage-green transition-colors hover:bg-canvas-white hover:text-ash-graphite"
+              aria-label={`Copiar enlace de Mesa ${mesaNumero}`}
+              title="Copiar enlace"
+            >
+              <span className="material-symbols-outlined text-16">content_copy</span>
+            </button>
+          </div>
+          {usaOrigenLocal && (
+            <p className="flex items-start gap-6 rounded-lg border border-amber-300 bg-amber-50 px-10 py-8 text-10 leading-relaxed text-amber-800">
+              <span className="material-symbols-outlined mt-0.5 text-14">warning</span>
+              Este QR usa localhost y no se abrirá desde otro celular. Configurá NEXT_PUBLIC_APP_URL con la URL de red o pública.
+            </p>
+          )}
+        </>
       )}
       <div className="grid grid-cols-2 gap-8">
         <a

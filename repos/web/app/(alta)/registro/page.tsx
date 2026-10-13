@@ -217,6 +217,9 @@ export default function RegistroPage() {
             <small className="auth-terms">
               Al continuar, aceptás nuestros <Link href="/terminos">Términos de uso</Link> y la <Link href="/privacidad">Política de privacidad</Link>.
             </small>
+            <p className="auth-mobile-alternate">
+              ¿Ya tenés una cuenta? <Link href="/login">Ingresar</Link>
+            </p>
           </div>
         </section>
 

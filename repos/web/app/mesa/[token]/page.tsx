@@ -795,7 +795,7 @@ export default function MesaPage() {
 
   // 6. Acciones del comensal
   const handleGuardarComensal = (nombre: string) => {
-    if (!mesa || state.cuentaSolicitada) return;
+    if (!mesa) return;
     const identidad = comensal
       ? { ...comensal, nombre: nombre.trim(), cuentaVersion: mesa.cuenta_version }
       : createComensalIdentity(nombre, mesa.cuenta_version);
@@ -806,7 +806,7 @@ export default function MesaPage() {
   };
 
   const handleContinuarSinAlias = () => {
-    if (!mesa || state.cuentaSolicitada) return;
+    if (!mesa) return;
     const identidad = createComensalIdentity("", mesa.cuenta_version);
     saveComensalIdentity(identidad, mesa.id);
     setComensal(identidad);

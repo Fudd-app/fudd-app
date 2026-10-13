@@ -262,6 +262,9 @@ export default function LoginPage() {
               Mesa CLICK nunca te pedirá la contraseña de tu cuenta de Google. Al ingresar aceptás los{" "}
               <Link href="/terminos">Términos de uso</Link> y la <Link href="/privacidad">Política de privacidad</Link>.
             </small>
+            <p className="auth-mobile-alternate">
+              ¿No tenés cuenta? <Link href="/registro">Registrar mi negocio</Link>
+            </p>
           </div>
         </section>
 
