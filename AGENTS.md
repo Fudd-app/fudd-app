@@ -14,7 +14,7 @@ Estas reglas aplican a cualquier agente de IA (Claude, Gemini, CLI, etc.) que tr
    - `docs/flows/happy-path-cliente.md` — flujo del cliente / comensal
 
 3. **Consultar el Status Report más reciente** para ver bloqueantes o decisiones pendientes:
-   - `docs/presentations/parte-2/status-report-20261005.html`
+   - `docs/presentations/parte-2/status-report-20261019.html`
 
 > No implementar nada que no esté cubierto por una US del sprint en curso. Si hay dudas, preguntar antes de avanzar.
 
