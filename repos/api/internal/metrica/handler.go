@@ -24,10 +24,18 @@ func (h *Handlers) Resumen(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := r.URL.Query()
+	sucursalID := strings.TrimSpace(query.Get("sucursal_id"))
+	if claims.Rol != auth.RolDuenio {
+		if sucursalID != "" && sucursalID != claims.SucursalID {
+			jsonError(w, "sucursal fuera de alcance", http.StatusForbidden)
+			return
+		}
+		sucursalID = claims.SucursalID
+	}
 	resumen, err := h.svc.ObtenerResumen(
 		r.Context(),
 		claims.TenantID,
-		strings.TrimSpace(query.Get("sucursal_id")),
+		sucursalID,
 		strings.TrimSpace(query.Get("desde")),
 		strings.TrimSpace(query.Get("hasta")),
 	)

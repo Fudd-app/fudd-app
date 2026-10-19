@@ -43,22 +43,50 @@ type Tenant struct {
 	CreatedAt           time.Time      `json:"created_at"`
 }
 
+// TenantOperativo contiene únicamente la identidad necesaria para presentar
+// el panel al staff. Excluye datos fiscales, plan, facturación y credenciales.
+type TenantOperativo struct {
+	ID               string  `json:"id"`
+	Nombre           string  `json:"nombre"`
+	NombreFantasia   string  `json:"nombre_fantasia,omitempty"`
+	Rubro            string  `json:"rubro"`
+	LogoURL          *string `json:"logo_url,omitempty"`
+	ColorPrimario    *string `json:"color_primario,omitempty"`
+	EstiloVisual     *string `json:"estilo_visual,omitempty"`
+	MostrarMarcaAgua bool    `json:"mostrar_marca_agua"`
+	ColorSecundario  *string `json:"color_secundario,omitempty"`
+	ColorCategoria   *string `json:"color_categoria,omitempty"`
+	ColorAccion      *string `json:"color_accion,omitempty"`
+	TipoFuente       *string `json:"tipo_fuente,omitempty"`
+	Slug             string  `json:"slug"`
+}
+
+func (t *Tenant) VistaOperativa() TenantOperativo {
+	return TenantOperativo{
+		ID: t.ID, Nombre: t.Nombre, NombreFantasia: t.NombreFantasia, Rubro: t.Rubro,
+		LogoURL: t.LogoURL, ColorPrimario: t.ColorPrimario, EstiloVisual: t.EstiloVisual,
+		MostrarMarcaAgua: t.MostrarMarcaAgua, ColorSecundario: t.ColorSecundario,
+		ColorCategoria: t.ColorCategoria, ColorAccion: t.ColorAccion, TipoFuente: t.TipoFuente,
+		Slug: t.Slug,
+	}
+}
+
 type OnboardingInput struct {
-	Nombre         string         `json:"nombre"`
-	NombreFantasia string         `json:"nombre_fantasia"`
-	Rubro          string         `json:"rubro"`
-	Slug           string         `json:"slug"`
-	EmailAdmin     string         `json:"email_admin"`
-	NombreAdmin    string         `json:"nombre_admin"`
-	Password       string         `json:"password"`
-	PasswordHash   string         `json:"-"`
+	Nombre         string `json:"nombre"`
+	NombreFantasia string `json:"nombre_fantasia"`
+	Rubro          string `json:"rubro"`
+	Slug           string `json:"slug"`
+	EmailAdmin     string `json:"email_admin"`
+	NombreAdmin    string `json:"nombre_admin"`
+	Password       string `json:"password"`
+	PasswordHash   string `json:"-"`
 	// Alternativa a Password: registro con la cuenta de Google del admin.
-	GoogleCredential string `json:"google_credential"`
-	GoogleSub        string `json:"-"`
-	SucursalNombre string         `json:"sucursal_nombre"`
-	Whatsapp       string         `json:"whatsapp"`
-	EmailSucursal  string         `json:"email_sucursal"`
-	Horarios       map[string]any `json:"horarios"`
+	GoogleCredential string         `json:"google_credential"`
+	GoogleSub        string         `json:"-"`
+	SucursalNombre   string         `json:"sucursal_nombre"`
+	Whatsapp         string         `json:"whatsapp"`
+	EmailSucursal    string         `json:"email_sucursal"`
+	Horarios         map[string]any `json:"horarios"`
 }
 
 type ActualizarTenantInput struct {

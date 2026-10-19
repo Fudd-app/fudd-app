@@ -15,8 +15,6 @@ export function getApiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 }
 
-const TOKEN_STORAGE_KEY = 'mc_token';
-
 export class ApiError extends Error {
   status: number;
   data: unknown;
@@ -139,23 +137,10 @@ function parseJsonField(value: unknown) {
   }
 }
 
-export function obtenerToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem(TOKEN_STORAGE_KEY);
-}
-
-export function guardarSesion(token: string) {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(TOKEN_STORAGE_KEY, token);
-}
-
-export function cerrarSesion() {
-  if (typeof window === 'undefined') return;
-  localStorage.removeItem(TOKEN_STORAGE_KEY);
-}
-
-export function estaAutenticado(): boolean {
-  return !!obtenerToken();
+// La sesión vive únicamente en la cookie HttpOnly emitida por la API. El
+// frontend nunca lee ni persiste el JWT.
+export async function cerrarSesion(): Promise<void> {
+  await apiFetch<void>('/auth/logout', { method: 'POST' });
 }
 
 async function apiFetch<T>(
@@ -169,11 +154,6 @@ async function apiFetch<T>(
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
-
-  const token = obtenerToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -395,12 +375,40 @@ export interface UsuarioAPI {
   id: string;
   tenant_id: string;
   sucursal_id?: string;
+	 sucursal_nombre?: string;
   nombre: string;
   email: string;
   rol: 'admin' | 'encargado' | 'mozo' | 'cocina';
-  activo: boolean;
+	estado: 'activo' | 'bloqueado';
   created_at: string;
   updated_at: string;
+}
+
+export interface SesionUsuario {
+  id: string;
+  tenant_id: string;
+  email: string;
+  nombre: string;
+  rol: 'admin' | 'encargado' | 'mozo' | 'cocina';
+  sucursal_id?: string | null;
+}
+
+export interface InvitacionEquipoAPI {
+  id: string;
+  negocio: string;
+  slug: string;
+  sucursal_id: string;
+  sucursal: string;
+  email: string;
+  rol: 'encargado' | 'mozo' | 'cocina';
+  estado: 'pendiente' | 'cancelada' | 'usada' | 'reemplazada';
+  expires_at: string;
+  created_at: string;
+}
+
+export interface EquipoAPI {
+  usuarios: UsuarioAPI[];
+  invitaciones: InvitacionEquipoAPI[];
 }
 
 export interface MesaPublica {
@@ -511,6 +519,9 @@ export interface PedidoAPI {
   sucursal_id: string;
   cuenta_version: number;
   estado: 'recibido' | 'preparando' | 'listo' | 'cerrado';
+	origen?: 'comensal' | 'mozo';
+	creado_por_usuario_id?: string;
+	creado_por_nombre?: string;
   items?: PedidoItemAPI[];
   created_at: string;
   updated_at: string;
@@ -600,34 +611,31 @@ export const api = {
   },
 
   autenticarConPassword: async (email: string, password: string) => {
-    const res = await apiFetch<{ token: string }>('/auth/password', {
+		return apiFetch<{ usuario: SesionUsuario }>('/auth/password', {
       method: 'POST',
       body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
     });
-    if (res.token) {
-      guardarSesion(res.token);
-    }
-    return res;
   },
 
   autenticarConGoogle: async (credential: string) => {
-    const res = await apiFetch<{ token: string }>('/auth/google', {
+		return apiFetch<{ usuario: SesionUsuario }>('/auth/google', {
       method: 'POST',
       body: JSON.stringify({ credential }),
     });
-    if (res.token) {
-      guardarSesion(res.token);
-    }
-    return res;
   },
 
+	 autenticarEquipoConGoogle: async (slug: string, credential: string) => {
+		 return apiFetch<{ usuario: SesionUsuario }>(`/auth/negocios/${encodeURIComponent(slug)}/google`, {
+			 method: 'POST',
+			 body: JSON.stringify({ credential }),
+		 });
+	 },
+
   verificarToken: async (token: string) => {
-    const res = await apiFetch<{ token: string }>(`/auth/verify?token=${encodeURIComponent(token)}`);
-    if (res.token) {
-      guardarSesion(res.token);
-    }
-    return res;
+		return apiFetch<{ usuario: SesionUsuario }>(`/auth/verify?token=${encodeURIComponent(token)}`);
   },
+
+	 obtenerSesion: async () => apiFetch<SesionUsuario>('/auth/me'),
 
   // 2. Tenant / Onboarding (US-39)
   crearTenant: async (data: OnboardingInput) => {
@@ -902,16 +910,15 @@ export const api = {
 
   // 6. Equipo / Usuarios (US-40)
   listarUsuarios: async () => {
-    return apiFetch<UsuarioAPI[]>('/usuarios');
+		return apiFetch<EquipoAPI>('/usuarios');
   },
 
   invitarUsuario: async (data: {
-    nombre: string;
     email: string;
-    rol: 'admin' | 'encargado' | 'mozo' | 'cocina';
+		rol: 'encargado' | 'mozo' | 'cocina';
     sucursal_id?: string;
   }) => {
-    return apiFetch<{ usuario: UsuarioAPI; magic_link?: string; url_invitacion?: string }>('/usuarios', {
+		return apiFetch<{ invitacion: InvitacionEquipoAPI; invitacion_link: string; email_enviado: boolean; advertencia_email?: string }>('/usuarios', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -923,12 +930,20 @@ export const api = {
     });
   },
 
-  actualizarUsuario: async (id: string, data: { nombre?: string; rol?: 'admin' | 'encargado' | 'mozo' | 'cocina' }) => {
+	actualizarUsuario: async (id: string, data: { nombre?: string; estado?: 'activo' | 'bloqueado' }) => {
     return apiFetch<UsuarioAPI>(`/usuarios/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
   },
+
+	cancelarInvitacion: async (id: string) => apiFetch<void>(`/usuarios/invitaciones/${id}`, { method: 'DELETE' }),
+	reenviarInvitacion: async (id: string) => apiFetch<{ invitacion: InvitacionEquipoAPI; invitacion_link: string; email_enviado: boolean; advertencia_email?: string }>(`/usuarios/invitaciones/${id}/reenviar`, { method: 'POST' }),
+	obtenerInvitacion: async (token: string) => apiFetch<InvitacionEquipoAPI>(`/publica/invitaciones/${encodeURIComponent(token)}`),
+	aceptarInvitacion: async (token: string, credential: string, nombre: string) => apiFetch<{ usuario: SesionUsuario }>(`/publica/invitaciones/${encodeURIComponent(token)}/aceptar`, {
+		method: 'POST',
+		body: JSON.stringify({ credential, nombre }),
+	}),
 
   // 7. Flujo Público Comensal (US-42, US-43, US-44)
   obtenerMesaPorQR: async (qrToken: string) => {
@@ -951,6 +966,11 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+
+	crearPedidoAsistido: async (data: { mesa_id: string; alias_cliente?: string; items: NuevoPedidoInput['items'] }) => apiFetch<PedidoAPI>('/pedidos/asistido', {
+		method: 'POST',
+		body: JSON.stringify(data),
+	}),
 
   listarPedidosMesa: async (qrToken: string) => {
     return apiFetch<PedidoAPI[]>(`/publica/mesas/${encodeURIComponent(qrToken)}/pedidos`);
@@ -988,15 +1008,11 @@ export const api = {
   },
 
   obtenerEventosSucursalUrl: (sucursalId: string) => {
-    const token = obtenerToken();
-    const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
-    return `${getApiBaseUrl()}/sucursales/${encodeURIComponent(sucursalId)}/eventos${tokenQuery}`;
+		return `${getApiBaseUrl()}/sucursales/${encodeURIComponent(sucursalId)}/eventos`;
   },
 
   obtenerEventosKDSUrl: (sucursalId: string) => {
-    const token = obtenerToken();
-    const tokenQuery = token ? `&token=${encodeURIComponent(token)}` : '';
-    return `${getApiBaseUrl()}/kds/eventos?sucursal_id=${encodeURIComponent(sucursalId)}${tokenQuery}`;
+		return `${getApiBaseUrl()}/kds/eventos?sucursal_id=${encodeURIComponent(sucursalId)}`;
   },
 
   // 9. Métricas y KPIs (US-72 / US-73)
@@ -1015,9 +1031,7 @@ export const api = {
     formData.append('archivo', archivo);
 
     const baseUrl = getApiBaseUrl();
-    const token = obtenerToken();
     const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
 
     const res = await fetch(`${baseUrl}/carta/importar`, {
       method: 'POST',

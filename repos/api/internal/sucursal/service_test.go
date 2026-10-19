@@ -16,7 +16,7 @@ type mockStore struct {
 	eliminarFn       func(ctx context.Context, id string, tenantID string) error
 	crearSectorFn    func(ctx context.Context, sucursalID string, tenantID string, input sucursal.SectorInput) (*sucursal.Sector, error)
 	listarSectoresFn func(ctx context.Context, sucursalID string, tenantID string) ([]sucursal.Sector, error)
-	eliminarSectorFn func(ctx context.Context, id string, tenantID string) error
+	eliminarSectorFn func(ctx context.Context, id, tenantID, sucursalAlcance string) error
 }
 
 func (m *mockStore) Crear(ctx context.Context, tenantID string, input sucursal.SucursalInput) (*sucursal.Sucursal, error) {
@@ -40,8 +40,8 @@ func (m *mockStore) CrearSector(ctx context.Context, sucursalID string, tenantID
 func (m *mockStore) ListarSectores(ctx context.Context, sucursalID string, tenantID string) ([]sucursal.Sector, error) {
 	return m.listarSectoresFn(ctx, sucursalID, tenantID)
 }
-func (m *mockStore) EliminarSector(ctx context.Context, id string, tenantID string) error {
-	return m.eliminarSectorFn(ctx, id, tenantID)
+func (m *mockStore) EliminarSector(ctx context.Context, id, tenantID, sucursalAlcance string) error {
+	return m.eliminarSectorFn(ctx, id, tenantID, sucursalAlcance)
 }
 
 func TestCrearSucursal_Exitoso(t *testing.T) {

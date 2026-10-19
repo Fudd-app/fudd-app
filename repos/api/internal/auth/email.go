@@ -21,11 +21,29 @@ type EmailSender interface {
 	EnviarMagicLink(ctx context.Context, email, link string) error
 }
 
+type invitationEmailSender interface {
+	EnviarInvitacion(ctx context.Context, email, link string) error
+}
+
+// EnviarInvitacion usa una plantilla específica cuando el proveedor la
+// soporta. El fallback mantiene compatibilidad con emisores de pruebas.
+func EnviarInvitacion(ctx context.Context, sender EmailSender, email, link string) error {
+	if especializado, ok := sender.(invitationEmailSender); ok {
+		return especializado.EnviarInvitacion(ctx, email, link)
+	}
+	return sender.EnviarMagicLink(ctx, email, link)
+}
+
 // LogEmailSender solo loguea el link para desarrollo local.
 type LogEmailSender struct{}
 
 func (s *LogEmailSender) EnviarMagicLink(ctx context.Context, email, link string) error {
 	slog.InfoContext(ctx, "Enviando magic link por LOG (Desarrollo)", "email", email, "link", link)
+	return nil
+}
+
+func (s *LogEmailSender) EnviarInvitacion(ctx context.Context, email, link string) error {
+	slog.InfoContext(ctx, "Enviando invitación por LOG (Desarrollo)", "email", email, "link", link)
 	return nil
 }
 
@@ -45,14 +63,24 @@ func NuevoBrevoEmailSender(apiKey, senderName, senderEmail string) *BrevoEmailSe
 }
 
 func (s *BrevoEmailSender) EnviarMagicLink(ctx context.Context, toEmail, link string) error {
+	return s.enviar(ctx, toEmail, "Tu enlace de acceso a Mesa CLICK",
+		fmt.Sprintf("<p>Hola,</p><p>Hacé clic en el siguiente enlace para ingresar a tu cuenta de Mesa CLICK. Expira en 15 minutos:</p><p><a href=\"%s\">Ingresar a Mesa CLICK</a></p><p>Si no solicitaste este enlace, podés ignorar este correo.</p>", link))
+}
+
+func (s *BrevoEmailSender) EnviarInvitacion(ctx context.Context, toEmail, link string) error {
+	return s.enviar(ctx, toEmail, "Te invitaron al equipo de Mesa CLICK",
+		fmt.Sprintf("<p>Hola,</p><p>Te invitaron a formar parte de un equipo en Mesa CLICK.</p><p><a href=\"%s\">Aceptar invitación con Google</a></p><p>El enlace vence en 48 horas y puede usarse una sola vez. Debés continuar con la misma dirección de email que recibió esta invitación.</p>", link))
+}
+
+func (s *BrevoEmailSender) enviar(ctx context.Context, toEmail, subject, htmlContent string) error {
 	body := map[string]any{
 		"sender": map[string]string{
 			"name":  s.senderName,
 			"email": s.senderEmail,
 		},
 		"to":          []map[string]string{{"email": toEmail}},
-		"subject":     "Tu enlace de acceso a Mesa CLICK",
-		"htmlContent": fmt.Sprintf("<p>Hola,</p><p>Hacé clic en el siguiente enlace para ingresar a tu cuenta de Mesa CLICK. Expira en 15 minutos:</p><p><a href=\"%s\">Ingresar a Mesa CLICK</a></p><p>Si no solicitaste este enlace, podés ignorar este correo.</p>", link),
+		"subject":     subject,
+		"htmlContent": htmlContent,
 	}
 
 	jsonBody, err := json.Marshal(body)
@@ -135,12 +163,12 @@ func (s *SMTPEmailSender) EnviarMagicLink(ctx context.Context, toEmail, link str
 <body>
   <div class="card">
     <div class="logo">🍽️ Mesa CLICK</div>
-    <h2 style="font-size: 18px; margin: 0 0 12px 0;">Iniciar sesión en Mesa CLICK</h2>
+    <h2 style="font-size: 18px; margin: 0 0 12px 0;">Acceder a Mesa CLICK</h2>
     <p style="font-size: 14px; line-height: 1.5; color: #283a2e;">
-      Hacé clic en el siguiente botón para acceder directamente a tu panel de control. Este enlace es de un solo uso y expira en 15 minutos:
+      Hacé clic en el siguiente botón para continuar. Este enlace es personal y de un solo uso:
     </p>
     <div style="text-align: center;">
-      <a href="%s" class="btn">Ingresar al panel</a>
+      <a href="%s" class="btn">Continuar en Mesa CLICK</a>
     </div>
     <p class="footer">
       O copiá y pegá este enlace en tu navegador:<br>
@@ -205,6 +233,12 @@ func (s *SMTPEmailSender) EnviarMagicLink(ctx context.Context, toEmail, link str
 	return nil
 }
 
+// SMTP conserva el mismo transporte y plantilla HTML; el texto del enlace
+// sigue siendo válido para aceptar la invitación y el backend impone las 48 h.
+func (s *SMTPEmailSender) EnviarInvitacion(ctx context.Context, toEmail, link string) error {
+	return s.EnviarMagicLink(ctx, toEmail, link)
+}
+
 // conectar abre la sesión SMTP con timeout explícito. Sin esto, un puerto
 // filtrado por el firewall o el proveedor deja el request colgado hasta el
 // timeout del sistema operativo (~21s en Windows) en lugar de fallar rápido.
@@ -260,12 +294,22 @@ func NuevoResendEmailSender(apiKey, fromEmail string) *ResendEmailSender {
 }
 
 func (s *ResendEmailSender) EnviarMagicLink(ctx context.Context, toEmail, link string) error {
+	return s.enviar(ctx, toEmail, "Tu acceso a Mesa CLICK",
+		fmt.Sprintf("<p>Hola,</p><p>Haz clic en el siguiente enlace para ingresar a tu cuenta de Mesa CLICK (expira en 15 minutos):</p><p><a href='%s'>Ingresar a Mesa CLICK</a></p><p>Si no solicitaste este enlace, puedes ignorar este correo.</p>", link))
+}
+
+func (s *ResendEmailSender) EnviarInvitacion(ctx context.Context, toEmail, link string) error {
+	return s.enviar(ctx, toEmail, "Te invitaron al equipo de Mesa CLICK",
+		fmt.Sprintf("<p>Hola,</p><p>Te invitaron a formar parte de un equipo en Mesa CLICK.</p><p><a href='%s'>Aceptar invitación con Google</a></p><p>El enlace vence en 48 horas y puede usarse una sola vez. Debes continuar con la misma dirección de email que recibió esta invitación.</p>", link))
+}
+
+func (s *ResendEmailSender) enviar(ctx context.Context, toEmail, subject, htmlContent string) error {
 	url := "https://api.resend.com/emails"
 	body := map[string]any{
 		"from":    s.fromEmail,
 		"to":      []string{toEmail},
-		"subject": "Tu acceso a Mesa CLICK",
-		"html":    fmt.Sprintf("<p>Hola,</p><p>Haz clic en el siguiente enlace para ingresar a tu cuenta de Mesa CLICK (expira en 15 minutos):</p><p><a href='%s'>Ingresar a Mesa CLICK</a></p><p>Si no solicitaste este enlace, puedes ignorar este correo.</p>", link),
+		"subject": subject,
+		"html":    htmlContent,
 	}
 
 	jsonBody, err := json.Marshal(body)

@@ -205,7 +205,7 @@ func TestIntegracion_FlujoCompletoPedido(t *testing.T) {
 
 	// F.1 CAMBIAR ESTADOS POR ÍTEM (Simula la interacción del KDS)
 	t.Log("Cambiando el primer item a 'preparando'...")
-	updatedPedido, err := pedidoSvc.CambiarEstadoItem(ctx, createdPedido.Items[0].ID, createdTenant.ID, "preparando")
+	updatedPedido, err := pedidoSvc.CambiarEstadoItem(ctx, createdPedido.Items[0].ID, createdTenant.ID, "", "preparando")
 	if err != nil {
 		t.Fatalf("error actualizando estado del primer item: %v", err)
 	}
@@ -214,7 +214,7 @@ func TestIntegracion_FlujoCompletoPedido(t *testing.T) {
 	}
 
 	t.Log("Marcando el primer item como 'listo'...")
-	updatedPedido, err = pedidoSvc.CambiarEstadoItem(ctx, createdPedido.Items[0].ID, createdTenant.ID, "listo")
+	updatedPedido, err = pedidoSvc.CambiarEstadoItem(ctx, createdPedido.Items[0].ID, createdTenant.ID, "", "listo")
 	if err != nil {
 		t.Fatalf("error marcando listo el primer item: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestIntegracion_FlujoCompletoPedido(t *testing.T) {
 	}
 
 	t.Log("Marcando el segundo item como 'listo'...")
-	updatedPedido, err = pedidoSvc.CambiarEstadoItem(ctx, createdPedido.Items[1].ID, createdTenant.ID, "listo")
+	updatedPedido, err = pedidoSvc.CambiarEstadoItem(ctx, createdPedido.Items[1].ID, createdTenant.ID, "", "listo")
 	if err != nil {
 		t.Fatalf("error marcando listo el segundo item: %v", err)
 	}

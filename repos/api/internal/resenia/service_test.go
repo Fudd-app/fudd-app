@@ -268,4 +268,3 @@ func TestObtenerResumen_Validaciones(t *testing.T) {
 		t.Errorf("esperaba ErrValidation para fecha inválida, obtuve: %v", err)
 	}
 }
-

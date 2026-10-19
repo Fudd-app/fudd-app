@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/notificacion"
 )
 
@@ -66,6 +67,7 @@ func TestHandlers_EventosSucursal_SSEConnect(t *testing.T) {
 	req.SetPathValue("sucursal_id", "123")
 
 	ctx, cancel := context.WithCancel(req.Context())
+	ctx = auth.ContextConClaims(ctx, &auth.Claims{UsuarioID: "u-1", TenantID: "t-1", Rol: auth.RolEncargado, SucursalID: "123"})
 	req = req.WithContext(ctx)
 
 	// Usar httptest.NewRecorder que implementa http.Flusher de forma simulada en algunas versiones de go,

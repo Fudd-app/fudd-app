@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/notificacion"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/pedido"
 )
@@ -26,10 +27,10 @@ func (m *mockStore) ListarActivos(ctx context.Context, sucursalID, tenantID stri
 func (m *mockStore) ListarCuentaActualPorQR(ctx context.Context, qrToken string) ([]pedido.Pedido, error) {
 	return []pedido.Pedido{}, nil
 }
-func (m *mockStore) CambiarEstado(ctx context.Context, id, tenantID, nuevoEstado string) (*pedido.Pedido, error) {
+func (m *mockStore) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado string) (*pedido.Pedido, error) {
 	return &pedido.Pedido{ID: id, Estado: nuevoEstado}, nil
 }
-func (m *mockStore) CambiarEstadoItem(ctx context.Context, itemID, tenantID, nuevoEstado string) (*pedido.Pedido, error) {
+func (m *mockStore) CambiarEstadoItem(ctx context.Context, itemID, tenantID, sucursalAlcance, nuevoEstado string) (*pedido.Pedido, error) {
 	m.estadoItemRecibido = nuevoEstado
 	if m.pedidoTrasCambioDeItem != nil {
 		return m.pedidoTrasCambioDeItem, nil
@@ -153,7 +154,7 @@ func TestCrear_DosComensalesMismoNombre_ConservaIDsDistintos(t *testing.T) {
 
 func TestCambiarEstado_EstadoInvalido(t *testing.T) {
 	svc := pedido.NuevoService(&mockStore{})
-	_, err := svc.CambiarEstado(context.Background(), "p-1", "tenant-1", "invalido")
+	_, err := svc.CambiarEstado(context.Background(), "p-1", "tenant-1", "", "invalido")
 	if err == nil {
 		t.Fatal("esperaba error por estado inválido")
 	}
@@ -162,7 +163,7 @@ func TestCambiarEstado_EstadoInvalido(t *testing.T) {
 func TestCambiarEstado_EstadosValidos(t *testing.T) {
 	svc := pedido.NuevoService(&mockStore{})
 	for _, estado := range pedido.EstadosValidos {
-		_, err := svc.CambiarEstado(context.Background(), "p-1", "tenant-1", estado)
+		_, err := svc.CambiarEstado(context.Background(), "p-1", "tenant-1", "", estado)
 		if err != nil {
 			t.Errorf("estado %q debería ser válido pero dio error: %v", estado, err)
 		}
@@ -222,9 +223,68 @@ func TestCrear_ConVariantes_Exito(t *testing.T) {
 	}
 }
 
+func TestCrearAsistido_RegistraOrigenCreadorYAlias(t *testing.T) {
+	store := &mockStore{}
+	svc := pedido.NuevoService(store)
+
+	_, err := svc.CrearAsistido(context.Background(), &auth.Claims{
+		UsuarioID:  "usuario-1",
+		TenantID:   "tenant-1",
+		Rol:        auth.RolMozo,
+		SucursalID: "suc-1",
+	}, pedido.PedidoAsistidoInput{
+		MesaID:       "mesa-1",
+		AliasCliente: "  Mesa cumple  ",
+		Items: []pedido.NuevoItemInput{{
+			ArticuloID: "art-1",
+			Cantidad:   1,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+	if store.crearInput.Origen != "mozo" {
+		t.Fatalf("origen incorrecto: got %q, want mozo", store.crearInput.Origen)
+	}
+	if store.crearInput.CreadoPorUsuarioID != "usuario-1" {
+		t.Fatalf("creador incorrecto: got %q", store.crearInput.CreadoPorUsuarioID)
+	}
+	item := store.crearInput.Items[0]
+	if item.ComensalNombre != "Mesa cumple" {
+		t.Fatalf("alias no normalizado: got %q", item.ComensalNombre)
+	}
+	if len(item.ComensalID) != 36 {
+		t.Fatalf("se esperaba identidad UUID para el comensal, got %q", item.ComensalID)
+	}
+}
+
+func TestCrearAsistido_RechazaMesaDeOtraSucursal(t *testing.T) {
+	store := &mockStore{}
+	svc := pedido.NuevoService(store)
+
+	_, err := svc.CrearAsistido(context.Background(), &auth.Claims{
+		UsuarioID:  "usuario-1",
+		TenantID:   "tenant-1",
+		Rol:        auth.RolMozo,
+		SucursalID: "suc-2",
+	}, pedido.PedidoAsistidoInput{
+		MesaID: "mesa-1",
+		Items: []pedido.NuevoItemInput{{
+			ArticuloID: "art-1",
+			Cantidad:   1,
+		}},
+	})
+	if err == nil {
+		t.Fatal("se esperaba rechazo para una mesa de otra sucursal")
+	}
+	if store.crearInput.MesaID != "" {
+		t.Fatal("el pedido no debe llegar a persistencia cuando la sucursal no coincide")
+	}
+}
+
 func TestCambiarEstadoItem_EstadoInvalido(t *testing.T) {
 	svc := pedido.NuevoService(&mockStore{})
-	_, err := svc.CambiarEstadoItem(context.Background(), "item-1", "tenant-1", "entregado")
+	_, err := svc.CambiarEstadoItem(context.Background(), "item-1", "tenant-1", "", "entregado")
 	if err == nil {
 		t.Fatal("esperaba error por estado de item inválido")
 	}
@@ -235,7 +295,7 @@ func TestCambiarEstadoItem_EstadosValidos(t *testing.T) {
 	svc := pedido.NuevoService(store)
 
 	for _, estado := range pedido.EstadosItemValidos {
-		_, err := svc.CambiarEstadoItem(context.Background(), "item-1", "tenant-1", estado)
+		_, err := svc.CambiarEstadoItem(context.Background(), "item-1", "tenant-1", "", estado)
 		if err != nil {
 			t.Errorf("estado %q debería ser válido pero dio error: %v", estado, err)
 		}
@@ -259,7 +319,7 @@ func TestCambiarEstadoItem_PublicaEventoEnCanalKDS(t *testing.T) {
 	canal, desuscribir := notificacion.Instancia.Suscribir("kds:suc-kds")
 	defer desuscribir()
 
-	_, err := svc.CambiarEstadoItem(context.Background(), "item-1", "tenant-1", "listo")
+	_, err := svc.CambiarEstadoItem(context.Background(), "item-1", "tenant-1", "", "listo")
 	if err != nil {
 		t.Fatalf("error inesperado: %v", err)
 	}

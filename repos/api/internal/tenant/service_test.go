@@ -2,12 +2,33 @@ package tenant_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/tenant"
 )
+
+func TestVistaOperativaNoExponeConfiguracionGlobal(t *testing.T) {
+	secreto := "credencial-privada"
+	vista := (&tenant.Tenant{
+		ID: "t-1", Nombre: "Café", Slug: "cafe", Plan: "pro",
+		DatosFiscales: map[string]any{"cuit": "secret"}, MPAccessToken: &secreto,
+	}).VistaOperativa()
+
+	contenido, err := json.Marshal(vista)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonTexto := string(contenido)
+	for _, campoSensible := range []string{"datos_fiscales", "mp_access_token", "plan", "credencial-privada", "secret"} {
+		if strings.Contains(jsonTexto, campoSensible) {
+			t.Fatalf("la vista operativa expuso %q: %s", campoSensible, jsonTexto)
+		}
+	}
+}
 
 type mockStore struct {
 	crearFn                     func(ctx context.Context, input tenant.OnboardingInput) (*tenant.Tenant, error)

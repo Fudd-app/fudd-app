@@ -126,7 +126,7 @@ export default function ReputacionSection() {
     }
 
     const sseUrl = api.obtenerEventosSucursalUrl(sucursalParaSSE);
-    const es = new EventSource(sseUrl);
+		const es = new EventSource(sseUrl, { withCredentials: true });
     eventSourceRef.current = es;
 
     es.addEventListener("resena_creada", (e: MessageEvent) => {

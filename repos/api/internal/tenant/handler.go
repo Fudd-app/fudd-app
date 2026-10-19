@@ -67,6 +67,10 @@ func (h *Handlers) ObtenerMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	if claims.Rol != auth.RolDuenio {
+		json.NewEncoder(w).Encode(t.VistaOperativa())
+		return
+	}
 	json.NewEncoder(w).Encode(t)
 }
 

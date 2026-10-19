@@ -21,9 +21,10 @@ func TestEventosKDS_AbreCanalSSEParaSucursalDelTenant(t *testing.T) {
 	protegido := auth.Requerir(http.HandlerFunc(handler.EventosKDS))
 
 	token, err := auth.GenerarJWT(&auth.Claims{
-		UsuarioID: "usuario-1",
-		TenantID:  "tenant-1",
-		Rol:       "encargado",
+		UsuarioID:  "usuario-1",
+		TenantID:   "tenant-1",
+		Rol:        "encargado",
+		SucursalID: "suc-1",
 	}, secreto)
 	if err != nil {
 		t.Fatalf("no se pudo generar JWT de prueba: %v", err)
@@ -73,9 +74,10 @@ func TestEventosKDS_RechazaSucursalDeOtroTenant(t *testing.T) {
 	handler := pedido.NuevosHandlers(pedido.NuevoService(store))
 	protegido := auth.Requerir(http.HandlerFunc(handler.EventosKDS))
 	token, err := auth.GenerarJWT(&auth.Claims{
-		UsuarioID: "usuario-1",
-		TenantID:  "tenant-1",
-		Rol:       "encargado",
+		UsuarioID:  "usuario-1",
+		TenantID:   "tenant-1",
+		Rol:        "encargado",
+		SucursalID: "suc-ajena",
 	}, secreto)
 	if err != nil {
 		t.Fatalf("no se pudo generar JWT de prueba: %v", err)

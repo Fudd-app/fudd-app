@@ -89,11 +89,11 @@
 | **US-65** | `Frontend` | Pantalla KDS Dedicada de Cocina con Temporizadores | ✅ Resuelta | Pablo Aguirre | [Ver detalle](sprint-15/US-65-pantalla-kds-cocina.md) |
 | **US-66** | `Integración` | Interacción Táctil en KDS y Notificación al Salón | ✅ Resuelta | Pablo Aguirre | [Ver detalle](sprint-15/US-66-interaccion-kds-cambio-estados.md) |
 | **US-67** | `Integración` | Impresión Térmica de Comandas (58/80 mm) y Reintento Manual | 📋 Pendiente | Por asignar | [Ver detalle](sprint-15/US-67-impresion-comandas-termicas.md) |
-| **US-85** | `Fullstack` | Inicio de Sesión con Google para Administración | ⚡ En Curso | Mateo Silvestrin / Codex | [Ver detalle](sprint-15/US-85-login-google.md) |
+| **US-85** | `Fullstack` | Identidad Google y sesiones revocables | ✓ Completada | Mateo Silvestrin / Codex | [Ver detalle](sprint-15/US-85-login-google.md) |
 | **US-86** | `Fullstack / Integración` | Imágenes de Productos, Íconos de Categoría y Carta Mobile Visual | ✅ Resuelta | Mateo Silvestrin / Codex | [Ver detalle](sprint-15/US-86-imagenes-iconos-carta-mobile.md) |
 | **US-87** | `Fullstack / Frontend` | Editor Visual Pro de Apariencia de la Carta | ✅ Resuelta | Mateo Silvestrin / Codex | [Ver detalle](sprint-15/US-87-editor-visual-apariencia-carta.md) |
-| **US-83** | `Fullstack` | Gestión de Equipo de Trabajo con Credenciales y Ciclo de Vida | 📋 Pendiente | Por asignar | [Ver detalle](sprint-15/US-83-gestion-equipo-credenciales-ciclo-vida.md) |
-| **US-84** | `Fullstack` | Portal de Login Único por Negocio (Tenant-Scoped) con Branding | 📋 Pendiente | Por asignar | [Ver detalle](sprint-15/US-84-login-unico-tenant-branding-staff.md) |
+| **US-83** | `Fullstack` | Acceso del equipo por invitación, rol y sucursal | ✓ Completada | Mateo Silvestrin / Codex | [Ver detalle](sprint-15/US-83-gestion-equipo-credenciales-ciclo-vida.md) |
+| **US-84** | `Fullstack` | Login de staff acotado al negocio | ✓ Completada | Mateo Silvestrin / Codex | [Ver detalle](sprint-15/US-84-login-unico-tenant-branding-staff.md) |
 
 ### 📌 Sprint 16: Modelo Freemium (Free vs Pro) & Control de Suscripciones (12/10 – 18/10/2026)
 

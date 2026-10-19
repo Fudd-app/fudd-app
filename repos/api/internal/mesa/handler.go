@@ -17,7 +17,7 @@ func NuevosHandlers(svc *Service) *Handlers { return &Handlers{svc: svc} }
 
 func (h *Handlers) Listar(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromContext(r.Context())
-	mesas, err := h.svc.Listar(r.Context(), claims.TenantID)
+	mesas, err := h.svc.ListarSucursal(r.Context(), claims.TenantID, claims.SucursalID)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "error listando mesas", "err", err)
 		jsonError(w, "error listando mesas", http.StatusInternalServerError)
@@ -33,6 +33,12 @@ func (h *Handlers) Crear(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "body inválido", http.StatusBadRequest)
 		return
 	}
+	sucursalID, err := auth.ResolverSucursal(claims, input.SucursalID)
+	if err != nil {
+		jsonError(w, err.Error(), http.StatusForbidden)
+		return
+	}
+	input.SucursalID = sucursalID
 	m, err := h.svc.Crear(r.Context(), claims.TenantID, input)
 	if err != nil {
 		if errors.Is(err, ErrValidation) {
@@ -55,6 +61,10 @@ func (h *Handlers) Crear(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Actualizar(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromContext(r.Context())
 	id := r.PathValue("id")
+	if err := h.svc.ValidarAlcance(r.Context(), id, claims.TenantID, claims.SucursalID); err != nil {
+		jsonError(w, "mesa no encontrada", http.StatusNotFound)
+		return
+	}
 	var u MesaUpdate
 	if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
 		jsonError(w, "body inválido", http.StatusBadRequest)
@@ -84,6 +94,10 @@ func (h *Handlers) Actualizar(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) CerrarCuenta(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromContext(r.Context())
 	id := r.PathValue("id")
+	if err := h.svc.ValidarAlcance(r.Context(), id, claims.TenantID, claims.SucursalID); err != nil {
+		jsonError(w, "mesa no encontrada", http.StatusNotFound)
+		return
+	}
 	m, err := h.svc.CerrarCuenta(r.Context(), id, claims.TenantID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -100,6 +114,10 @@ func (h *Handlers) CerrarCuenta(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) HabilitarPago(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromContext(r.Context())
 	id := r.PathValue("id")
+	if err := h.svc.ValidarAlcance(r.Context(), id, claims.TenantID, claims.SucursalID); err != nil {
+		jsonError(w, "mesa no encontrada", http.StatusNotFound)
+		return
+	}
 	if id == "" {
 		jsonError(w, "id de mesa requerido", http.StatusBadRequest)
 		return
@@ -155,6 +173,10 @@ func (h *Handlers) SolicitarCuenta(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Eliminar(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromContext(r.Context())
 	id := r.PathValue("id")
+	if err := h.svc.ValidarAlcance(r.Context(), id, claims.TenantID, claims.SucursalID); err != nil {
+		jsonError(w, "mesa no encontrada", http.StatusNotFound)
+		return
+	}
 	if err := h.svc.Eliminar(r.Context(), id, claims.TenantID); err != nil {
 		if errors.Is(err, ErrNotFound) {
 			jsonError(w, "mesa no encontrada", http.StatusNotFound)

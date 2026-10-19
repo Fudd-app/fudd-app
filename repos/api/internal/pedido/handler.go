@@ -47,11 +47,32 @@ func (h *Handlers) Crear(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(p)
 }
 
+func (h *Handlers) CrearAsistido(w http.ResponseWriter, r *http.Request) {
+	var input PedidoAsistidoInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		jsonError(w, "body inválido", http.StatusBadRequest)
+		return
+	}
+	p, err := h.svc.CrearAsistido(r.Context(), auth.ClaimsFromContext(r.Context()), input)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrMesaCerrada), errors.Is(err, ErrCuentaSolicitada):
+			jsonError(w, err.Error(), http.StatusConflict)
+		case errors.Is(err, ErrValidation), errors.Is(err, ErrNotFound):
+			jsonError(w, err.Error(), http.StatusBadRequest)
+		default:
+			jsonError(w, err.Error(), http.StatusForbidden)
+		}
+		return
+	}
+	jsonCreado(w, p)
+}
+
 func (h *Handlers) ListarActivos(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromContext(r.Context())
-	sucursalID := r.URL.Query().Get("sucursal_id")
-	if sucursalID == "" {
-		jsonError(w, "sucursal_id requerido", http.StatusBadRequest)
+	sucursalID, err := auth.ResolverSucursal(claims, r.URL.Query().Get("sucursal_id"))
+	if err != nil {
+		jsonError(w, err.Error(), http.StatusForbidden)
 		return
 	}
 	pedidos, err := h.svc.ListarActivos(r.Context(), sucursalID, claims.TenantID)
@@ -86,7 +107,7 @@ func (h *Handlers) CambiarEstado(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "body inválido", http.StatusBadRequest)
 		return
 	}
-	p, err := h.svc.CambiarEstado(r.Context(), id, claims.TenantID, input.Estado)
+	p, err := h.svc.CambiarEstado(r.Context(), id, claims.TenantID, claims.SucursalID, input.Estado)
 	if err != nil {
 		if errors.Is(err, ErrValidation) {
 			jsonError(w, err.Error(), http.StatusBadRequest)
@@ -117,7 +138,7 @@ func (h *Handlers) CambiarEstadoItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p, err := h.svc.CambiarEstadoItem(r.Context(), itemID, claims.TenantID, input.Estado)
+	p, err := h.svc.CambiarEstadoItem(r.Context(), itemID, claims.TenantID, claims.SucursalID, input.Estado)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrValidation):
@@ -143,7 +164,11 @@ func (h *Handlers) EventosKDS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sucursalID := r.URL.Query().Get("sucursal_id")
+	sucursalID, err := auth.ResolverSucursal(claims, r.URL.Query().Get("sucursal_id"))
+	if err != nil {
+		jsonError(w, err.Error(), http.StatusForbidden)
+		return
+	}
 	if err := h.svc.ValidarAccesoKDS(r.Context(), sucursalID, claims.TenantID); err != nil {
 		if errors.Is(err, ErrValidation) {
 			jsonError(w, err.Error(), http.StatusBadRequest)
@@ -199,6 +224,12 @@ func (h *Handlers) EventosKDS(w http.ResponseWriter, r *http.Request) {
 
 func jsonOK(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(v)
+}
+
+func jsonCreado(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(v)
 }
 

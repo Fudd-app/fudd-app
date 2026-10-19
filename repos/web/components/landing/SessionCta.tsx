@@ -1,32 +1,20 @@
 "use client";
 
-import React, { useSyncExternalStore } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { obtenerToken } from "@/lib/api";
+import { api } from "@/lib/api";
 import LandingIcon from "@/components/landing/LandingIcon";
 
 export const PANEL_LABEL = "Ir a mi panel";
 
-// El token vive en localStorage: un JWT vencido no cuenta como sesión activa.
-function tieneSesionActiva(): boolean {
-  const token = obtenerToken();
-  if (!token) return false;
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
-    return typeof payload.exp !== "number" || payload.exp * 1000 > Date.now();
-  } catch {
-    return true;
-  }
-}
-
-function subscribe(onChange: () => void) {
-  window.addEventListener("storage", onChange);
-  return () => window.removeEventListener("storage", onChange);
-}
-
-// En el servidor (y en el primer render) se asume visitante sin sesión.
 export function useSesionActiva(): boolean {
-  return useSyncExternalStore(subscribe, tieneSesionActiva, () => false);
+	const [activa, setActiva] = useState(false);
+	useEffect(() => {
+		let vigente = true;
+		void api.obtenerSesion().then(() => { if (vigente) setActiva(true); }).catch(() => { if (vigente) setActiva(false); });
+		return () => { vigente = false; };
+	}, []);
+	return activa;
 }
 
 interface SessionCtaProps {

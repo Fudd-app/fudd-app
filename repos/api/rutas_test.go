@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
 
 func TestEsEntornoDesarrolloLocal(t *testing.T) {
 	tests := []struct {
@@ -32,5 +36,31 @@ func TestEsEntornoDesarrolloLocal(t *testing.T) {
 				)
 			}
 		})
+	}
+}
+
+func TestCORSCredencialesSoloParaOrigenPermitido(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("APP_URL", "https://mesa-click-web.onrender.com")
+	t.Setenv("CORS_ALLOWED_ORIGINS", "https://qa.mesaclick.com")
+	handler := corsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	permitido := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
+	permitido.Header.Set("Origin", "https://mesa-click-web.onrender.com")
+	respuestaPermitida := httptest.NewRecorder()
+	handler.ServeHTTP(respuestaPermitida, permitido)
+	if respuestaPermitida.Header().Get("Access-Control-Allow-Origin") != "https://mesa-click-web.onrender.com" ||
+		respuestaPermitida.Header().Get("Access-Control-Allow-Credentials") != "true" {
+		t.Fatal("el frontend configurado debe poder enviar la cookie de sesión")
+	}
+
+	denegado := httptest.NewRequest(http.MethodOptions, "/auth/me", nil)
+	denegado.Header.Set("Origin", "https://sitio-ajeno.example")
+	respuestaDenegada := httptest.NewRecorder()
+	handler.ServeHTTP(respuestaDenegada, denegado)
+	if respuestaDenegada.Code != http.StatusForbidden || respuestaDenegada.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Fatalf("un origen ajeno no debe recibir CORS con credenciales: status=%d", respuestaDenegada.Code)
 	}
 }

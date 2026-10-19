@@ -240,4 +240,3 @@ func (s *pgStore) ObtenerResumen(ctx context.Context, tenantID, sucursalID strin
 		Resenas:      resenas,
 	}, nil
 }
-

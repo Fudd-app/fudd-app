@@ -7,6 +7,8 @@ import (
 )
 
 var ErrUsuarioNoEncontrado = errors.New("usuario no encontrado")
+var ErrUsuarioBloqueado = errors.New("usuario bloqueado")
+var ErrSesionRevocada = errors.New("sesión revocada")
 
 type MagicToken struct {
 	ID        string
@@ -17,19 +19,32 @@ type MagicToken struct {
 }
 
 type UsuarioAuth struct {
-	ID           string
-	TenantID     string
-	Email        string
-	Rol          string
-	GoogleSub    *string
-	PasswordHash *string
+	ID             string
+	TenantID       string
+	Email          string
+	Nombre         string
+	Rol            string
+	SucursalID     *string
+	Estado         string
+	SessionVersion int64
+	GoogleSub      *string
+	PasswordHash   *string
 }
 
 type Claims struct {
-	UsuarioID string `json:"usuario_id"`
-	TenantID  string `json:"tenant_id"`
-	Rol       string `json:"rol"`
+	UsuarioID      string `json:"usuario_id"`
+	TenantID       string `json:"tenant_id"`
+	Rol            string `json:"rol"`
+	SucursalID     string `json:"sucursal_id,omitempty"`
+	SessionVersion int64  `json:"session_version"`
 }
+
+const (
+	RolDuenio    = "admin"
+	RolEncargado = "encargado"
+	RolMozo      = "mozo"
+	RolCocinero  = "cocina"
+)
 
 type ctxKey string
 

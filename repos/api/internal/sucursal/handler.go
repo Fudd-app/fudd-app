@@ -23,12 +23,25 @@ func (h *Handlers) Listar(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "error listando sucursales", http.StatusInternalServerError)
 		return
 	}
+	if claims.Rol != auth.RolDuenio {
+		filtradas := sucs[:0]
+		for _, suc := range sucs {
+			if suc.ID == claims.SucursalID {
+				filtradas = append(filtradas, suc)
+			}
+		}
+		sucs = filtradas
+	}
 	jsonOK(w, sucs)
 }
 
 func (h *Handlers) ObtenerPorID(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromContext(r.Context())
 	id := r.PathValue("id")
+	if claims.Rol != auth.RolDuenio && id != claims.SucursalID {
+		jsonError(w, "sucursal no encontrada", http.StatusNotFound)
+		return
+	}
 	suc, err := h.svc.ObtenerPorID(r.Context(), id, claims.TenantID)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
@@ -69,6 +82,10 @@ func (h *Handlers) Crear(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) Actualizar(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromContext(r.Context())
 	id := r.PathValue("id")
+	if claims.Rol != auth.RolDuenio && id != claims.SucursalID {
+		jsonError(w, "sucursal no encontrada", http.StatusNotFound)
+		return
+	}
 	var input SucursalInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		jsonError(w, "body inválido", http.StatusBadRequest)
@@ -114,6 +131,10 @@ func (h *Handlers) Eliminar(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) CrearSector(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromContext(r.Context())
 	sucursalID := r.PathValue("sucursal_id")
+	if claims.Rol != auth.RolDuenio && sucursalID != claims.SucursalID {
+		jsonError(w, "sucursal no encontrada", http.StatusNotFound)
+		return
+	}
 	var input SectorInput
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		jsonError(w, "body inválido", http.StatusBadRequest)
@@ -143,6 +164,10 @@ func (h *Handlers) CrearSector(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) ListarSectores(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromContext(r.Context())
 	sucursalID := r.PathValue("sucursal_id")
+	if claims.Rol != auth.RolDuenio && sucursalID != claims.SucursalID {
+		jsonError(w, "sucursal no encontrada", http.StatusNotFound)
+		return
+	}
 
 	secs, err := h.svc.ListarSectores(r.Context(), sucursalID, claims.TenantID)
 	if err != nil {
@@ -162,7 +187,7 @@ func (h *Handlers) EliminarSector(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromContext(r.Context())
 	id := r.PathValue("id")
 
-	err := h.svc.EliminarSector(r.Context(), id, claims.TenantID)
+	err := h.svc.EliminarSector(r.Context(), id, claims.TenantID, claims.SucursalID)
 	if err != nil {
 		if errors.Is(err, ErrSectorNotFound) {
 			jsonError(w, "sector no encontrado", http.StatusNotFound)

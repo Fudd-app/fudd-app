@@ -31,6 +31,7 @@ var (
 type IdentidadGoogle struct {
 	Subject         string
 	Email           string
+	Nombre          string
 	EmailVerificado bool
 }
 
@@ -41,6 +42,7 @@ type VerificadorGoogle interface {
 
 type googleIDTokenClaims struct {
 	Email           string `json:"email"`
+	Nombre          string `json:"name"`
 	EmailVerificado bool   `json:"email_verified"`
 	jwt.RegisteredClaims
 }
@@ -95,6 +97,7 @@ func (v *verificadorGoogleIDToken) Verificar(ctx context.Context, credencial, au
 	identidad := &IdentidadGoogle{
 		Subject:         strings.TrimSpace(claims.Subject),
 		Email:           NormalizarEmail(claims.Email),
+		Nombre:          strings.TrimSpace(claims.Nombre),
 		EmailVerificado: claims.EmailVerificado,
 	}
 	if identidad.Subject == "" || identidad.Email == "" {

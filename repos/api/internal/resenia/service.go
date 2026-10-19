@@ -150,4 +150,3 @@ func parsearFecha(valor string, finDelDia bool) (time.Time, error) {
 	}
 	return time.Time{}, fmt.Errorf("formato no reconocido: %s", valor)
 }
-

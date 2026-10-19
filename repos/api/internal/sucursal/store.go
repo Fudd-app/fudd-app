@@ -20,7 +20,7 @@ type Store interface {
 
 	CrearSector(ctx context.Context, sucursalID string, tenantID string, input SectorInput) (*Sector, error)
 	ListarSectores(ctx context.Context, sucursalID string, tenantID string) ([]Sector, error)
-	EliminarSector(ctx context.Context, id string, tenantID string) error
+	EliminarSector(ctx context.Context, id, tenantID, sucursalAlcance string) error
 }
 
 type pgStore struct{}
@@ -268,12 +268,19 @@ func (s *pgStore) ListarSectores(ctx context.Context, sucursalID string, tenantI
 	return sectores, nil
 }
 
-func (s *pgStore) EliminarSector(ctx context.Context, id string, tenantID string) error {
-	// Validar que el sector pertenezca a una sucursal del tenant
+func (s *pgStore) EliminarSector(ctx context.Context, id, tenantID, sucursalAlcance string) error {
+	// El duenio puede operar sobre todo el tenant; el equipo queda limitado a
+	// la sucursal incluida en su sesion.
 	cmdTag, err := db.Pool.Exec(ctx,
 		`DELETE FROM sectores
-		 WHERE id = $1 AND sucursal_id IN (SELECT id FROM sucursales WHERE tenant_id = $2)`,
-		id, tenantID,
+		 WHERE id = $1
+		   AND sucursal_id IN (
+			SELECT id
+			FROM sucursales
+			WHERE tenant_id = $2
+			  AND ($3 = '' OR id = $3::uuid)
+		   )`,
+		id, tenantID, sucursalAlcance,
 	)
 	if err != nil {
 		return fmt.Errorf("error eliminando sector: %w", err)

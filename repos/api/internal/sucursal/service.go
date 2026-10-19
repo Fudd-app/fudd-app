@@ -69,9 +69,9 @@ func (svc *Service) ListarSectores(ctx context.Context, sucursalID string, tenan
 	return svc.store.ListarSectores(ctx, sucursalID, tenantID)
 }
 
-func (svc *Service) EliminarSector(ctx context.Context, id string, tenantID string) error {
+func (svc *Service) EliminarSector(ctx context.Context, id, tenantID, sucursalAlcance string) error {
 	if id == "" {
 		return fmt.Errorf("%w: id de sector requerido", ErrValidation)
 	}
-	return svc.store.EliminarSector(ctx, id, tenantID)
+	return svc.store.EliminarSector(ctx, id, tenantID, sucursalAlcance)
 }

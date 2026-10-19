@@ -72,4 +72,3 @@ type MesaContexto struct {
 	CuentaVersion int
 	Estado        string
 }
-

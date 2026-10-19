@@ -57,6 +57,9 @@ func (svc *Service) AutenticarPassword(ctx context.Context, email, password stri
 	if err := CompararPassword(hash, password); err != nil || usuario.PasswordHash == nil {
 		return nil, ErrCredencialesInvalidas
 	}
+	if err := validarUsuarioActivo(usuario); err != nil {
+		return nil, err
+	}
 	return usuario, nil
 }
 
@@ -98,7 +101,7 @@ func (svc *Service) AutenticarGoogle(ctx context.Context, credencial string) (*U
 
 	usuario, err := svc.store.ObtenerUsuarioPorGoogleSub(ctx, identidad.Subject)
 	if err == nil {
-		return usuario, nil
+		return usuario, validarUsuarioActivo(usuario)
 	}
 	if !errors.Is(err, ErrUsuarioNoEncontrado) {
 		return nil, err
@@ -115,7 +118,57 @@ func (svc *Service) AutenticarGoogle(ctx context.Context, credencial string) (*U
 		return nil, err
 	}
 	usuario.GoogleSub = &identidad.Subject
-	return usuario, nil
+	return usuario, validarUsuarioActivo(usuario)
+}
+
+// AutenticarStaffGoogle exige el slug del negocio para desambiguar a una misma
+// persona que trabaja en más de un tenant. El alta solo puede existir por una
+// invitación previamente aceptada; nunca crea usuarios durante el login.
+func (svc *Service) AutenticarStaffGoogle(ctx context.Context, slug, credencial string) (*UsuarioAuth, error) {
+	identidad, err := svc.VerificarIdentidadGoogle(ctx, credencial)
+	if err != nil {
+		return nil, err
+	}
+	staffStore, ok := svc.store.(StaffStore)
+	if !ok {
+		return nil, errors.New("store sin soporte para acceso del equipo")
+	}
+	slug = strings.TrimSpace(strings.ToLower(slug))
+	usuario, err := staffStore.ObtenerStaffPorGoogleSub(ctx, slug, identidad.Subject)
+	if err == nil {
+		return usuario, validarUsuarioActivo(usuario)
+	}
+	if !errors.Is(err, ErrUsuarioNoEncontrado) {
+		return nil, err
+	}
+	usuario, err = staffStore.ObtenerStaffPorEmail(ctx, slug, identidad.Email)
+	if err != nil {
+		return nil, err
+	}
+	if err := svc.store.VincularGoogleSub(ctx, usuario.ID, identidad.Subject); err != nil {
+		return nil, err
+	}
+	usuario.GoogleSub = &identidad.Subject
+	return usuario, validarUsuarioActivo(usuario)
+}
+
+func validarUsuarioActivo(usuario *UsuarioAuth) error {
+	if usuario == nil {
+		return ErrUsuarioNoEncontrado
+	}
+	// El vacío solo existe en dobles de prueba anteriores a session_version.
+	if usuario.Estado != "" && usuario.Estado != "activo" {
+		return ErrUsuarioBloqueado
+	}
+	return nil
+}
+
+func (svc *Service) CerrarSesion(ctx context.Context, usuarioID string) error {
+	sessionStore, ok := svc.store.(SessionStore)
+	if !ok {
+		return nil
+	}
+	return sessionStore.InvalidarSesiones(ctx, usuarioID)
 }
 
 // SolicitarLink genera el magic link y lo envía por email.
@@ -181,15 +234,24 @@ func (svc *Service) VerificarToken(ctx context.Context, token string) (*UsuarioA
 	if err := svc.store.MarcarTokenUsado(ctx, mt.ID); err != nil {
 		return nil, err
 	}
-	return svc.store.ObtenerUsuarioPorID(ctx, mt.UsuarioID)
+	usuario, err := svc.store.ObtenerUsuarioPorID(ctx, mt.UsuarioID)
+	if err != nil {
+		return nil, err
+	}
+	if err := validarUsuarioActivo(usuario); err != nil {
+		return nil, err
+	}
+	return usuario, nil
 }
 
 func GenerarJWT(claims *Claims, secreto string) (string, error) {
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"usuario_id": claims.UsuarioID,
-		"tenant_id":  claims.TenantID,
-		"rol":        claims.Rol,
-		"exp":        time.Now().Add(24 * time.Hour * 30).Unix(),
+		"usuario_id":      claims.UsuarioID,
+		"tenant_id":       claims.TenantID,
+		"rol":             claims.Rol,
+		"sucursal_id":     claims.SucursalID,
+		"session_version": claims.SessionVersion,
+		"exp":             time.Now().Add(24 * time.Hour * 30).Unix(),
 	})
 	return t.SignedString([]byte(secreto))
 }
@@ -214,10 +276,17 @@ func ValidarJWT(tokenStr, secreto string) (*Claims, error) {
 	if !ok1 || !ok2 || !ok3 {
 		return nil, errors.New("claims inválidos o incompletos")
 	}
+	sucursalID, _ := mc["sucursal_id"].(string)
+	var sessionVersion int64
+	if raw, ok := mc["session_version"].(float64); ok {
+		sessionVersion = int64(raw)
+	}
 	return &Claims{
-		UsuarioID: usuarioID,
-		TenantID:  tenantID,
-		Rol:       rol,
+		UsuarioID:      usuarioID,
+		TenantID:       tenantID,
+		Rol:            rol,
+		SucursalID:     sucursalID,
+		SessionVersion: sessionVersion,
 	}, nil
 }
 

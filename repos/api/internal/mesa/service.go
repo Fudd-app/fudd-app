@@ -19,6 +19,38 @@ func (svc *Service) Listar(ctx context.Context, tenantID string) ([]Mesa, error)
 	return svc.store.Listar(ctx, tenantID)
 }
 
+func (svc *Service) ListarSucursal(ctx context.Context, tenantID, sucursalID string) ([]Mesa, error) {
+	mesas, err := svc.store.Listar(ctx, tenantID)
+	if err != nil || sucursalID == "" {
+		return mesas, err
+	}
+	filtradas := make([]Mesa, 0)
+	for _, m := range mesas {
+		if m.SucursalID == sucursalID {
+			filtradas = append(filtradas, m)
+		}
+	}
+	return filtradas, nil
+}
+
+func (svc *Service) ValidarAlcance(ctx context.Context, mesaID, tenantID, sucursalID string) error {
+	if sucursalID == "" {
+		return nil
+	}
+	store, ok := svc.store.(ScopedStore)
+	if !ok {
+		return nil
+	}
+	pertenece, err := store.MesaPerteneceSucursal(ctx, mesaID, tenantID, sucursalID)
+	if err != nil {
+		return err
+	}
+	if !pertenece {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (svc *Service) Crear(ctx context.Context, tenantID string, input MesaInput) (*Mesa, error) {
 	if input.Numero <= 0 {
 		return nil, fmt.Errorf("número de mesa debe ser mayor a 0: %w", ErrValidation)

@@ -14,9 +14,12 @@ package main
 
 import (
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/joho/godotenv"
@@ -81,19 +84,45 @@ func main() {
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if origin == "" {
-			origin = "*"
+		permitido := origin == "" || origenCORSPermitido(origin)
+		if origin != "" && permitido {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Add("Vary", "Origin")
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
-		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization, X-CSRF-Token")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 		if r.Method == http.MethodOptions {
+			if !permitido {
+				http.Error(w, "origen no permitido", http.StatusForbidden)
+				return
+			}
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func origenCORSPermitido(origin string) bool {
+	origin = strings.TrimRight(strings.TrimSpace(origin), "/")
+	permitidos := []string{strings.TrimRight(strings.TrimSpace(os.Getenv("APP_URL")), "/")}
+	permitidos = append(permitidos, strings.Split(os.Getenv("CORS_ALLOWED_ORIGINS"), ",")...)
+	for _, permitido := range permitidos {
+		if strings.EqualFold(origin, strings.TrimRight(strings.TrimSpace(permitido), "/")) && permitido != "" {
+			return true
+		}
+	}
+
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("APP_ENV")), "production") {
+		return false
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	return strings.EqualFold(host, "localhost") || (net.ParseIP(host) != nil && net.ParseIP(host).IsLoopback())
 }

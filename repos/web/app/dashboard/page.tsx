@@ -3,22 +3,25 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import CartaSection from "@/components/dashboard/CartaSection";
+import CartaLecturaSection from "@/components/dashboard/CartaLecturaSection";
 import MesasSection from "@/components/dashboard/MesasSection";
 import RecepcionistaSection from "@/components/dashboard/RecepcionistaSection";
 import ConfiguracionSection from "@/components/dashboard/ConfiguracionSection";
 import MetricasSection from "@/components/dashboard/MetricasSection";
 import ReputacionSection from "@/components/dashboard/ReputacionSection";
+import EquipoSection from "@/components/dashboard/EquipoSection";
 import Logo from "@/components/brand/Logo";
-import { api, cerrarSesion, estaAutenticado, Tenant } from "@/lib/api";
+import { api, cerrarSesion, SesionUsuario, Tenant } from "@/lib/api";
 import { ToastProvider, ConfirmProvider } from "@/components/ui";
 import OnboardingTour from "@/components/dashboard/OnboardingTour";
 
-type Section = 'carta' | 'mesas' | 'recepcionista' | 'metricas' | 'resenas' | 'configuracion';
+type Section = 'carta' | 'mesas' | 'recepcionista' | 'equipo' | 'metricas' | 'resenas' | 'configuracion';
 
 const SECTIONS: { id: Section; icon: string; label: string }[] = [
   { id: 'carta', icon: 'restaurant_menu', label: 'Carta' },
   { id: 'mesas', icon: 'table_restaurant', label: 'Mesas & QR' },
   { id: 'recepcionista', icon: 'receipt_long', label: 'Recepcionista' },
+	{ id: 'equipo', icon: 'groups', label: 'Equipo' },
   { id: 'resenas', icon: 'star_rate', label: 'Reseñas' },
 ];
 
@@ -26,13 +29,15 @@ function renderSection(
   section: Section,
   configuracionTab: "negocio" | "apariencia" | "equipo" | "sucursales" | "planes" | "mercadopago",
   onTenantUpdate: (t: Tenant) => void,
+	sesion: SesionUsuario | null,
 ) {
   switch (section) {
-    case 'carta': return <CartaSection />;
-    case 'mesas': return <MesasSection />;
+		case 'carta': return sesion?.rol === 'cocina' ? <CartaLecturaSection /> : <CartaSection />;
+		case 'mesas': return <MesasSection readOnly={sesion?.rol === 'mozo'} />;
     case 'recepcionista': return <RecepcionistaSection />;
     case 'metricas': return <MetricasSection />;
     case 'resenas': return <ReputacionSection />;
+		case 'equipo': return <EquipoSection sesion={sesion} />;
     case 'configuracion': return <ConfiguracionSection initialTab={configuracionTab} onTenantUpdate={onTenantUpdate} />;
   }
 }
@@ -44,12 +49,14 @@ export default function DashboardPage() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [tenant, setTenant] = useState<Tenant | null>(null);
+	const [sesion, setSesion] = useState<SesionUsuario | null>(null);
   const [isTourOpen, setIsTourOpen] = useState(false);
 
   useEffect(() => {
     async function loadTenant() {
-      if (estaAutenticado()) {
-        try {
+			try {
+				const sesionActual = await api.obtenerSesion();
+				setSesion(sesionActual);
           const t = await api.obtenerMiTenant();
           setTenant(t);
 
@@ -69,18 +76,27 @@ export default function DashboardPage() {
               console.warn("No se pudo verificar estado del tour:", err);
             }
           }
-        } catch (err) {
-          console.warn("No se pudo cargar tenant:", err);
-        }
-      }
+			} catch (err) {
+				console.warn("No se pudo cargar la sesión:", err);
+				router.replace('/login');
+			}
     }
     loadTenant();
-  }, []);
+	}, [router]);
 
-  const handleLogout = () => {
-    cerrarSesion();
-    router.push("/login");
+	const handleLogout = async () => {
+		const destino = sesion?.rol === 'admin' || !tenant ? '/login' : `/${tenant.slug}/login`;
+		try { await cerrarSesion(); } finally { router.push(destino); }
   };
+
+	const seccionesVisibles = SECTIONS.filter((seccion) => {
+		if (!sesion) return false;
+		if (sesion.rol === 'admin') return seccion.id !== 'equipo';
+		if (sesion.rol === 'encargado') return seccion.id !== 'configuracion';
+		if (sesion.rol === 'mozo') return ['carta', 'mesas', 'recepcionista'].includes(seccion.id);
+		if (sesion.rol === 'cocina') return seccion.id === 'carta';
+		return false;
+	});
 
   return (
     <ConfirmProvider>
@@ -106,7 +122,7 @@ export default function DashboardPage() {
           <span className="max-w-[90px] truncate border-l border-concrete pl-8 text-12 font-medium text-sage-green sm:max-w-[260px] sm:pl-12">
             {tenant ? tenant.nombre : "Admin"}
           </span>
-          {tenant && (
+			{tenant && sesion?.rol === 'admin' && (
             <>
               <span className="hidden rounded-full border border-concrete bg-ghost-fog px-8 py-2 text-10 font-mono text-sage-green lg:inline-block">
                 /{tenant.slug}
@@ -155,12 +171,12 @@ export default function DashboardPage() {
                     <p className="mt-2 truncate text-11 text-sage-green">Sesión activa</p>
                   </div>
                   <UserMenuItem icon="account_circle" label="Perfil" />
-                  <div onClick={() => { setConfiguracionTab("planes"); setActiveSection("configuracion"); setIsUserMenuOpen(false); }}>
+					{sesion?.rol === 'admin' && <div onClick={() => { setConfiguracionTab("planes"); setActiveSection("configuracion"); setIsUserMenuOpen(false); }}>
                     <UserMenuItem icon="credit_card" label="Planes y suscripción" />
-                  </div>
-                  <Link href="/kds" target="_blank" onClick={() => setIsUserMenuOpen(false)}>
+					</div>}
+					{sesion?.rol !== 'mozo' && <Link href="/kds" target="_blank" onClick={() => setIsUserMenuOpen(false)}>
                     <UserMenuItem icon="skillet" label="Pantalla Cocina (KDS) ↗" />
-                  </Link>
+					</Link>}
                   <div onClick={() => { setIsTourOpen(true); setIsUserMenuOpen(false); }}>
                     <UserMenuItem icon="school" label="Recorrido tutorial" />
                   </div>
@@ -208,7 +224,7 @@ export default function DashboardPage() {
             </button>
           </div>
           <nav className="space-y-4 flex-1 px-8">
-            {SECTIONS.map((s) => (
+			{seccionesVisibles.map((s) => (
               <NavItem
                 key={s.id}
                 icon={s.icon}
@@ -223,7 +239,7 @@ export default function DashboardPage() {
               />
             ))}
             {/* Botón Cocina (KDS) justo abajo de Recepcionista */}
-            <Link
+			{sesion?.rol !== 'mozo' && <Link
               href="/kds"
               target="_blank"
               rel="noopener noreferrer"
@@ -234,8 +250,8 @@ export default function DashboardPage() {
               <span className="material-symbols-outlined text-20">skillet</span>
               <span className="flex-1 text-13 font-medium">Cocina (KDS)</span>
               <span className="rounded border border-concrete bg-ghost-fog px-6 py-1 text-10 font-bold text-sage-green">PRO ↗</span>
-            </Link>
-            <NavItem
+			</Link>}
+			{(sesion?.rol === 'admin' || sesion?.rol === 'encargado') && <NavItem
               icon="monitoring"
               label="Métricas"
               active={activeSection === "metricas"}
@@ -245,10 +261,10 @@ export default function DashboardPage() {
                 setActiveSection("metricas");
                 setIsExpanded(false);
               }}
-            />
+			/>}
           </nav>
           <div className="pt-16 border-t border-ghost-fog space-y-4 px-8">
-            <NavItem
+			{sesion?.rol === 'admin' && <NavItem
               icon="settings"
               label="Configuración"
               active={activeSection === "configuracion"}
@@ -258,7 +274,7 @@ export default function DashboardPage() {
                 setActiveSection("configuracion");
                 setIsExpanded(false);
               }}
-            />
+			/>}
             <NavItem
               icon="school"
               label="Recorrido tutorial"
@@ -279,7 +295,7 @@ export default function DashboardPage() {
           } hidden shrink-0 flex-col overflow-x-hidden overflow-y-auto border-r border-concrete bg-canvas-white py-16 transition-all duration-300 ease-in-out md:flex`}
         >
           <nav className={`space-y-4 flex-1 flex flex-col ${isExpanded ? "px-8" : "items-center"}`}>
-            {SECTIONS.map((s) => (
+			{seccionesVisibles.map((s) => (
               <NavItem
                 key={s.id}
                 icon={s.icon}
@@ -291,7 +307,7 @@ export default function DashboardPage() {
               />
             ))}
             {/* Botón Cocina (KDS) justo abajo de Recepcionista */}
-            <Link
+			{sesion?.rol !== 'mozo' && <Link
               href="/kds"
               target="_blank"
               rel="noopener noreferrer"
@@ -307,25 +323,25 @@ export default function DashboardPage() {
                   <span className="rounded border border-concrete bg-ghost-fog px-6 py-1 text-10 font-bold text-sage-green">PRO ↗</span>
                 </div>
               )}
-            </Link>
-            <NavItem
+			</Link>}
+			{(sesion?.rol === 'admin' || sesion?.rol === 'encargado') && <NavItem
               icon="monitoring"
               label="Métricas"
               active={activeSection === "metricas"}
               expanded={isExpanded}
               dataTour="nav-metricas"
               onClick={() => setActiveSection("metricas")}
-            />
+			/>}
           </nav>
           <div className={`pt-16 border-t border-ghost-fog space-y-4 flex flex-col ${isExpanded ? "px-8" : "items-center"}`}>
-            <NavItem
+			{sesion?.rol === 'admin' && <NavItem
               icon="settings"
               label="Configuración"
               active={activeSection === "configuracion"}
               expanded={isExpanded}
               dataTour="nav-configuracion"
               onClick={() => setActiveSection("configuracion")}
-            />
+			/>}
             <NavItem
               icon="school"
               label="Recorrido tutorial"
@@ -337,7 +353,7 @@ export default function DashboardPage() {
         </aside>
 
         <main className="min-w-0 flex-1 overflow-hidden">
-          {renderSection(activeSection, configuracionTab, setTenant)}
+			{renderSection(activeSection, configuracionTab, setTenant, sesion)}
         </main>
       </div>
 

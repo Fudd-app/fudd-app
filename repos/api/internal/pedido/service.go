@@ -2,12 +2,14 @@ package pedido
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/notificacion"
 )
 
@@ -18,6 +20,49 @@ type Service struct {
 func NuevoService(s Store) *Service { return &Service{store: s} }
 
 func (svc *Service) Crear(ctx context.Context, input NuevoPedidoInput) (*Pedido, error) {
+	input.Origen = "comensal"
+	input.CreadoPorUsuarioID = ""
+	input.CreadoPorNombre = ""
+	return svc.crear(ctx, input)
+}
+
+func (svc *Service) CrearAsistido(ctx context.Context, actor *auth.Claims, input PedidoAsistidoInput) (*Pedido, error) {
+	if actor == nil || (actor.Rol != auth.RolDuenio && actor.Rol != auth.RolEncargado && actor.Rol != auth.RolMozo) {
+		return nil, errors.New("sin permisos para cargar pedidos")
+	}
+	sucursalID, _, err := svc.store.ObtenerSucursalPorMesa(ctx, input.MesaID)
+	if err != nil {
+		return nil, err
+	}
+	if actor.Rol != auth.RolDuenio && sucursalID != actor.SucursalID {
+		return nil, errors.New("mesa fuera de la sucursal asignada")
+	}
+	comensalID, err := nuevoUUID()
+	if err != nil {
+		return nil, err
+	}
+	alias := strings.TrimSpace(input.AliasCliente)
+	for i := range input.Items {
+		if input.Items[i].ComensalID == "" {
+			input.Items[i].ComensalID = comensalID
+		}
+		if input.Items[i].ComensalNombre == "" {
+			input.Items[i].ComensalNombre = alias
+		}
+	}
+	return svc.crear(ctx, NuevoPedidoInput{
+		MesaID: input.MesaID, Items: input.Items, Origen: "mozo",
+		CreadoPorUsuarioID: actor.UsuarioID, CreadoPorNombre: aliasCreador(actor),
+	})
+}
+
+func aliasCreador(actor *auth.Claims) string {
+	// El nombre se completa en la persistencia histórica desde el usuario en
+	// una mejora futura; el rol evita perder contexto si luego se lo elimina.
+	return actor.Rol
+}
+
+func (svc *Service) crear(ctx context.Context, input NuevoPedidoInput) (*Pedido, error) {
 	if input.MesaID == "" {
 		return nil, fmt.Errorf("mesa_id requerido: %w", ErrValidation)
 	}
@@ -79,11 +124,11 @@ func (svc *Service) ListarCuentaActualPorQR(ctx context.Context, qrToken string)
 	return svc.store.ListarCuentaActualPorQR(ctx, qrToken)
 }
 
-func (svc *Service) CambiarEstado(ctx context.Context, id, tenantID, nuevoEstado string) (*Pedido, error) {
+func (svc *Service) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado string) (*Pedido, error) {
 	if !estadoValido(nuevoEstado) {
 		return nil, fmt.Errorf("estado inválido: %q (válidos: recibido, preparando, listo, cerrado): %w", nuevoEstado, ErrValidation)
 	}
-	p, err := svc.store.CambiarEstado(ctx, id, tenantID, nuevoEstado)
+	p, err := svc.store.CambiarEstado(ctx, id, tenantID, sucursalAlcance, nuevoEstado)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
 			return nil, err
@@ -100,7 +145,7 @@ func (svc *Service) CambiarEstado(ctx context.Context, id, tenantID, nuevoEstado
 	return p, nil
 }
 
-func (svc *Service) CambiarEstadoItem(ctx context.Context, itemID, tenantID, nuevoEstado string) (*Pedido, error) {
+func (svc *Service) CambiarEstadoItem(ctx context.Context, itemID, tenantID, sucursalAlcance, nuevoEstado string) (*Pedido, error) {
 	itemID = strings.TrimSpace(itemID)
 	nuevoEstado = strings.TrimSpace(nuevoEstado)
 	if itemID == "" {
@@ -110,7 +155,7 @@ func (svc *Service) CambiarEstadoItem(ctx context.Context, itemID, tenantID, nue
 		return nil, fmt.Errorf("estado de item inválido: %q (válidos: pendiente, preparando, listo): %w", nuevoEstado, ErrValidation)
 	}
 
-	p, err := svc.store.CambiarEstadoItem(ctx, itemID, tenantID, nuevoEstado)
+	p, err := svc.store.CambiarEstadoItem(ctx, itemID, tenantID, sucursalAlcance, nuevoEstado)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrPedidoCerrado) {
 			return nil, err
@@ -150,6 +195,17 @@ func uuidValido(value string) bool {
 	compacto := strings.ReplaceAll(value, "-", "")
 	_, err := hex.DecodeString(compacto)
 	return err == nil
+}
+
+func nuevoUUID() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	h := hex.EncodeToString(b)
+	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:32], nil
 }
 
 func estadoValido(estado string) bool {

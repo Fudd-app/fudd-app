@@ -24,7 +24,19 @@ type Store interface {
 
 type pgStore struct{}
 
+type ScopedStore interface {
+	MesaPerteneceSucursal(ctx context.Context, mesaID, tenantID, sucursalID string) (bool, error)
+}
+
 func NuevoStore() Store { return &pgStore{} }
+
+func (s *pgStore) MesaPerteneceSucursal(ctx context.Context, mesaID, tenantID, sucursalID string) (bool, error) {
+	var pertenece bool
+	err := db.Pool.QueryRow(ctx, `SELECT EXISTS(
+	 SELECT 1 FROM mesas m JOIN sucursales s ON s.id=m.sucursal_id
+	 WHERE m.id=$1 AND s.tenant_id=$2 AND m.sucursal_id=$3)`, mesaID, tenantID, sucursalID).Scan(&pertenece)
+	return pertenece, err
+}
 
 func (s *pgStore) Listar(ctx context.Context, tenantID string) ([]Mesa, error) {
 	rows, err := db.Pool.Query(ctx,

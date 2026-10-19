@@ -52,7 +52,7 @@ func (s *pgStore) Crear(ctx context.Context, input OnboardingInput) (*Tenant, er
 	)
 	if err != nil {
 		if isUniqueConstraint(err, "usuarios_email_key") || isUniqueConstraint(err, "idx_usuarios_email_lower") ||
-			isUniqueConstraint(err, "idx_usuarios_google_sub") {
+			isUniqueConstraint(err, "idx_usuarios_admin_email") || isUniqueConstraint(err, "idx_usuarios_admin_google_sub") {
 			return nil, ErrEmailAdminConflict
 		}
 		return nil, fmt.Errorf("error creando usuario admin: %w", err)
@@ -283,7 +283,7 @@ func (s *pgStore) SlugEnUso(ctx context.Context, slug string) (bool, error) {
 func (s *pgStore) EmailAdminEnUso(ctx context.Context, email string) (bool, error) {
 	var existe bool
 	err := db.Pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM usuarios WHERE lower(email) = lower($1))`,
+		`SELECT EXISTS(SELECT 1 FROM usuarios WHERE lower(email) = lower($1) AND rol = 'admin')`,
 		email,
 	).Scan(&existe)
 	if err != nil {

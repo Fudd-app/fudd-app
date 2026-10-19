@@ -94,7 +94,7 @@ function QRCanvas({ token, mesaNumero }: { token: string; mesaNumero: number }) 
   );
 }
 
-export default function MesasSection() {
+export default function MesasSection({ readOnly = false }: { readOnly?: boolean }) {
   const toast = useToast();
   const confirmar = useConfirm();
   const [mesas, setMesas] = useState<MesaAPI[]>([]);
@@ -149,11 +149,11 @@ export default function MesasSection() {
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       void cargarMesas();
-      void cargarPlan();
+			if (!readOnly) void cargarPlan();
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [cargarMesas, cargarPlan]);
+	}, [cargarMesas, cargarPlan, readOnly]);
 
   const limiteMesasAlcanzado = Boolean(
     estadoPlan &&
@@ -260,7 +260,9 @@ export default function MesasSection() {
             {loading ? 'Cargando mesas...' : `${mesas.length} mesas configuradas con QR activo`}
           </p>
         </div>
-        <div className="flex items-center gap-8">
+		<div className="flex items-center gap-8">
+			{readOnly && <span className="rounded-full border border-concrete bg-canvas-white px-10 py-4 text-11 text-sage-green">Solo lectura</span>}
+			{!readOnly && <>
           {limiteMesasAlcanzado && (
             <span
               className="inline-flex items-center gap-4 rounded-full border border-stone/30 bg-ghost-fog px-10 py-4 text-11 font-mono font-medium text-stone"
@@ -283,7 +285,8 @@ export default function MesasSection() {
               {limiteMesasAlcanzado ? "lock" : "add"}
             </span>
             Nueva mesa
-          </button>
+			</button>
+			</>}
         </div>
       </div>
 
@@ -293,7 +296,7 @@ export default function MesasSection() {
         </div>
       )}
 
-      {mostrarFormMesa && (
+		{mostrarFormMesa && !readOnly && (
         <form onSubmit={handleCrearMesa} className="flex flex-col items-stretch gap-12 rounded-xl border border-concrete bg-canvas-white p-16 shadow-sm sm:flex-row sm:items-end sm:p-20">
           <div className="space-y-4 flex-1">
             <label className="text-11 font-mono text-sage-green uppercase">Número de Mesa</label>
@@ -368,7 +371,7 @@ export default function MesasSection() {
                       {mesa.capacidad} personas
                     </p>
                   </div>
-                  <details className="group relative shrink-0">
+					{!readOnly && <details className="group relative shrink-0">
                     <summary
                       className="flex h-40 w-40 cursor-pointer list-none items-center justify-center rounded-lg text-sage-green transition-colors hover:bg-ghost-fog hover:text-ash-graphite [&::-webkit-details-marker]:hidden"
                       aria-label={`Acciones de Mesa ${mesa.numero}`}
@@ -386,10 +389,12 @@ export default function MesasSection() {
                         Eliminar mesa
                       </button>
                     </div>
-                  </details>
+					</details>}
                 </div>
-                <div className="px-14 pb-14">
-                  <QRCanvas token={mesa.qr_token} mesaNumero={mesa.numero} />
+				<div className="px-14 pb-14">
+					{readOnly ? (
+						<div className="rounded-lg border border-ghost-fog bg-ghost-fog/50 p-12 text-12 text-sage-green">Estado: <strong className="text-ash-graphite">{mesa.estado === 'activa' ? 'Activa' : 'Inactiva'}</strong></div>
+					) : <QRCanvas token={mesa.qr_token} mesaNumero={mesa.numero} />}
                 </div>
               </article>
             ))}
@@ -400,21 +405,21 @@ export default function MesasSection() {
               icon="table_restaurant"
               title="No hay mesas configuradas"
               description="Creá tu primera mesa para generar el código QR que los clientes escanean."
-              actionLabel="Nueva Mesa"
-              onAction={handleAbrirCrearMesa}
+				actionLabel={readOnly ? undefined : "Nueva Mesa"}
+				onAction={readOnly ? undefined : handleAbrirCrearMesa}
             />
           )}
         </>
       )}
 
-      <UpgradeModal
+		{!readOnly && <UpgradeModal
         isOpen={modalUpgradeOpen}
         onClose={() => setModalUpgradeOpen(false)}
         recurso="mesas"
         limite={modalLimiteInfo.limite ?? estadoPlan?.limites?.mesas ?? 10}
         uso={modalLimiteInfo.uso ?? estadoPlan?.uso?.mesas ?? mesas.length}
         onUpgradeSolicitado={() => void cargarPlan()}
-      />
+		/>}
     </div>
   );
 }

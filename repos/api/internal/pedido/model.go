@@ -17,14 +17,17 @@ var EstadosValidos = []string{"recibido", "preparando", "listo", "cerrado"}
 var EstadosItemValidos = []string{"pendiente", "preparando", "listo"}
 
 type Pedido struct {
-	ID            string       `json:"id"`
-	MesaID        string       `json:"mesa_id"`
-	SucursalID    string       `json:"sucursal_id"`
-	CuentaVersion int          `json:"cuenta_version"`
-	Estado        string       `json:"estado"`
-	Items         []PedidoItem `json:"items,omitempty"`
-	CreatedAt     time.Time    `json:"created_at"`
-	UpdatedAt     time.Time    `json:"updated_at"`
+	ID                 string       `json:"id"`
+	MesaID             string       `json:"mesa_id"`
+	SucursalID         string       `json:"sucursal_id"`
+	CuentaVersion      int          `json:"cuenta_version"`
+	Estado             string       `json:"estado"`
+	Origen             string       `json:"origen"`
+	CreadoPorUsuarioID *string      `json:"creado_por_usuario_id,omitempty"`
+	CreadoPorNombre    *string      `json:"creado_por_nombre,omitempty"`
+	Items              []PedidoItem `json:"items,omitempty"`
+	CreatedAt          time.Time    `json:"created_at"`
+	UpdatedAt          time.Time    `json:"updated_at"`
 }
 
 type PedidoItemVariante struct {
@@ -48,8 +51,17 @@ type PedidoItem struct {
 }
 
 type NuevoPedidoInput struct {
-	MesaID string           `json:"mesa_id"`
-	Items  []NuevoItemInput `json:"items"`
+	MesaID             string           `json:"mesa_id"`
+	Items              []NuevoItemInput `json:"items"`
+	Origen             string           `json:"-"`
+	CreadoPorUsuarioID string           `json:"-"`
+	CreadoPorNombre    string           `json:"-"`
+}
+
+type PedidoAsistidoInput struct {
+	MesaID       string           `json:"mesa_id"`
+	AliasCliente string           `json:"alias_cliente,omitempty"`
+	Items        []NuevoItemInput `json:"items"`
 }
 
 type NuevoItemInput struct {

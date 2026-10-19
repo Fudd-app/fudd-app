@@ -13,8 +13,8 @@ type Store interface {
 	Crear(ctx context.Context, input NuevoPedidoInput, sucursalID string, cuentaVersion int) (*Pedido, error)
 	ListarActivos(ctx context.Context, sucursalID, tenantID string) ([]Pedido, error)
 	ListarCuentaActualPorQR(ctx context.Context, qrToken string) ([]Pedido, error)
-	CambiarEstado(ctx context.Context, id, tenantID, nuevoEstado string) (*Pedido, error)
-	CambiarEstadoItem(ctx context.Context, itemID, tenantID, nuevoEstado string) (*Pedido, error)
+	CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado string) (*Pedido, error)
+	CambiarEstadoItem(ctx context.Context, itemID, tenantID, sucursalAlcance, nuevoEstado string) (*Pedido, error)
 	SucursalPerteneceATenant(ctx context.Context, sucursalID, tenantID string) (bool, error)
 	ObtenerSucursalPorMesa(ctx context.Context, mesaID string) (string, int, error)
 }
@@ -55,8 +55,9 @@ func (s *pgStore) Crear(ctx context.Context, input NuevoPedidoInput, sucursalID 
 
 	p := &Pedido{}
 	err = tx.QueryRow(ctx,
-		`INSERT INTO pedidos (mesa_id, sucursal_id, cuenta_version, estado)
-		 SELECT $1, $2, $3, 'recibido'
+		`INSERT INTO pedidos (mesa_id, sucursal_id, cuenta_version, estado, origen, creado_por_usuario_id, creado_por_nombre)
+		 SELECT $1, $2, $3, 'recibido', $4, NULLIF($5, '')::uuid,
+		        COALESCE((SELECT nombre FROM usuarios WHERE id=NULLIF($5, '')::uuid), NULLIF($6, ''))
 		 WHERE EXISTS (
 			SELECT 1
 			FROM mesas
@@ -66,9 +67,9 @@ func (s *pgStore) Crear(ctx context.Context, input NuevoPedidoInput, sucursalID 
 			  AND cuenta_solicitada = false
 			  AND cuenta_version = $3
 		 )
-		 RETURNING id, mesa_id, sucursal_id, cuenta_version, estado, created_at, updated_at`,
-		input.MesaID, sucursalID, cuentaVersion,
-	).Scan(&p.ID, &p.MesaID, &p.SucursalID, &p.CuentaVersion, &p.Estado, &p.CreatedAt, &p.UpdatedAt)
+		 RETURNING id, mesa_id, sucursal_id, cuenta_version, estado, origen, creado_por_usuario_id, creado_por_nombre, created_at, updated_at`,
+		input.MesaID, sucursalID, cuentaVersion, input.Origen, input.CreadoPorUsuarioID, input.CreadoPorNombre,
+	).Scan(&p.ID, &p.MesaID, &p.SucursalID, &p.CuentaVersion, &p.Estado, &p.Origen, &p.CreadoPorUsuarioID, &p.CreadoPorNombre, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrCuentaSolicitada
@@ -181,7 +182,7 @@ func (s *pgStore) Crear(ctx context.Context, input NuevoPedidoInput, sucursalID 
 
 func (s *pgStore) ListarActivos(ctx context.Context, sucursalID, tenantID string) ([]Pedido, error) {
 	return s.listarPedidos(ctx,
-		`SELECT p.id, p.mesa_id, p.sucursal_id, p.cuenta_version, p.estado, p.created_at, p.updated_at
+		`SELECT p.id, p.mesa_id, p.sucursal_id, p.cuenta_version, p.estado, p.origen, p.creado_por_usuario_id, p.creado_por_nombre, p.created_at, p.updated_at
 		 FROM pedidos p
 		 JOIN sucursales su ON su.id = p.sucursal_id
 		 JOIN mesas m ON m.id = p.mesa_id
@@ -193,7 +194,7 @@ func (s *pgStore) ListarActivos(ctx context.Context, sucursalID, tenantID string
 
 func (s *pgStore) ListarCuentaActualPorQR(ctx context.Context, qrToken string) ([]Pedido, error) {
 	return s.listarPedidos(ctx,
-		`SELECT p.id, p.mesa_id, p.sucursal_id, p.cuenta_version, p.estado, p.created_at, p.updated_at
+		`SELECT p.id, p.mesa_id, p.sucursal_id, p.cuenta_version, p.estado, p.origen, p.creado_por_usuario_id, p.creado_por_nombre, p.created_at, p.updated_at
 		 FROM pedidos p
 		 JOIN mesas m ON m.id = p.mesa_id
 		 WHERE m.qr_token = $1
@@ -217,6 +218,9 @@ func (s *pgStore) listarPedidos(ctx context.Context, query string, args ...any) 
 			&p.SucursalID,
 			&p.CuentaVersion,
 			&p.Estado,
+			&p.Origen,
+			&p.CreadoPorUsuarioID,
+			&p.CreadoPorNombre,
 			&p.CreatedAt,
 			&p.UpdatedAt,
 		); err != nil {
@@ -316,7 +320,7 @@ func (s *pgStore) listarItems(ctx context.Context, pedidoID string) ([]PedidoIte
 	return items, nil
 }
 
-func (s *pgStore) CambiarEstado(ctx context.Context, id, tenantID, nuevoEstado string) (*Pedido, error) {
+func (s *pgStore) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado string) (*Pedido, error) {
 	p := &Pedido{}
 	err := db.Pool.QueryRow(ctx,
 		`UPDATE pedidos
@@ -329,9 +333,10 @@ func (s *pgStore) CambiarEstado(ctx context.Context, id, tenantID, nuevoEstado s
 		     END
 		 WHERE id = $2
 		   AND sucursal_id IN (SELECT id FROM sucursales WHERE tenant_id = $3)
-		 RETURNING id, mesa_id, sucursal_id, cuenta_version, estado, created_at, updated_at`,
-		nuevoEstado, id, tenantID,
-	).Scan(&p.ID, &p.MesaID, &p.SucursalID, &p.CuentaVersion, &p.Estado, &p.CreatedAt, &p.UpdatedAt)
+		   AND ($4 = '' OR sucursal_id = $4::uuid)
+		 RETURNING id, mesa_id, sucursal_id, cuenta_version, estado, origen, creado_por_usuario_id, creado_por_nombre, created_at, updated_at`,
+		nuevoEstado, id, tenantID, sucursalAlcance,
+	).Scan(&p.ID, &p.MesaID, &p.SucursalID, &p.CuentaVersion, &p.Estado, &p.Origen, &p.CreadoPorUsuarioID, &p.CreadoPorNombre, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -341,7 +346,7 @@ func (s *pgStore) CambiarEstado(ctx context.Context, id, tenantID, nuevoEstado s
 	return p, nil
 }
 
-func (s *pgStore) CambiarEstadoItem(ctx context.Context, itemID, tenantID, nuevoEstado string) (*Pedido, error) {
+func (s *pgStore) CambiarEstadoItem(ctx context.Context, itemID, tenantID, sucursalAlcance, nuevoEstado string) (*Pedido, error) {
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error iniciando actualización de item: %w", err)
@@ -354,9 +359,9 @@ func (s *pgStore) CambiarEstadoItem(ctx context.Context, itemID, tenantID, nuevo
 		 FROM pedido_items pi
 		 JOIN pedidos p ON p.id = pi.pedido_id
 		 JOIN sucursales su ON su.id = p.sucursal_id
-		 WHERE pi.id = $1 AND su.tenant_id = $2
+		 WHERE pi.id = $1 AND su.tenant_id = $2 AND ($3 = '' OR p.sucursal_id = $3::uuid)
 		 FOR UPDATE OF p`,
-		itemID, tenantID,
+		itemID, tenantID, sucursalAlcance,
 	).Scan(&pedidoID, &estadoPedido)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -427,7 +432,7 @@ func resolverEstadoPedido(total, listos, iniciados int) string {
 
 func (s *pgStore) obtenerPedidoPorID(ctx context.Context, pedidoID, tenantID string) (*Pedido, error) {
 	pedidos, err := s.listarPedidos(ctx,
-		`SELECT p.id, p.mesa_id, p.sucursal_id, p.cuenta_version, p.estado, p.created_at, p.updated_at
+		`SELECT p.id, p.mesa_id, p.sucursal_id, p.cuenta_version, p.estado, p.origen, p.creado_por_usuario_id, p.creado_por_nombre, p.created_at, p.updated_at
 		 FROM pedidos p
 		 JOIN sucursales su ON su.id = p.sucursal_id
 		 WHERE p.id = $1 AND su.tenant_id = $2`,

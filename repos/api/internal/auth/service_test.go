@@ -22,6 +22,21 @@ type mockStore struct {
 	guardarTokenFn               func(ctx context.Context, usuarioID, token string, expiresAt time.Time) (string, error)
 	obtenerTokenFn               func(ctx context.Context, token string) (*auth.MagicToken, error)
 	marcarTokenUsadoFn           func(ctx context.Context, tokenID string) error
+	obtenerStaffPorGoogleSubFn   func(ctx context.Context, slug, googleSub string) (*auth.UsuarioAuth, error)
+	obtenerStaffPorEmailFn       func(ctx context.Context, slug, email string) (*auth.UsuarioAuth, error)
+}
+
+func (m *mockStore) ObtenerStaffPorGoogleSub(ctx context.Context, slug, googleSub string) (*auth.UsuarioAuth, error) {
+	if m.obtenerStaffPorGoogleSubFn == nil {
+		return nil, auth.ErrUsuarioNoEncontrado
+	}
+	return m.obtenerStaffPorGoogleSubFn(ctx, slug, googleSub)
+}
+func (m *mockStore) ObtenerStaffPorEmail(ctx context.Context, slug, email string) (*auth.UsuarioAuth, error) {
+	if m.obtenerStaffPorEmailFn == nil {
+		return nil, auth.ErrUsuarioNoEncontrado
+	}
+	return m.obtenerStaffPorEmailFn(ctx, slug, email)
 }
 
 func (m *mockStore) ObtenerUsuarioPorEmail(ctx context.Context, email string) (*auth.UsuarioAuth, error) {
@@ -501,7 +516,47 @@ func TestAutenticarPassword_HandlerDevuelveSesion(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status: got %d, want %d; body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
 	}
-	if !strings.Contains(recorder.Body.String(), `"token"`) {
-		t.Fatalf("respuesta sin sesión: %s", recorder.Body.String())
+	if len(recorder.Result().Cookies()) == 0 || recorder.Result().Cookies()[0].Name != "session" || !recorder.Result().Cookies()[0].HttpOnly {
+		t.Fatalf("respuesta sin cookie HttpOnly: %s", recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), `"token"`) {
+		t.Fatalf("el JWT no debe exponerse al JavaScript: %s", recorder.Body.String())
+	}
+}
+
+func TestAutenticarStaffGoogle_AislaPorSlug(t *testing.T) {
+	var slugConsultado string
+	store := &mockStore{obtenerStaffPorGoogleSubFn: func(_ context.Context, slug, sub string) (*auth.UsuarioAuth, error) {
+		slugConsultado = slug
+		sucursal := "s-1"
+		return &auth.UsuarioAuth{ID: "u-1", TenantID: "t-1", Rol: auth.RolMozo, SucursalID: &sucursal, Estado: "activo", SessionVersion: 1}, nil
+	}}
+	verifier := &mockGoogleVerifier{verificarFn: func(context.Context, string, string) (*auth.IdentidadGoogle, error) {
+		return &auth.IdentidadGoogle{Subject: "google-1", Email: "mozo@bar.com", EmailVerificado: true}, nil
+	}}
+	usuario, err := auth.NuevoServiceConGoogle(store, &mockEmailSender{}, "client-id", verifier).AutenticarStaffGoogle(context.Background(), " Mi-Bar ", "credencial")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slugConsultado != "mi-bar" || usuario.TenantID != "t-1" {
+		t.Fatalf("login no aislado por negocio: slug=%q usuario=%+v", slugConsultado, usuario)
+	}
+}
+
+func TestRequerirSesion_RechazaVersionRevocada(t *testing.T) {
+	t.Setenv("JWT_SECRET", "secreto-revocacion")
+	store := &mockStore{obtenerUsuarioPorIDFn: func(context.Context, string) (*auth.UsuarioAuth, error) {
+		return &auth.UsuarioAuth{ID: "u-1", TenantID: "t-1", Rol: auth.RolMozo, Estado: "activo", SessionVersion: 2}, nil
+	}}
+	token, err := auth.GenerarJWT(&auth.Claims{UsuarioID: "u-1", TenantID: "t-1", Rol: auth.RolMozo, SessionVersion: 1}, "secreto-revocacion")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/protegido", nil)
+	req.AddCookie(&http.Cookie{Name: "session", Value: token})
+	recorder := httptest.NewRecorder()
+	auth.RequerirSesion(store)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Fatal("no debía ejecutar el handler") })).ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 }

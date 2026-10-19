@@ -4,7 +4,6 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   api,
-  estaAutenticado,
   PedidoAPI,
   Sucursal,
 } from "@/lib/api";
@@ -69,18 +68,21 @@ export default function KDSPage() {
   const [cargando, setCargando] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [drawerHistorialAbierto, setDrawerHistorialAbierto] = useState<boolean>(false);
+	const [loginDestino, setLoginDestino] = useState('/login');
 
   // 1. Verificación de autenticación y carga inicial de sucursales y mesas
   useEffect(() => {
-    if (!estaAutenticado()) {
-      router.push("/login");
-      return;
-    }
-
     async function inicializarKDS() {
       try {
         setCargando(true);
         setError(null);
+				const sesion = await api.obtenerSesion();
+				if (!['admin', 'encargado', 'cocina'].includes(sesion.rol)) {
+					router.replace('/dashboard');
+					return;
+				}
+				const tenant = await api.obtenerMiTenant();
+				setLoginDestino(sesion.rol === 'admin' ? '/login' : `/${tenant.slug}/login`);
 
         // Cargar sucursales
         const sucs = await api.listarSucursales();
@@ -122,7 +124,8 @@ export default function KDSPage() {
         }
       } catch (err: unknown) {
         console.error("Error inicializando KDS:", err);
-        setError(err instanceof Error ? err.message : "Error al inicializar pantalla de cocina");
+			setError(err instanceof Error ? err.message : "Error al inicializar pantalla de cocina");
+			if (err instanceof Error && err.message.toLowerCase().includes('sesión')) router.replace('/login');
       } finally {
         setCargando(false);
       }
@@ -160,7 +163,7 @@ export default function KDSPage() {
     let eventSource: EventSource | null = null;
 
     try {
-      eventSource = new EventSource(sseUrl);
+		eventSource = new EventSource(sseUrl, { withCredentials: true });
 
       eventSource.onopen = () => {
         setConectadoSSE(true);
@@ -419,6 +422,7 @@ export default function KDSPage() {
         totalComandasActivas={pedidosActivos.length}
         totalDespachadas={pedidosDespachados.length}
         onAbrirHistorial={() => setDrawerHistorialAbierto(true)}
+		loginDestino={loginDestino}
       />
 
       {/* CONTENIDO PRINCIPAL */}

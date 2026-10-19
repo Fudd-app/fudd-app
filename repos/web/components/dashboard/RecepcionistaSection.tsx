@@ -5,6 +5,7 @@ import { agruparPorComensal } from "@/lib/desgloseCuenta";
 import { EmptyState, Skeleton, useToast, useConfirm } from "@/components/ui";
 import { playOrderReadySound } from "@/components/kds/AudioAlerts";
 import StockModal from "./StockModal";
+import PedidoAsistidoModal from "./PedidoAsistidoModal";
 
 export interface PedidoVista {
   id: string;
@@ -487,12 +488,14 @@ export default function RecepcionistaSection() {
   const confirmar = useConfirm();
   const [pedidos, setPedidos] = useState<PedidoVista[]>([]);
   const [sucursal, setSucursal] = useState<Sucursal | null>(null);
+	const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [mesas, setMesas] = useState<Record<string, MesaAPI>>({});
   const [loading, setLoading] = useState(true);
   const [sseConectado, setSseConectado] = useState(false);
   const [mesaAccionEnCurso, setMesaAccionEnCurso] = useState<'todo-listo' | 'cerrar-cuenta' | 'habilitar-pago' | null>(null);
   const [mesaDetalleKey, setMesaDetalleKey] = useState<string | null>(null);
   const [stockModalAbierto, setStockModalAbierto] = useState(false);
+	const [pedidoAsistidoAbierto, setPedidoAsistidoAbierto] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
 
   const transformarPedidoApi = useCallback((p: PedidoAPI, mesasMap: Record<string, MesaAPI>): PedidoVista => {
@@ -535,6 +538,7 @@ export default function RecepcionistaSection() {
       }
 
       if (sucursalesList && sucursalesList.length > 0) {
+			setSucursales(sucursalesList);
         const primSuc = sucursalesList[0];
         setSucursal(primSuc);
 
@@ -559,6 +563,11 @@ export default function RecepcionistaSection() {
     }
   }, [transformarPedidoApi]);
 
+	useEffect(() => {
+		if (!sucursal || loading) return;
+		void api.listarPedidosActivos(sucursal.id).then((lista) => setPedidos(lista.map((p) => transformarPedidoApi(p, mesas)))).catch(() => setPedidos([]));
+	}, [sucursal?.id, loading, mesas, transformarPedidoApi]);
+
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       void cargarDatos();
@@ -571,7 +580,7 @@ export default function RecepcionistaSection() {
     if (!sucursal) return;
 
     const sseUrl = api.obtenerEventosSucursalUrl(sucursal.id);
-    const es = new EventSource(sseUrl);
+		const es = new EventSource(sseUrl, { withCredentials: true });
     eventSourceRef.current = es;
 
     es.onopen = () => {
@@ -876,6 +885,8 @@ export default function RecepcionistaSection() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-8 self-start sm:self-auto">
+			{sucursales.length > 1 && <select aria-label="Sucursal" value={sucursal?.id ?? ''} onChange={(e) => setSucursal(sucursales.find((s) => s.id === e.target.value) ?? null)} className="h-44 rounded-lg border border-concrete bg-canvas-white px-10 text-12 font-semibold">{sucursales.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}</select>}
+			<button onClick={() => setPedidoAsistidoAbierto(true)} className="flex h-44 items-center gap-6 rounded-lg bg-plain-green px-14 text-12 font-semibold text-white shadow-sm hover:bg-plain-green-muted"><span className="material-symbols-outlined text-18">add</span>Cargar pedido</button>
           <a
             href="/kds"
             target="_blank"
@@ -1023,6 +1034,7 @@ export default function RecepcionistaSection() {
         isOpen={stockModalAbierto}
         onClose={() => setStockModalAbierto(false)}
       />
+		<PedidoAsistidoModal abierto={pedidoAsistidoAbierto} mesas={Object.values(mesas).filter((m) => m.estado === 'activa')} onClose={() => setPedidoAsistidoAbierto(false)} onCreado={() => void cargarDatos()} />
     </div>
   );
 }

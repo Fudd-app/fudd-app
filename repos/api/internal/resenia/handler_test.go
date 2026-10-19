@@ -143,4 +143,3 @@ func TestHandler_Resumen(t *testing.T) {
 		t.Errorf("esperaba 200 con auth, obtuve %d", rec.Code)
 	}
 }
-

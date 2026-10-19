@@ -2,8 +2,9 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { isAudioEnabled, setAudioEnabled } from "./AudioAlerts";
-import { Sucursal } from "@/lib/api";
+import { cerrarSesion, Sucursal } from "@/lib/api";
 
 export interface KDSHeaderProps {
   sucursales: Sucursal[];
@@ -13,6 +14,7 @@ export interface KDSHeaderProps {
   totalComandasActivas: number;
   totalDespachadas: number;
   onAbrirHistorial: () => void;
+	loginDestino: string;
 }
 
 export function KDSHeader({
@@ -23,7 +25,9 @@ export function KDSHeader({
   totalComandasActivas,
   totalDespachadas,
   onAbrirHistorial,
+	loginDestino,
 }: KDSHeaderProps) {
+	const router = useRouter();
   const [horaActual, setHoraActual] = useState<string>("");
   const [audioActivo, setAudioActivo] = useState<boolean>(true);
   const [esPantallaCompleta, setEsPantallaCompleta] = useState<boolean>(false);
@@ -159,6 +163,7 @@ export function KDSHeader({
 
       {/* LADO DERECHO: HERRAMIENTAS Y ACCIONES */}
       <div className="flex items-center gap-8">
+		<button type="button" onClick={() => void cerrarSesion().finally(() => router.push(loginDestino))} className="flex h-44 w-44 items-center justify-center rounded-lg border border-concrete text-sage-green hover:bg-ghost-fog" title="Cerrar sesión"><span className="material-symbols-outlined text-20">logout</span></button>
         {/* BOTÓN HISTORIAL DE DESPACHOS */}
         <button
           type="button"

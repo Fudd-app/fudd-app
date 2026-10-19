@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/db"
 )
 
@@ -18,6 +19,10 @@ func (h *Handlers) EventosSucursal(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "sucursal_id requerido", http.StatusBadRequest)
 		return
 	}
+	if _, err := auth.ResolverSucursal(auth.ClaimsFromContext(r.Context()), sucursalID); err != nil {
+		http.Error(w, "sucursal fuera de alcance", http.StatusForbidden)
+		return
+	}
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -29,7 +34,6 @@ func (h *Handlers) EventosSucursal(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	canal := fmt.Sprintf("sucursal:%s", sucursalID)
 	ch, desuscribir := Instancia.Suscribir(canal)
