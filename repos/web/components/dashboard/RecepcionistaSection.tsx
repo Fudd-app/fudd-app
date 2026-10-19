@@ -4,6 +4,17 @@ import { api, PedidoAPI, Sucursal, MesaAPI } from "@/lib/api";
 import { agruparPorComensal } from "@/lib/desgloseCuenta";
 import { EmptyState, Skeleton, useToast, useConfirm } from "@/components/ui";
 import { playOrderReadySound } from "@/components/kds/AudioAlerts";
+import {
+  AnchoTicketTermico,
+  DatosTicketTermico,
+  TicketTermicoModal,
+  TicketTermicoPrintPortal,
+  dispararImpresionNavegador,
+  getAnchoTicketTermico,
+  isAutoPrintEnabled,
+  setAnchoTicketTermico,
+  setAutoPrintEnabled,
+} from "@/components/kds/TicketTermico";
 import StockModal from "./StockModal";
 import PedidoAsistidoModal from "./PedidoAsistidoModal";
 
@@ -95,11 +106,13 @@ function PedidoDetalle({
   pedido,
   onAvanzar,
   onCerrar,
+  onImprimirPedido,
   etiquetaPorComensal,
 }: {
   pedido: PedidoVista;
   onAvanzar: (id: string) => void;
   onCerrar: (id: string) => void;
+  onImprimirPedido: (pedido: PedidoVista) => void;
   etiquetaPorComensal: Map<string, string>;
 }) {
   const total = pedido.items.reduce((sum, i) => sum + i.precio * i.cantidad, 0);
@@ -141,7 +154,16 @@ function PedidoDetalle({
         <span className="font-mono font-semibold text-ash-graphite">${total.toLocaleString()}</span>
       </div>
 
-      <div className="mt-12 flex items-center gap-8">
+      <div className="mt-12 flex flex-wrap items-center gap-8">
+        <button
+          type="button"
+          onClick={() => onImprimirPedido(pedido)}
+          className="flex min-h-44 cursor-pointer items-center justify-center gap-6 rounded-lg border border-concrete bg-canvas-white px-12 py-8 text-12 font-semibold text-ash-graphite transition-all hover:border-stone hover:bg-ghost-fog active:scale-[0.98]"
+          title="Imprimir ticket térmico de este pedido (58/80 mm)"
+        >
+          <span className="material-symbols-outlined text-16">print</span>
+          <span>Imprimir ticket</span>
+        </button>
         {pedido.estado !== 'listo' && !pedido.finalizado && (
           <button
             onClick={() => onAvanzar(pedido.id)}
@@ -310,6 +332,8 @@ function MesaDetalleModal({
   onTodoListo,
   onCerrarCuenta,
   onHabilitarPago,
+  onImprimirMesa,
+  onImprimirPedido,
   mesaAccionEnCurso,
 }: {
   grupo: MesaGrupo;
@@ -319,6 +343,8 @@ function MesaDetalleModal({
   onTodoListo: (grupo: MesaGrupo) => void;
   onCerrarCuenta: (grupo: MesaGrupo) => void;
   onHabilitarPago: (grupo: MesaGrupo, habilitar?: boolean) => void;
+  onImprimirMesa: (grupo: MesaGrupo) => void;
+  onImprimirPedido: (pedido: PedidoVista) => void;
   mesaAccionEnCurso: 'todo-listo' | 'cerrar-cuenta' | 'habilitar-pago' | null;
 }) {
   const total = grupo.pedidos.reduce(
@@ -393,6 +419,15 @@ function MesaDetalleModal({
         </header>
 
         <div className="flex flex-wrap gap-8 border-b border-ghost-fog bg-canvas-white px-16 py-12 sm:px-20">
+          <button
+            type="button"
+            onClick={() => onImprimirMesa(grupo)}
+            className="flex min-h-44 cursor-pointer items-center justify-center gap-6 rounded-lg border border-concrete bg-canvas-white px-12 py-8 text-12 font-semibold text-ash-graphite transition-colors hover:border-stone hover:bg-ghost-fog"
+            title="Imprimir ticket térmico completo de la mesa (58/80 mm)"
+          >
+            <span className="material-symbols-outlined text-16">print</span>
+            <span>Imprimir ticket mesa</span>
+          </button>
           <button
             type="button"
             onClick={() => onTodoListo(grupo)}
@@ -474,6 +509,7 @@ function MesaDetalleModal({
               pedido={pedido}
               onAvanzar={onAvanzar}
               onCerrar={onCerrar}
+              onImprimirPedido={onImprimirPedido}
               etiquetaPorComensal={etiquetaPorComensal}
             />
           ))}
@@ -495,8 +531,18 @@ export default function RecepcionistaSection() {
   const [mesaAccionEnCurso, setMesaAccionEnCurso] = useState<'todo-listo' | 'cerrar-cuenta' | 'habilitar-pago' | null>(null);
   const [mesaDetalleKey, setMesaDetalleKey] = useState<string | null>(null);
   const [stockModalAbierto, setStockModalAbierto] = useState(false);
-	const [pedidoAsistidoAbierto, setPedidoAsistidoAbierto] = useState(false);
+  const [pedidoAsistidoAbierto, setPedidoAsistidoAbierto] = useState(false);
+  const [anchoTicket, setAnchoTicket] = useState<AnchoTicketTermico>("80mm");
+  const [autoPrint, setAutoPrint] = useState<boolean>(false);
+  const [ticketActual, setTicketActual] = useState<DatosTicketTermico | null>(null);
+  const [modalTicketAbierto, setModalTicketAbierto] = useState<boolean>(false);
+  const [errorImpresionTicket, setErrorImpresionTicket] = useState<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+
+  useEffect(() => {
+    setAnchoTicket(getAnchoTicketTermico());
+    setAutoPrint(isAutoPrintEnabled());
+  }, []);
 
   const transformarPedidoApi = useCallback((p: PedidoAPI, mesasMap: Record<string, MesaAPI>): PedidoVista => {
     const numMesa = mesasMap[p.mesa_id]?.numero || 1;
@@ -839,6 +885,93 @@ export default function RecepcionistaSection() {
     }
   };
 
+  const handleCambiarAnchoTicket = useCallback((nuevoAncho: AnchoTicketTermico) => {
+    setAnchoTicket(nuevoAncho);
+    setAnchoTicketTermico(nuevoAncho);
+  }, []);
+
+  const handleCambiarAutoPrint = useCallback((activo: boolean) => {
+    setAutoPrint(activo);
+    setAutoPrintEnabled(activo);
+  }, []);
+
+  const handleImprimirPedido = useCallback(
+    (pedido: PedidoVista) => {
+      const datos: DatosTicketTermico = {
+        id: pedido.id,
+        numeroPedido: `#${pedido.id.slice(0, 6).toUpperCase()}`,
+        mesa: pedido.mesa,
+        sucursalNombre: sucursal?.nombre,
+        fechaHora: `${new Date().toLocaleDateString("es-AR")} ${pedido.timestamp}`,
+        items: pedido.items.map((it) => ({
+          id: it.id,
+          nombre: it.nombre,
+          cantidad: it.cantidad,
+          precioUnitario: it.precio,
+          notas: it.nota || undefined,
+          comensalNombre: it.comensalNombre,
+          variantes: it.variantes,
+        })),
+        mostrarPrecios: true,
+        esReimpresion: false,
+      };
+      setTicketActual(datos);
+      setErrorImpresionTicket(null);
+      setModalTicketAbierto(true);
+    },
+    [sucursal]
+  );
+
+  const handleImprimirMesa = useCallback(
+    (grupo: MesaGrupo) => {
+      const datos: DatosTicketTermico = {
+        id: grupo.key,
+        numeroPedido:
+          grupo.pedidos.length > 1
+            ? `${grupo.pedidos.length} PEDIDOS`
+            : `#${(grupo.pedidos[0]?.id || "000000").slice(0, 6).toUpperCase()}`,
+        mesa: grupo.mesa,
+        sucursalNombre: sucursal?.nombre,
+        fechaHora: new Date().toLocaleString("es-AR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        items: grupo.pedidos.flatMap((p) =>
+          p.items.map((it) => ({
+            id: `${p.id}-${it.id}`,
+            nombre: it.nombre,
+            cantidad: it.cantidad,
+            precioUnitario: it.precio,
+            notas: it.nota || undefined,
+            comensalNombre: it.comensalNombre,
+            variantes: it.variantes,
+          }))
+        ),
+        mostrarPrecios: true,
+        esReimpresion: false,
+      };
+      setTicketActual(datos);
+      setErrorImpresionTicket(null);
+      setModalTicketAbierto(true);
+    },
+    [sucursal]
+  );
+
+  const handleEjecutarImpresion = useCallback(() => {
+    if (!ticketActual) return;
+    const ok = dispararImpresionNavegador();
+    if (ok) {
+      setErrorImpresionTicket(null);
+    } else {
+      setErrorImpresionTicket(
+        "No se pudo enviar el ticket a la impresora térmica. Verificá la conexión USB/Red y reintentá manualmente."
+      );
+    }
+  }, [ticketActual]);
+
   const cerrarMesaDetalle = useCallback(() => setMesaDetalleKey(null), []);
   const mesasAgrupadas = useMemo(() => {
     const grupos = new Map<string, MesaGrupo>();
@@ -1026,6 +1159,8 @@ export default function RecepcionistaSection() {
           onTodoListo={marcarMesaTodoLista}
           onCerrarCuenta={cerrarCuenta}
           onHabilitarPago={habilitarPago}
+          onImprimirMesa={handleImprimirMesa}
+          onImprimirPedido={handleImprimirPedido}
           mesaAccionEnCurso={mesaAccionEnCurso}
         />
       )}
@@ -1034,7 +1169,25 @@ export default function RecepcionistaSection() {
         isOpen={stockModalAbierto}
         onClose={() => setStockModalAbierto(false)}
       />
-		<PedidoAsistidoModal abierto={pedidoAsistidoAbierto} mesas={Object.values(mesas).filter((m) => m.estado === 'activa')} onClose={() => setPedidoAsistidoAbierto(false)} onCreado={() => void cargarDatos()} />
+      <PedidoAsistidoModal
+        abierto={pedidoAsistidoAbierto}
+        mesas={Object.values(mesas).filter((m) => m.estado === 'activa')}
+        onClose={() => setPedidoAsistidoAbierto(false)}
+        onCreado={() => void cargarDatos()}
+      />
+
+      <TicketTermicoModal
+        isOpen={modalTicketAbierto}
+        datos={ticketActual}
+        ancho={anchoTicket}
+        onCambiarAncho={handleCambiarAnchoTicket}
+        autoPrint={autoPrint}
+        onCambiarAutoPrint={handleCambiarAutoPrint}
+        errorImpresion={errorImpresionTicket}
+        onImprimir={handleEjecutarImpresion}
+        onClose={() => setModalTicketAbierto(false)}
+      />
+      <TicketTermicoPrintPortal datos={ticketActual} ancho={anchoTicket} />
     </div>
   );
 }

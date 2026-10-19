@@ -509,6 +509,9 @@ func TestAutenticarPassword_HandlerDevuelveSesion(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/auth/password", strings.NewReader(
 		`{"email":"admin@mibar.com","password":"MesaClick2026"}`,
 	))
+	req.Host = "mesa-click-api.onrender.com"
+	req.Header.Set("Origin", "https://mesa-click-web.onrender.com")
+	req.Header.Set("X-Forwarded-Proto", "https")
 	recorder := httptest.NewRecorder()
 
 	handler.AutenticarPassword(recorder, req)
@@ -518,6 +521,10 @@ func TestAutenticarPassword_HandlerDevuelveSesion(t *testing.T) {
 	}
 	if len(recorder.Result().Cookies()) == 0 || recorder.Result().Cookies()[0].Name != "session" || !recorder.Result().Cookies()[0].HttpOnly {
 		t.Fatalf("respuesta sin cookie HttpOnly: %s", recorder.Body.String())
+	}
+	cookie := recorder.Result().Cookies()[0]
+	if cookie.SameSite != http.SameSiteNoneMode || !cookie.Secure || !cookie.Partitioned {
+		t.Fatalf("cookie cross-site inválida: SameSite=%v Secure=%v Partitioned=%v", cookie.SameSite, cookie.Secure, cookie.Partitioned)
 	}
 	if strings.Contains(recorder.Body.String(), `"token"`) {
 		t.Fatalf("el JWT no debe exponerse al JavaScript: %s", recorder.Body.String())

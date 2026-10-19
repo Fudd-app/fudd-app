@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 )
 
 type Handlers struct {
@@ -172,10 +174,10 @@ func (h *Handlers) CerrarSesion(w http.ResponseWriter, r *http.Request) {
 	if claims != nil {
 		_ = h.svc.CerrarSesion(r.Context(), claims.UsuarioID)
 	}
+	secure, sameSite := atributosCookieSesion(r)
 	http.SetCookie(w, &http.Cookie{
 		Name: "session", Value: "", Path: "/", HttpOnly: true,
-		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" || os.Getenv("APP_ENV") == "production",
-		SameSite: http.SameSiteLaxMode, MaxAge: -1,
+		Secure: secure, SameSite: sameSite, Partitioned: sameSite == http.SameSiteNoneMode, MaxAge: -1,
 	})
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -204,14 +206,16 @@ func EscribirSesion(w http.ResponseWriter, r *http.Request, usuario *UsuarioAuth
 		return
 	}
 
+	secure, sameSite := atributosCookieSesion(r)
 	http.SetCookie(w, &http.Cookie{
-		Name:     "session",
-		Value:    jwt,
-		HttpOnly: true,
-		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" || os.Getenv("APP_ENV") == "production",
-		SameSite: http.SameSiteLaxMode,
-		Path:     "/",
-		MaxAge:   60 * 60 * 24 * 30,
+		Name:        "session",
+		Value:       jwt,
+		HttpOnly:    true,
+		Secure:      secure,
+		SameSite:    sameSite,
+		Partitioned: sameSite == http.SameSiteNoneMode,
+		Path:        "/",
+		MaxAge:      60 * 60 * 24 * 30,
 	})
 
 	w.Header().Set("Content-Type", "application/json")
@@ -221,6 +225,24 @@ func EscribirSesion(w http.ResponseWriter, r *http.Request, usuario *UsuarioAuth
 			"nombre": usuario.Nombre, "rol": usuario.Rol, "sucursal_id": usuario.SucursalID,
 		},
 	})
+}
+
+// atributosCookieSesion permite que el frontend y la API vivan en hosts
+// distintos (como los servicios separados de Render). En ese caso el navegador
+// exige SameSite=None y Secure para enviar la cookie en fetch con credenciales.
+// En desarrollo local, donde ambos usan localhost con puertos distintos, Lax
+// sigue siendo suficiente y permite trabajar por HTTP.
+func atributosCookieSesion(r *http.Request) (bool, http.SameSite) {
+	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") || strings.EqualFold(os.Getenv("APP_ENV"), "production")
+	sameSite := http.SameSiteLaxMode
+
+	origin, errOrigin := url.Parse(strings.TrimSpace(r.Header.Get("Origin")))
+	destino, errDestino := url.Parse("//" + r.Host)
+	if errOrigin == nil && errDestino == nil && origin.Hostname() != "" && destino.Hostname() != "" && !strings.EqualFold(origin.Hostname(), destino.Hostname()) {
+		return true, http.SameSiteNoneMode
+	}
+
+	return secure, sameSite
 }
 
 func jsonError(w http.ResponseWriter, msg string, status int) {
