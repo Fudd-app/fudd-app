@@ -34,6 +34,72 @@ func NuevoServiceConGoogle(s Store, e EmailSender, clientID string, verifier Ver
 	}
 }
 
+func RutaRedireccionPorRol(rol string) string {
+	if strings.EqualFold(strings.TrimSpace(rol), "cocina") {
+		return "/kds"
+	}
+	return "/dashboard"
+}
+
+func (svc *Service) ObtenerNegocioPublico(ctx context.Context, slug string) (*NegocioPublicoAuth, error) {
+	slug = strings.ToLower(strings.TrimSpace(slug))
+	if slug == "" {
+		return nil, ErrNegocioNoEncontrado
+	}
+	return svc.store.ObtenerNegocioPorSlug(ctx, slug)
+}
+
+func (svc *Service) AutenticarStaffPorSlug(ctx context.Context, slug, username, password string) (*LoginStaffResultado, error) {
+	slug = strings.ToLower(strings.TrimSpace(slug))
+	username = strings.ToLower(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(username), "@")))
+
+	if slug == "" {
+		return nil, ErrNegocioNoEncontrado
+	}
+
+	negocio, err := svc.store.ObtenerNegocioPorSlug(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+
+	if username == "" || password == "" {
+		_ = CompararPassword(dummyPasswordHash, password)
+		return nil, ErrCredencialesInvalidas
+	}
+
+	usuario, err := svc.store.ObtenerUsuarioPorTenantYUsername(ctx, negocio.ID, username)
+	if err != nil {
+		if errors.Is(err, ErrUsuarioNoEncontrado) {
+			_ = CompararPassword(dummyPasswordHash, password)
+			return nil, ErrCredencialesInvalidas
+		}
+		return nil, err
+	}
+
+	if strings.EqualFold(usuario.Estado, "archivado") {
+		_ = CompararPassword(dummyPasswordHash, password)
+		return nil, ErrCredencialesInvalidas
+	}
+
+	hash := dummyPasswordHash
+	if usuario.PasswordHash != nil && strings.TrimSpace(*usuario.PasswordHash) != "" {
+		hash = *usuario.PasswordHash
+	}
+	if err := CompararPassword(hash, password); err != nil || usuario.PasswordHash == nil {
+		return nil, ErrCredencialesInvalidas
+	}
+
+	if strings.EqualFold(usuario.Estado, "bloqueado") {
+		return nil, ErrUsuarioBloqueado
+	}
+
+	return &LoginStaffResultado{
+		Usuario:    usuario,
+		Negocio:    negocio,
+		RedirectTo: RutaRedireccionPorRol(usuario.Rol),
+	}, nil
+}
+
 func (svc *Service) AutenticarPassword(ctx context.Context, email, password string) (*UsuarioAuth, error) {
 	email = NormalizarEmail(email)
 	if email == "" || password == "" {
@@ -50,6 +116,11 @@ func (svc *Service) AutenticarPassword(ctx context.Context, email, password stri
 		return nil, err
 	}
 
+	if strings.EqualFold(usuario.Estado, "archivado") {
+		_ = CompararPassword(dummyPasswordHash, password)
+		return nil, ErrCredencialesInvalidas
+	}
+
 	hash := dummyPasswordHash
 	if usuario.PasswordHash != nil && strings.TrimSpace(*usuario.PasswordHash) != "" {
 		hash = *usuario.PasswordHash
@@ -57,6 +128,11 @@ func (svc *Service) AutenticarPassword(ctx context.Context, email, password stri
 	if err := CompararPassword(hash, password); err != nil || usuario.PasswordHash == nil {
 		return nil, ErrCredencialesInvalidas
 	}
+
+	if strings.EqualFold(usuario.Estado, "bloqueado") {
+		return nil, ErrUsuarioBloqueado
+	}
+
 	return usuario, nil
 }
 
@@ -98,6 +174,12 @@ func (svc *Service) AutenticarGoogle(ctx context.Context, credencial string) (*U
 
 	usuario, err := svc.store.ObtenerUsuarioPorGoogleSub(ctx, identidad.Subject)
 	if err == nil {
+		if strings.EqualFold(usuario.Estado, "bloqueado") {
+			return nil, ErrUsuarioBloqueado
+		}
+		if strings.EqualFold(usuario.Estado, "archivado") {
+			return nil, ErrUsuarioNoEncontrado
+		}
 		return usuario, nil
 	}
 	if !errors.Is(err, ErrUsuarioNoEncontrado) {
@@ -110,6 +192,12 @@ func (svc *Service) AutenticarGoogle(ctx context.Context, credencial string) (*U
 			slog.WarnContext(ctx, "login de Google para correo no registrado", "email", identidad.Email)
 		}
 		return nil, err
+	}
+	if strings.EqualFold(usuario.Estado, "bloqueado") {
+		return nil, ErrUsuarioBloqueado
+	}
+	if strings.EqualFold(usuario.Estado, "archivado") {
+		return nil, ErrUsuarioNoEncontrado
 	}
 	if err := svc.store.VincularGoogleSub(ctx, usuario.ID, identidad.Subject); err != nil {
 		return nil, err
@@ -131,6 +219,12 @@ func (svc *Service) SolicitarLink(ctx context.Context, email string) (string, er
 			return "", ErrUsuarioNoEncontrado
 		}
 		return "", fmt.Errorf("error buscando usuario: %w", err)
+	}
+	if strings.EqualFold(usuario.Estado, "bloqueado") {
+		return "", ErrUsuarioBloqueado
+	}
+	if strings.EqualFold(usuario.Estado, "archivado") {
+		return "", ErrUsuarioNoEncontrado
 	}
 
 	token, err := generarTokenAleatorio()
@@ -181,16 +275,27 @@ func (svc *Service) VerificarToken(ctx context.Context, token string) (*UsuarioA
 	if err := svc.store.MarcarTokenUsado(ctx, mt.ID); err != nil {
 		return nil, err
 	}
-	return svc.store.ObtenerUsuarioPorID(ctx, mt.UsuarioID)
+	usr, err := svc.store.ObtenerUsuarioPorID(ctx, mt.UsuarioID)
+	if err != nil {
+		return nil, err
+	}
+	if strings.EqualFold(usr.Estado, "bloqueado") || strings.EqualFold(usr.Estado, "archivado") {
+		return nil, errors.New("cuenta no habilitada")
+	}
+	return usr, nil
 }
 
 func GenerarJWT(claims *Claims, secreto string) (string, error) {
-	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	mc := jwt.MapClaims{
 		"usuario_id": claims.UsuarioID,
 		"tenant_id":  claims.TenantID,
 		"rol":        claims.Rol,
 		"exp":        time.Now().Add(24 * time.Hour * 30).Unix(),
-	})
+	}
+	if claims.SucursalID != nil && *claims.SucursalID != "" {
+		mc["sucursal_id"] = *claims.SucursalID
+	}
+	t := jwt.NewWithClaims(jwt.SigningMethodHS256, mc)
 	return t.SignedString([]byte(secreto))
 }
 
@@ -214,10 +319,15 @@ func ValidarJWT(tokenStr, secreto string) (*Claims, error) {
 	if !ok1 || !ok2 || !ok3 {
 		return nil, errors.New("claims inválidos o incompletos")
 	}
+	var sucursalID *string
+	if sid, ok := mc["sucursal_id"].(string); ok && sid != "" {
+		sucursalID = &sid
+	}
 	return &Claims{
-		UsuarioID: usuarioID,
-		TenantID:  tenantID,
-		Rol:       rol,
+		UsuarioID:  usuarioID,
+		TenantID:   tenantID,
+		SucursalID: sucursalID,
+		Rol:        rol,
 	}, nil
 }
 

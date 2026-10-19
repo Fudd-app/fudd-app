@@ -3,9 +3,9 @@
 > **Sprint**: Sprint 15 (05/10 – 11/10/2026)  
 > **Épica**: Seguridad, Gestión de Personal & Multi-Tenancy  
 > **Tipo**: `Fullstack / Integración`  
-> **Estado**: 📋 **Pendiente**  
-> **Asignado a**: Por asignar  
-> **Rama de trabajo**: `feat/US-83-gestion-equipo-credenciales`  
+> **Estado**: ✅ **Resuelta**  
+> **Asignado a**: Pablo Aguirre + Antigravity (AI Agent)  
+> **Rama de trabajo**: `feat/US-67-impresion-termica`  
 
 ---
 
@@ -63,41 +63,41 @@
 ## 3. Checklist de Tareas Técnicas
 
 ### 🔹 Backend (`repos/api` - Go)
-- [ ] **Migración DB (`024_add_user_credentials_and_status.sql`)**:
-  - [ ] Agregar columnas a la tabla `usuarios`:
-    - `username VARCHAR(50) NULL` (con constraint único compuesto `UNIQUE (tenant_id, username)`).
+- [x] **Migración DB (`031_add_user_credentials_and_status.sql`)**:
+  - [x] Agregar columnas a la tabla `usuarios`:
+    - `username VARCHAR(50) NULL` (con constraint único compuesto `UNIQUE (tenant_id, lower(username))`).
     - `password_hash VARCHAR(255) NULL`.
     - `estado VARCHAR(20) NOT NULL DEFAULT 'activo'` (valores: `activo`, `bloqueado`, `archivado`).
     - `deleted_at TIMESTAMPTZ NULL`.
-- [ ] **Modelos & Structs (`internal/usuario/model.go`)**:
-  - [ ] Actualizar struct `Usuario` con `Username`, `Estado` y omitir `PasswordHash` en JSON.
-  - [ ] Struct `CrearUsuarioStaffInput` con `Username`, `Password`, `Nombre`, `Rol`, `SucursalID`.
-  - [ ] Struct `ResetPasswordInput` con `NuevaPassword`.
-  - [ ] Struct `CambiarEstadoUsuarioInput` con `Estado` (`activo`, `bloqueado`, `archivado`).
-- [ ] **Servicio & Repositorio (`internal/usuario/`)**:
-  - [ ] Implementar hashing seguro con `golang.org/x/crypto/bcrypt`.
-  - [ ] Método `CrearStaff(ctx, tenantID, input)` con validación de username único por tenant.
-  - [ ] Método `ResetearPassword(ctx, usuarioID, tenantID, nuevaPassword)`.
-  - [ ] Método `CambiarEstado(ctx, usuarioID, tenantID, nuevoEstado)`.
-  - [ ] Método `Eliminar(ctx, usuarioID, tenantID)` (soft delete).
-- [ ] **Handlers HTTP**:
-  - [ ] `POST /usuarios/staff` (creación de staff con credenciales).
-  - [ ] `PATCH /usuarios/{id}/password` (blanqueo de contraseña).
-  - [ ] `PATCH /usuarios/{id}/estado` (bloqueo/desbloqueo).
-  - [ ] `DELETE /usuarios/{id}` (archivado/baja).
-- [ ] **Tests unitarios e integración**:
-  - [ ] Validar que no se permitan usernames duplicados dentro del mismo tenant pero sí en tenants diferentes.
-  - [ ] Validar que un usuario `bloqueado` no pueda autenticarse.
+- [x] **Modelos & Structs (`internal/usuario/model.go`)**:
+  - [x] Actualizar struct `Usuario` con `Username`, `Estado` y omitir `PasswordHash` en JSON.
+  - [x] Struct `CrearUsuarioStaffInput` con `Username`, `Password`, `Nombre`, `Rol`, `SucursalID`.
+  - [x] Struct `ResetPasswordInput` con `NuevaPassword`.
+  - [x] Struct `CambiarEstadoUsuarioInput` con `Estado` (`activo`, `bloqueado`, `archivado`).
+- [x] **Servicio & Repositorio (`internal/usuario/`)**:
+  - [x] Implementar hashing seguro con `golang.org/x/crypto/bcrypt`.
+  - [x] Método `CrearStaff(ctx, tenantID, input)` con validación de username único por tenant.
+  - [x] Método `ResetearPassword(ctx, usuarioID, tenantID, nuevaPassword)`.
+  - [x] Método `CambiarEstado(ctx, usuarioID, tenantID, nuevoEstado)`.
+  - [x] Método `Eliminar(ctx, usuarioID, tenantID)` (soft delete).
+- [x] **Handlers HTTP**:
+  - [x] `POST /usuarios/staff` (creación de staff con credenciales).
+  - [x] `PATCH /usuarios/{id}/password` (blanqueo de contraseña).
+  - [x] `PATCH /usuarios/{id}/estado` (bloqueo/desbloqueo).
+  - [x] `DELETE /usuarios/{id}` (archivado/baja).
+- [x] **Tests unitarios e integración**:
+  - [x] Validar que no se permitan usernames duplicados dentro del mismo tenant pero sí en tenants diferentes.
+  - [x] Validar que un usuario `bloqueado` no pueda autenticarse.
 
 ### 🔹 Frontend (`repos/web` - Next.js)
-- [ ] **Cliente API (`lib/api.ts`)**:
-  - [ ] Tipos: `UsuarioAPI` actualizado con `username`, `estado`.
-  - [ ] Métodos: `api.crearUsuarioStaff`, `api.resetearPasswordUsuario`, `api.cambiarEstadoUsuario`, `api.eliminarUsuario`.
-- [ ] **Componentes de Administración de Equipo (`components/dashboard/EquipoSection.tsx` o dentro de `ConfiguracionSection.tsx`)**:
-  - [ ] Modal de Alta con botón "Autogenerar clave" (utilidad generadora de passwords legibles tipo `Panda72!`).
-  - [ ] Botón de copiar datos de acceso al portapapeles con toast de confirmación.
-  - [ ] Modal de blanqueo de clave con autogeneración instantánea.
-  - [ ] Tabla con badges de estado y dropdown de acciones contextuales.
+- [x] **Cliente API (`lib/api.ts`)**:
+  - [x] Tipos: `UsuarioAPI` actualizado con `username`, `estado`.
+  - [x] Métodos: `api.crearUsuarioStaff`, `api.resetearPasswordUsuario`, `api.cambiarEstadoUsuario`, `api.eliminarUsuario`.
+- [x] **Componentes de Administración de Equipo (`components/dashboard/EquipoSection.tsx` o dentro de `ConfiguracionSection.tsx`)**:
+  - [x] Modal de Alta con botón "Autogenerar clave" (utilidad generadora de passwords legibles tipo `Panda72!`).
+  - [x] Botón de copiar datos de acceso al portapapeles con toast de confirmación.
+  - [x] Modal de blanqueo de clave con autogeneración instantánea.
+  - [x] Tabla con badges de estado y dropdown de acciones contextuales.
 
 ---
 

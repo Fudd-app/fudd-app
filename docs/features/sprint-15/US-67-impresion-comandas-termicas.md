@@ -3,8 +3,8 @@
 > **Sprint**: Sprint 15 (05/10 – 11/10/2026)  
 > **Épica**: Kitchen Display System (KDS) & Impresión de Comandas  
 > **Tipo**: `Integración`  
-> **Estado**: 📋 **Pendiente**  
-> **Asignado a**: Por asignar  
+> **Estado**: ✅ **Resuelta**  
+> **Asignado a**: Pablo Aguirre + Antigravity (AI Agent)  
 > **Rama de trabajo**: `feat/US-67-impresion-termica`  
 
 ---
@@ -17,19 +17,19 @@
 
 ## 2. Criterios de Aceptación (Definition of Done)
 
-- [ ] Diseño de comanda térmica limpio, monoespaciado y de alto contraste en 58mm y 80mm.
-- [ ] Detalle de ticket: Mesa, fecha/hora, número de pedido, cantidad, ítem, modificadores destacados y notas.
-- [ ] Botón 'Imprimir ticket' en cada comanda del KDS y dashboard de recepción.
-- [ ] Disparo opcional de impresión automática al entrar un nuevo pedido.
+- [x] Diseño de comanda térmica limpio, monoespaciado y de alto contraste en 58mm y 80mm.
+- [x] Detalle de ticket: Mesa, fecha/hora, número de pedido, cantidad, ítem, modificadores destacados y notas.
+- [x] Botón 'Imprimir ticket' en cada comanda del KDS y dashboard de recepción.
+- [x] Disparo opcional de impresión automática al entrar un nuevo pedido.
 
 ---
 
 ## 3. Checklist de Tareas Técnicas
 
-- [ ] Crear vista/layout de impresión térmica con `@media print` en CSS.
-- [ ] Lógica de formateo compacto para 58mm y 80mm.
-- [ ] Botón de reimpresión manual accesible.
-- [ ] Documentar integración con impresoras térmicas USB/Red.
+- [x] Crear vista/layout de impresión térmica con `@media print` en CSS.
+- [x] Lógica de formateo compacto para 58mm y 80mm.
+- [x] Botón de reimpresión manual accesible.
+- [x] Documentar integración con impresoras térmicas USB/Red.
 
 ---
 
