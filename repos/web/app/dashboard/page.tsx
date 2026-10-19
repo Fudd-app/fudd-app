@@ -47,15 +47,28 @@ export default function DashboardPage() {
   const [isTourOpen, setIsTourOpen] = useState(false);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const initialSec = localStorage.getItem("mesaclick_initial_section");
+      const staffRol = localStorage.getItem("mesaclick_staff_rol");
+      if (initialSec === "recepcionista" || staffRol === "mozo") {
+        setActiveSection("recepcionista");
+        localStorage.removeItem("mesaclick_initial_section");
+      }
+    }
+
     async function loadTenant() {
       if (estaAutenticado()) {
         try {
           const t = await api.obtenerMiTenant();
           setTenant(t);
 
-          // Si el usuario registrado aún no vio el recorrido para este tenant en esta versión
+          // Si el usuario registrado aún no vio el recorrido para este tenant en esta versión (solo admin)
           if (typeof window !== "undefined") {
             try {
+              const staffRol = localStorage.getItem("mesaclick_staff_rol");
+              if (staffRol && staffRol !== "admin") {
+                return;
+              }
               const tenantTourKey = `mesaclick_tour_seen_${t.id}`;
               const globalTourKey = "mesaclick_admin_tour_completed";
               const seen = localStorage.getItem(tenantTourKey) || localStorage.getItem(globalTourKey);
@@ -78,8 +91,14 @@ export default function DashboardPage() {
   }, []);
 
   const handleLogout = () => {
+    const staffSlug = typeof window !== "undefined" ? localStorage.getItem("mesaclick_staff_slug") : null;
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("mesaclick_staff_rol");
+      localStorage.removeItem("mesaclick_staff_slug");
+      localStorage.removeItem("mesaclick_initial_section");
+    }
     cerrarSesion();
-    router.push("/login");
+    router.push(staffSlug ? `/${staffSlug}/login` : "/login");
   };
 
   return (

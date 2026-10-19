@@ -258,6 +258,10 @@ export default function LoginPage() {
               </>
             )}
 
+            <div className="mt-16 rounded-xl border border-concrete bg-ghost-fog/60 p-12 text-12 leading-relaxed text-sage-green">
+              <strong className="text-ash-graphite">¿Sos mozo, encargado o cocinero?</strong> Ingresá a través del portal exclusivo de tu local (por ejemplo: <code className="font-mono text-ash-graphite">mesaclick.com/tu-local/login</code>) con el usuario y clave asignados.
+            </div>
+
             <small className="auth-terms">
               Mesa CLICK nunca te pedirá la contraseña de tu cuenta de Google. Al ingresar aceptás los{" "}
               <Link href="/terminos">Términos de uso</Link> y la <Link href="/privacidad">Política de privacidad</Link>.

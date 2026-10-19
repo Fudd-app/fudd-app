@@ -10,6 +10,9 @@ export interface ComandaCardProps {
   onCambiarEstadoItem: (itemId: string, nuevoEstado: "pendiente" | "preparando" | "listo") => Promise<void>;
   onComandasCompletasLista: (pedidoIds: string[]) => Promise<void>;
   onDespacharComandas: (pedidoIds: string[]) => Promise<void>;
+  onImprimirTicket?: (pedidos: PedidoAPI[], numeroMesa: number, nombreSector?: string) => void;
+  ticketImpreso?: boolean;
+  errorImpresion?: boolean;
 }
 
 export function ComandaCard({
@@ -19,6 +22,9 @@ export function ComandaCard({
   onCambiarEstadoItem,
   onComandasCompletasLista,
   onDespacharComandas,
+  onImprimirTicket,
+  ticketImpreso = false,
+  errorImpresion = false,
 }: ComandaCardProps) {
   const [minutos, setMinutos] = useState<number>(0);
   const [segundosTexto, setSegundosTexto] = useState<string>("00:00");
@@ -244,8 +250,39 @@ export function ComandaCard({
         })}
       </div>
 
-      {/* FOOTER CON BOTONES TÁCTILES RÁPIDOS (US-66) */}
+      {/* FOOTER CON BOTONES TÁCTILES RÁPIDOS (US-66 & US-67) */}
       <div className="flex gap-8 border-t border-ghost-fog bg-[#F7F8F8] p-8">
+        {onImprimirTicket && (
+          <button
+            type="button"
+            onClick={() => onImprimirTicket(pedidos, numeroMesa, nombreSector)}
+            className={`flex min-h-48 shrink-0 cursor-pointer items-center justify-center gap-5 rounded-lg border px-10 text-12 font-bold transition-all active:scale-[0.98] ${
+              errorImpresion
+                ? "border-alert-red/50 bg-red-50 text-alert-red hover:bg-red-100"
+                : ticketImpreso
+                ? "border-concrete bg-canvas-white text-sage-green hover:border-stone hover:text-ash-graphite"
+                : "border-concrete bg-canvas-white text-ash-graphite hover:border-stone hover:bg-ghost-fog"
+            }`}
+            title={
+              errorImpresion
+                ? "Fallo al imprimir — clic para reintentar"
+                : ticketImpreso
+                ? "Reimprimir ticket térmico (58/80 mm)"
+                : "Imprimir ticket térmico (58/80 mm)"
+            }
+          >
+            <span className="material-symbols-outlined text-18">
+              {errorImpresion ? "print_error" : "print"}
+            </span>
+            <span>
+              {errorImpresion
+                ? "Reintentar"
+                : ticketImpreso
+                ? "Reimprimir"
+                : "Imprimir ticket"}
+            </span>
+          </button>
+        )}
         {!todosListos && !pedidosListos ? (
           <button
             type="button"

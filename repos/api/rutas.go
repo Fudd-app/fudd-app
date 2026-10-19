@@ -104,6 +104,8 @@ func registrarRutas(mux *http.ServeMux) {
 	mux.HandleFunc("POST /auth/google", authH.AutenticarGoogle)
 	mux.HandleFunc("POST /auth/magic-link", authH.SolicitarLink)
 	mux.HandleFunc("GET /auth/verify", authH.VerificarToken)
+	mux.HandleFunc("GET /publica/negocio/{slug}", authH.ObtenerNegocioPublico)
+	mux.HandleFunc("POST /publica/negocio/{slug}/login", authH.AutenticarStaffNegocio)
 
 	// Tenant
 	tenantStore := tenant.NuevoStore()
@@ -141,7 +143,10 @@ func registrarRutas(mux *http.ServeMux) {
 	usuarioH := usuario.NuevosHandlers(usuarioSvc)
 	mux.Handle("GET /usuarios", auth.Requerir(http.HandlerFunc(usuarioH.Listar)))
 	mux.Handle("POST /usuarios", auth.Requerir(http.HandlerFunc(usuarioH.Invitar)))
+	mux.Handle("POST /usuarios/staff", auth.Requerir(http.HandlerFunc(usuarioH.CrearStaff)))
 	mux.Handle("PATCH /usuarios/{id}", auth.Requerir(http.HandlerFunc(usuarioH.Actualizar)))
+	mux.Handle("PATCH /usuarios/{id}/password", auth.Requerir(http.HandlerFunc(usuarioH.ResetearPassword)))
+	mux.Handle("PATCH /usuarios/{id}/estado", auth.Requerir(http.HandlerFunc(usuarioH.CambiarEstado)))
 	mux.Handle("DELETE /usuarios/{id}", auth.Requerir(http.HandlerFunc(usuarioH.Eliminar)))
 
 	// Carta (admin — protegida)

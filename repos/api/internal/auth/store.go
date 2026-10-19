@@ -14,6 +14,8 @@ type Store interface {
 	ObtenerUsuarioPorEmail(ctx context.Context, email string) (*UsuarioAuth, error)
 	ObtenerUsuarioPorGoogleSub(ctx context.Context, googleSub string) (*UsuarioAuth, error)
 	ObtenerUsuarioPorID(ctx context.Context, id string) (*UsuarioAuth, error)
+	ObtenerNegocioPorSlug(ctx context.Context, slug string) (*NegocioPublicoAuth, error)
+	ObtenerUsuarioPorTenantYUsername(ctx context.Context, tenantID, username string) (*UsuarioAuth, error)
 	VincularGoogleSub(ctx context.Context, usuarioID, googleSub string) error
 	GuardarToken(ctx context.Context, usuarioID, token string, expiresAt time.Time) (string, error)
 	ObtenerToken(ctx context.Context, token string) (*MagicToken, error)
@@ -27,9 +29,13 @@ func NuevoStore() Store { return &pgStore{} }
 func (s *pgStore) ObtenerUsuarioPorEmail(ctx context.Context, email string) (*UsuarioAuth, error) {
 	u := &UsuarioAuth{}
 	err := db.Pool.QueryRow(ctx,
-		// lower() para que emails cargados con mayúsculas sigan matcheando.
-		`SELECT id, tenant_id, email, rol, google_sub, password_hash FROM usuarios WHERE lower(email) = lower($1)`, email,
-	).Scan(&u.ID, &u.TenantID, &u.Email, &u.Rol, &u.GoogleSub, &u.PasswordHash)
+		`SELECT id, tenant_id, sucursal_id, username, COALESCE(nombre, ''), COALESCE(email, ''),
+		        rol, COALESCE(estado, 'activo'), google_sub, password_hash
+		   FROM usuarios
+		  WHERE lower(email) = lower($1) AND deleted_at IS NULL`,
+		email,
+	).Scan(&u.ID, &u.TenantID, &u.SucursalID, &u.Username, &u.Nombre, &u.Email,
+		&u.Rol, &u.Estado, &u.GoogleSub, &u.PasswordHash)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrUsuarioNoEncontrado
@@ -42,8 +48,13 @@ func (s *pgStore) ObtenerUsuarioPorEmail(ctx context.Context, email string) (*Us
 func (s *pgStore) ObtenerUsuarioPorGoogleSub(ctx context.Context, googleSub string) (*UsuarioAuth, error) {
 	u := &UsuarioAuth{}
 	err := db.Pool.QueryRow(ctx,
-		`SELECT id, tenant_id, email, rol, google_sub, password_hash FROM usuarios WHERE google_sub = $1`, googleSub,
-	).Scan(&u.ID, &u.TenantID, &u.Email, &u.Rol, &u.GoogleSub, &u.PasswordHash)
+		`SELECT id, tenant_id, sucursal_id, username, COALESCE(nombre, ''), COALESCE(email, ''),
+		        rol, COALESCE(estado, 'activo'), google_sub, password_hash
+		   FROM usuarios
+		  WHERE google_sub = $1 AND deleted_at IS NULL`,
+		googleSub,
+	).Scan(&u.ID, &u.TenantID, &u.SucursalID, &u.Username, &u.Nombre, &u.Email,
+		&u.Rol, &u.Estado, &u.GoogleSub, &u.PasswordHash)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrUsuarioNoEncontrado
@@ -56,10 +67,53 @@ func (s *pgStore) ObtenerUsuarioPorGoogleSub(ctx context.Context, googleSub stri
 func (s *pgStore) ObtenerUsuarioPorID(ctx context.Context, id string) (*UsuarioAuth, error) {
 	u := &UsuarioAuth{}
 	err := db.Pool.QueryRow(ctx,
-		`SELECT id, tenant_id, email, rol, google_sub, password_hash FROM usuarios WHERE id = $1`, id,
-	).Scan(&u.ID, &u.TenantID, &u.Email, &u.Rol, &u.GoogleSub, &u.PasswordHash)
+		`SELECT id, tenant_id, sucursal_id, username, COALESCE(nombre, ''), COALESCE(email, ''),
+		        rol, COALESCE(estado, 'activo'), google_sub, password_hash
+		   FROM usuarios
+		  WHERE id = $1 AND deleted_at IS NULL`,
+		id,
+	).Scan(&u.ID, &u.TenantID, &u.SucursalID, &u.Username, &u.Nombre, &u.Email,
+		&u.Rol, &u.Estado, &u.GoogleSub, &u.PasswordHash)
 	if err != nil {
 		return nil, fmt.Errorf("usuario no encontrado: %w", err)
+	}
+	return u, nil
+}
+
+func (s *pgStore) ObtenerNegocioPorSlug(ctx context.Context, slug string) (*NegocioPublicoAuth, error) {
+	neg := &NegocioPublicoAuth{}
+	err := db.Pool.QueryRow(ctx,
+		`SELECT id, slug, nombre, COALESCE(nombre_fantasia, ''), COALESCE(rubro, ''),
+		        logo_url, color_primario, estilo_visual
+		   FROM tenants
+		  WHERE lower(slug) = lower($1)`,
+		slug,
+	).Scan(&neg.ID, &neg.Slug, &neg.Nombre, &neg.NombreFantasia, &neg.Rubro,
+		&neg.LogoURL, &neg.ColorPrimario, &neg.EstiloVisual)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNegocioNoEncontrado
+		}
+		return nil, fmt.Errorf("error consultando negocio por slug: %w", err)
+	}
+	return neg, nil
+}
+
+func (s *pgStore) ObtenerUsuarioPorTenantYUsername(ctx context.Context, tenantID, username string) (*UsuarioAuth, error) {
+	u := &UsuarioAuth{}
+	err := db.Pool.QueryRow(ctx,
+		`SELECT id, tenant_id, sucursal_id, username, COALESCE(nombre, ''), COALESCE(email, ''),
+		        rol, COALESCE(estado, 'activo'), google_sub, password_hash
+		   FROM usuarios
+		  WHERE tenant_id = $1 AND lower(username) = lower($2) AND deleted_at IS NULL`,
+		tenantID, username,
+	).Scan(&u.ID, &u.TenantID, &u.SucursalID, &u.Username, &u.Nombre, &u.Email,
+		&u.Rol, &u.Estado, &u.GoogleSub, &u.PasswordHash)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUsuarioNoEncontrado
+		}
+		return nil, fmt.Errorf("error consultando usuario de staff por username: %w", err)
 	}
 	return u, nil
 }

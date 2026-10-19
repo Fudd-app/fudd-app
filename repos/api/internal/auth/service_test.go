@@ -15,13 +15,15 @@ import (
 )
 
 type mockStore struct {
-	obtenerUsuarioPorEmailFn     func(ctx context.Context, email string) (*auth.UsuarioAuth, error)
-	obtenerUsuarioPorGoogleSubFn func(ctx context.Context, googleSub string) (*auth.UsuarioAuth, error)
-	obtenerUsuarioPorIDFn        func(ctx context.Context, id string) (*auth.UsuarioAuth, error)
-	vincularGoogleSubFn          func(ctx context.Context, usuarioID, googleSub string) error
-	guardarTokenFn               func(ctx context.Context, usuarioID, token string, expiresAt time.Time) (string, error)
-	obtenerTokenFn               func(ctx context.Context, token string) (*auth.MagicToken, error)
-	marcarTokenUsadoFn           func(ctx context.Context, tokenID string) error
+	obtenerUsuarioPorEmailFn           func(ctx context.Context, email string) (*auth.UsuarioAuth, error)
+	obtenerUsuarioPorGoogleSubFn       func(ctx context.Context, googleSub string) (*auth.UsuarioAuth, error)
+	obtenerUsuarioPorIDFn              func(ctx context.Context, id string) (*auth.UsuarioAuth, error)
+	obtenerNegocioPorSlugFn            func(ctx context.Context, slug string) (*auth.NegocioPublicoAuth, error)
+	obtenerUsuarioPorTenantYUsernameFn func(ctx context.Context, tenantID, username string) (*auth.UsuarioAuth, error)
+	vincularGoogleSubFn                func(ctx context.Context, usuarioID, googleSub string) error
+	guardarTokenFn                     func(ctx context.Context, usuarioID, token string, expiresAt time.Time) (string, error)
+	obtenerTokenFn                     func(ctx context.Context, token string) (*auth.MagicToken, error)
+	marcarTokenUsadoFn                 func(ctx context.Context, tokenID string) error
 }
 
 func (m *mockStore) ObtenerUsuarioPorEmail(ctx context.Context, email string) (*auth.UsuarioAuth, error) {
@@ -32,6 +34,18 @@ func (m *mockStore) ObtenerUsuarioPorGoogleSub(ctx context.Context, googleSub st
 }
 func (m *mockStore) ObtenerUsuarioPorID(ctx context.Context, id string) (*auth.UsuarioAuth, error) {
 	return m.obtenerUsuarioPorIDFn(ctx, id)
+}
+func (m *mockStore) ObtenerNegocioPorSlug(ctx context.Context, slug string) (*auth.NegocioPublicoAuth, error) {
+	if m.obtenerNegocioPorSlugFn != nil {
+		return m.obtenerNegocioPorSlugFn(ctx, slug)
+	}
+	return nil, auth.ErrNegocioNoEncontrado
+}
+func (m *mockStore) ObtenerUsuarioPorTenantYUsername(ctx context.Context, tenantID, username string) (*auth.UsuarioAuth, error) {
+	if m.obtenerUsuarioPorTenantYUsernameFn != nil {
+		return m.obtenerUsuarioPorTenantYUsernameFn(ctx, tenantID, username)
+	}
+	return nil, auth.ErrUsuarioNoEncontrado
 }
 func (m *mockStore) VincularGoogleSub(ctx context.Context, usuarioID, googleSub string) error {
 	return m.vincularGoogleSubFn(ctx, usuarioID, googleSub)
@@ -505,3 +519,105 @@ func TestAutenticarPassword_HandlerDevuelveSesion(t *testing.T) {
 		t.Fatalf("respuesta sin sesión: %s", recorder.Body.String())
 	}
 }
+
+func TestAutenticarStaffPorSlug_ExitosoYRedireccionPorRol(t *testing.T) {
+	hash, err := auth.HashPasswordStaff("Panda721")
+	if err != nil {
+		t.Fatalf("error generando hash staff: %v", err)
+	}
+	uname := "cocina1"
+	sucID := "suc-1"
+
+	store := &mockStore{
+		obtenerNegocioPorSlugFn: func(ctx context.Context, slug string) (*auth.NegocioPublicoAuth, error) {
+			if slug == "pizzeria-roma" {
+				return &auth.NegocioPublicoAuth{ID: "tenant-A", Slug: slug, Nombre: "Pizzería Roma"}, nil
+			}
+			return nil, auth.ErrNegocioNoEncontrado
+		},
+		obtenerUsuarioPorTenantYUsernameFn: func(ctx context.Context, tenantID, username string) (*auth.UsuarioAuth, error) {
+			if tenantID == "tenant-A" && username == "cocina1" {
+				return &auth.UsuarioAuth{
+					ID:           "usr-cocina-1",
+					TenantID:     "tenant-A",
+					SucursalID:   &sucID,
+					Username:     &uname,
+					Nombre:       "Carlos Cocina",
+					Rol:          "cocina",
+					Estado:       "activo",
+					PasswordHash: &hash,
+				}, nil
+			}
+			return nil, auth.ErrUsuarioNoEncontrado
+		},
+	}
+
+	svc := auth.NuevoService(store, &mockEmailSender{})
+	res, err := svc.AutenticarStaffPorSlug(context.Background(), "Pizzeria-Roma", "@Cocina1", "Panda721")
+	if err != nil {
+		t.Fatalf("error inesperado en login staff: %v", err)
+	}
+	if res.RedirectTo != "/kds" {
+		t.Errorf("redirect_to esperado /kds para rol cocina, got %q", res.RedirectTo)
+	}
+	if res.Usuario.TenantID != "tenant-A" {
+		t.Errorf("tenant_id inesperado: %q", res.Usuario.TenantID)
+	}
+}
+
+func TestAutenticarStaffPorSlug_RechazaUsuarioBloqueadoYAislamientoPorTenant(t *testing.T) {
+	hash, err := auth.HashPasswordStaff("Panda721")
+	if err != nil {
+		t.Fatalf("error generando hash staff: %v", err)
+	}
+	uname := "mozo1"
+
+	store := &mockStore{
+		obtenerNegocioPorSlugFn: func(ctx context.Context, slug string) (*auth.NegocioPublicoAuth, error) {
+			switch slug {
+			case "local-a":
+				return &auth.NegocioPublicoAuth{ID: "tenant-A", Slug: "local-a", Nombre: "Local A"}, nil
+			case "local-b":
+				return &auth.NegocioPublicoAuth{ID: "tenant-B", Slug: "local-b", Nombre: "Local B"}, nil
+			default:
+				return nil, auth.ErrNegocioNoEncontrado
+			}
+		},
+		obtenerUsuarioPorTenantYUsernameFn: func(ctx context.Context, tenantID, username string) (*auth.UsuarioAuth, error) {
+			// El usuario mozo1 pertenece únicamente a tenant-A y está bloqueado
+			if tenantID == "tenant-A" && username == "mozo1" {
+				return &auth.UsuarioAuth{
+					ID:           "usr-mozo-1",
+					TenantID:     "tenant-A",
+					Username:     &uname,
+					Nombre:       "Juan Mozo",
+					Rol:          "mozo",
+					Estado:       "bloqueado",
+					PasswordHash: &hash,
+				}, nil
+			}
+			return nil, auth.ErrUsuarioNoEncontrado
+		},
+	}
+
+	svc := auth.NuevoService(store, &mockEmailSender{})
+
+	// 1. Usuario bloqueado en su propio tenant recibe ErrUsuarioBloqueado
+	_, err = svc.AutenticarStaffPorSlug(context.Background(), "local-a", "mozo1", "Panda721")
+	if !errors.Is(err, auth.ErrUsuarioBloqueado) {
+		t.Fatalf("esperaba ErrUsuarioBloqueado, got: %v", err)
+	}
+
+	// 2. Mismo username y clave intentando entrar en local-b (tenant-B) es rechazado por aislamiento de tenant
+	_, err = svc.AutenticarStaffPorSlug(context.Background(), "local-b", "mozo1", "Panda721")
+	if !errors.Is(err, auth.ErrCredencialesInvalidas) {
+		t.Fatalf("esperaba ErrCredencialesInvalidas al intentar loguearse en otro tenant, got: %v", err)
+	}
+
+	// 3. Contraseña incorrecta
+	_, err = svc.AutenticarStaffPorSlug(context.Background(), "local-a", "mozo1", "ClaveFalsa99")
+	if !errors.Is(err, auth.ErrCredencialesInvalidas) {
+		t.Fatalf("esperaba ErrCredencialesInvalidas por clave incorrecta, got: %v", err)
+	}
+}
+

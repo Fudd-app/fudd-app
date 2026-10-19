@@ -7,6 +7,8 @@ import (
 	"os"
 )
 
+const msgUsuarioBloqueado = "Tu usuario ha sido suspendido temporalmente. Por favor, consultá con el encargado del local."
+
 type Handlers struct {
 	svc *Service
 	// exponerLink habilita devolver el magic link en la respuesta HTTP.
@@ -32,6 +34,10 @@ func (h *Handlers) SolicitarLink(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, ErrUsuarioNoEncontrado) {
 			jsonError(w, "No encontramos una cuenta registrada con ese correo.", http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, ErrUsuarioBloqueado) {
+			jsonError(w, msgUsuarioBloqueado, http.StatusForbidden)
 			return
 		}
 		jsonError(w, "error interno", http.StatusInternalServerError)
@@ -77,6 +83,10 @@ func (h *Handlers) AutenticarPassword(w http.ResponseWriter, r *http.Request) {
 
 	usuario, err := h.svc.AutenticarPassword(r.Context(), body.Email, body.Password)
 	if err != nil {
+		if errors.Is(err, ErrUsuarioBloqueado) {
+			jsonError(w, msgUsuarioBloqueado, http.StatusForbidden)
+			return
+		}
 		if errors.Is(err, ErrCredencialesInvalidas) {
 			jsonError(w, "Correo o contraseña incorrectos.", http.StatusUnauthorized)
 			return
@@ -99,6 +109,8 @@ func (h *Handlers) AutenticarGoogle(w http.ResponseWriter, r *http.Request) {
 	usuario, err := h.svc.AutenticarGoogle(r.Context(), body.Credencial)
 	if err != nil {
 		switch {
+		case errors.Is(err, ErrUsuarioBloqueado):
+			jsonError(w, msgUsuarioBloqueado, http.StatusForbidden)
 		case errors.Is(err, ErrUsuarioNoEncontrado):
 			jsonError(w, "No encontramos una cuenta registrada con ese correo.", http.StatusNotFound)
 		case errors.Is(err, ErrGoogleNoConfigurado):
@@ -116,6 +128,100 @@ func (h *Handlers) AutenticarGoogle(w http.ResponseWriter, r *http.Request) {
 	h.crearSesion(w, r, usuario)
 }
 
+// ObtenerNegocioPublico devuelve los datos públicos de branding del negocio para /[slug]/login (US-84).
+func (h *Handlers) ObtenerNegocioPublico(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	negocio, err := h.svc.ObtenerNegocioPublico(r.Context(), slug)
+	if err != nil {
+		if errors.Is(err, ErrNegocioNoEncontrado) {
+			jsonError(w, "Comercio no encontrado.", http.StatusNotFound)
+			return
+		}
+		jsonError(w, "error interno", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(negocio)
+}
+
+// AutenticarStaffNegocio autentica al personal operativo dentro del ámbito estricto del tenant (US-84).
+func (h *Handlers) AutenticarStaffNegocio(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
+	slug := r.PathValue("slug")
+
+	var body struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonError(w, "body inválido", http.StatusBadRequest)
+		return
+	}
+
+	res, err := h.svc.AutenticarStaffPorSlug(r.Context(), slug, body.Username, body.Password)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrNegocioNoEncontrado):
+			jsonError(w, "Comercio no encontrado.", http.StatusNotFound)
+		case errors.Is(err, ErrUsuarioBloqueado):
+			jsonError(w, msgUsuarioBloqueado, http.StatusForbidden)
+		case errors.Is(err, ErrCredencialesInvalidas):
+			jsonError(w, "Credenciales inválidas.", http.StatusUnauthorized)
+		default:
+			jsonError(w, "error interno", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	secreto := os.Getenv("JWT_SECRET")
+	if secreto == "" {
+		jsonError(w, "error generando sesión", http.StatusInternalServerError)
+		return
+	}
+
+	jwtToken, err := GenerarJWT(&Claims{
+		UsuarioID:  res.Usuario.ID,
+		TenantID:   res.Usuario.TenantID,
+		SucursalID: res.Usuario.SucursalID,
+		Rol:        res.Usuario.Rol,
+	}, secreto)
+	if err != nil {
+		jsonError(w, "error generando sesión", http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "session",
+		Value:    jwtToken,
+		HttpOnly: true,
+		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" || os.Getenv("APP_ENV") == "production",
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+		MaxAge:   60 * 60 * 24 * 30,
+	})
+
+	uname := ""
+	if res.Usuario.Username != nil {
+		uname = *res.Usuario.Username
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"token":       jwtToken,
+		"redirect_to": res.RedirectTo,
+		"usuario": UsuarioStaffSesion{
+			ID:         res.Usuario.ID,
+			TenantID:   res.Usuario.TenantID,
+			SucursalID: res.Usuario.SucursalID,
+			Username:   uname,
+			Nombre:     res.Usuario.Nombre,
+			Rol:        res.Usuario.Rol,
+		},
+	})
+}
+
 func (h *Handlers) crearSesion(w http.ResponseWriter, r *http.Request, usuario *UsuarioAuth) {
 	secreto := os.Getenv("JWT_SECRET")
 	if secreto == "" {
@@ -123,9 +229,10 @@ func (h *Handlers) crearSesion(w http.ResponseWriter, r *http.Request, usuario *
 		return
 	}
 	jwt, err := GenerarJWT(&Claims{
-		UsuarioID: usuario.ID,
-		TenantID:  usuario.TenantID,
-		Rol:       usuario.Rol,
+		UsuarioID:  usuario.ID,
+		TenantID:   usuario.TenantID,
+		SucursalID: usuario.SucursalID,
+		Rol:        usuario.Rol,
 	}, secreto)
 	if err != nil {
 		jsonError(w, "error generando sesión", http.StatusInternalServerError)
@@ -143,7 +250,10 @@ func (h *Handlers) crearSesion(w http.ResponseWriter, r *http.Request, usuario *
 	})
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"token": jwt})
+	json.NewEncoder(w).Encode(map[string]any{
+		"token":       jwt,
+		"redirect_to": RutaRedireccionPorRol(usuario.Rol),
+	})
 }
 
 func jsonError(w http.ResponseWriter, msg string, status int) {

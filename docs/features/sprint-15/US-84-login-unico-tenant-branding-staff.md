@@ -3,9 +3,9 @@
 > **Sprint**: Sprint 15 (05/10 – 11/10/2026)  
 > **Épica**: Seguridad, Gestión de Personal & Multi-Tenancy  
 > **Tipo**: `Fullstack / Integración`  
-> **Estado**: 📋 **Pendiente**  
-> **Asignado a**: Por asignar  
-> **Rama de trabajo**: `feat/US-84-login-tenant-branding`  
+> **Estado**: ✅ **Resuelta**  
+> **Asignado a**: Pablo Aguirre + Antigravity (AI Agent)  
+> **Rama de trabajo**: `feat/US-67-impresion-termica`  
 
 ---
 
@@ -63,33 +63,33 @@
 ## 3. Checklist de Tareas Técnicas
 
 ### 🔹 Backend (`repos/api` - Go)
-- [ ] **Endpoint Público de Información de Tenant (`GET /publica/negocio/{slug}`)**:
+- [x] **Endpoint Público de Información de Tenant (`GET /publica/negocio/{slug}`)**:
   - Retornar nombre de fantasía, logo URL, color primario y estado activo del negocio para armar la cabecera visual del login.
-- [ ] **Endpoint de Login de Staff (`POST /publica/negocio/{slug}/login`)**:
-  - [ ] Buscar el tenant por `slug`.
-  - [ ] Buscar el usuario por `tenant_id` y `username` (case-insensitive) donde `deleted_at IS NULL`.
-  - [ ] Verificar que el usuario no esté en estado `bloqueado`.
-  - [ ] Comparar contraseña mediante `bcrypt.CompareHashAndPassword`.
-  - [ ] Generar token JWT con claims estándar: `user_id`, `tenant_id`, `sucursal_id`, `rol`, expiración.
-  - [ ] Retornar el token JWT y los datos del usuario + ruta sugerida de redirección (`/kds` o `/dashboard`).
-- [ ] **Tests de Backend**:
-  - [ ] Test unitario de autenticación con contraseña válida.
-  - [ ] Test de rechazo por contraseña incorrecta.
-  - [ ] Test de rechazo cuando el usuario está en estado `bloqueado`.
-  - [ ] Test de aislamiento: usuario de tenant A no puede loguearse en tenant B aunque use mismo username y clave.
+- [x] **Endpoint de Login de Staff (`POST /publica/negocio/{slug}/login`)**:
+  - [x] Buscar el tenant por `slug`.
+  - [x] Buscar el usuario por `tenant_id` y `username` (case-insensitive) donde `deleted_at IS NULL`.
+  - [x] Verificar que el usuario no esté en estado `bloqueado`.
+  - [x] Comparar contraseña mediante `bcrypt.CompareHashAndPassword`.
+  - [x] Generar token JWT con claims estándar: `user_id`, `tenant_id`, `sucursal_id`, `rol`, expiración.
+  - [x] Retornar el token JWT y los datos del usuario + ruta sugerida de redirección (`/kds` o `/dashboard`).
+- [x] **Tests de Backend**:
+  - [x] Test unitario de autenticación con contraseña válida.
+  - [x] Test de rechazo por contraseña incorrecta.
+  - [x] Test de rechazo cuando el usuario está en estado `bloqueado`.
+  - [x] Test de aislamiento: usuario de tenant A no puede loguearse en tenant B aunque use mismo username y clave.
 
 ### 🔹 Frontend (`repos/web` - Next.js)
-- [ ] **Ruta Dinámica `app/[slug]/login/page.tsx`**:
-  - [ ] Cargar datos públicos del negocio a partir del slug (SSG / SSR con revalidación o fetch inicial).
-  - [ ] Renderizar tarjeta de login con el branding del comercio (logo, nombre, colores).
-  - [ ] Formulario accesible con inputs:
+- [x] **Ruta Dinámica `app/[slug]/login/page.tsx`**:
+  - [x] Cargar datos públicos del negocio a partir del slug (SSG / SSR con revalidación o fetch inicial).
+  - [x] Renderizar tarjeta de login con el branding del comercio (logo, nombre, colores).
+  - [x] Formulario accesible con inputs:
     - `username` (autofocus, teclado texto/alfanumérico).
     - `password` (con toggle de mostrar/ocultar clave 👁️).
-  - [ ] Manejo de errores con banners explicativos (credenciales incorrectas, usuario bloqueado, error de red).
-  - [ ] Almacenar token en cookie/localStorage mediante `guardarToken()`.
-  - [ ] Redirección automática según el rol recibido (`/kds` o `/dashboard`).
-- [ ] **Ajuste en Login Maestro (`app/login/page.tsx`)**:
-  - [ ] Agregar aclaración informativa: *"¿Sos mozo o cocinero? Ingresá a través del portal de tu local (ej: mesaclick.com/tu-local/login)"*.
+  - [x] Manejo de errores con banners explicativos (credenciales incorrectas, usuario bloqueado, error de red).
+  - [x] Almacenar token en cookie/localStorage mediante `guardarToken()`.
+  - [x] Redirección automática según el rol recibido (`/kds` o `/dashboard`).
+- [x] **Ajuste en Login Maestro (`app/login/page.tsx`)**:
+  - [x] Agregar aclaración informativa: *"¿Sos mozo o cocinero? Ingresá a través del portal de tu local (ej: mesaclick.com/tu-local/login)"*.
 
 ---
 

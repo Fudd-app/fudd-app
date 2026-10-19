@@ -12,6 +12,18 @@ import { KDSHeader } from "@/components/kds/KDSHeader";
 import { ComandaCard } from "@/components/kds/ComandaCard";
 import { HistorialDespachoDrawer } from "@/components/kds/HistorialDespachoDrawer";
 import { playNewOrderSound, playOrderReadySound } from "@/components/kds/AudioAlerts";
+import {
+  AnchoTicketTermico,
+  DatosTicketTermico,
+  TicketTermicoModal,
+  TicketTermicoPrintPortal,
+  construirDatosTicketDesdePedidos,
+  dispararImpresionNavegador,
+  getAnchoTicketTermico,
+  isAutoPrintEnabled,
+  setAnchoTicketTermico,
+  setAutoPrintEnabled,
+} from "@/components/kds/TicketTermico";
 
 const VENTANA_AGRUPACION_MS = 5 * 60 * 1000;
 
@@ -69,6 +81,20 @@ export default function KDSPage() {
   const [cargando, setCargando] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [drawerHistorialAbierto, setDrawerHistorialAbierto] = useState<boolean>(false);
+
+  // Estados de impresión térmica (US-67)
+  const [anchoTicket, setAnchoTicket] = useState<AnchoTicketTermico>("80mm");
+  const [autoPrint, setAutoPrint] = useState<boolean>(false);
+  const [ticketActual, setTicketActual] = useState<DatosTicketTermico | null>(null);
+  const [modalTicketAbierto, setModalTicketAbierto] = useState<boolean>(false);
+  const [errorImpresionTicket, setErrorImpresionTicket] = useState<string | null>(null);
+  const [ticketsImpresosIds, setTicketsImpresosIds] = useState<Record<string, boolean>>({});
+  const [ticketsErrorIds, setTicketsErrorIds] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setAnchoTicket(getAnchoTicketTermico());
+    setAutoPrint(isAutoPrintEnabled());
+  }, []);
 
   // 1. Verificación de autenticación y carga inicial de sucursales y mesas
   useEffect(() => {
@@ -175,7 +201,7 @@ export default function KDSPage() {
         setConectadoSSE(true);
       });
 
-      // Nueva comanda ingresada (US-66: sonido de campana / chime)
+      // Nueva comanda ingresada (US-66: sonido de campana / chime + US-67: auto-print opcional)
       eventSource.addEventListener("pedido_creado", (e: MessageEvent) => {
         try {
           const nuevoPedido: PedidoAPI = JSON.parse(e.data);
@@ -186,6 +212,32 @@ export default function KDSPage() {
             }
             return [...prev, nuevoPedido];
           });
+
+          // Disparo automático de comanda térmica si está habilitado (US-67)
+          if (isAutoPrintEnabled()) {
+            const infoMesa = mesasMap[nuevoPedido.mesa_id];
+            const sucActual = sucursales.find((s) => s.id === sucursalSeleccionadaId);
+            const datos = construirDatosTicketDesdePedidos(
+              [nuevoPedido],
+              infoMesa?.numero ?? 1,
+              {
+                sector: infoMesa?.sector,
+                sucursalNombre: sucActual?.nombre,
+                mostrarPrecios: false,
+                esReimpresion: false,
+              }
+            );
+            setTicketActual(datos);
+            setTimeout(() => {
+              const ok = dispararImpresionNavegador();
+              if (ok) {
+                setTicketsImpresosIds((prev) => ({ ...prev, [nuevoPedido.id]: true }));
+                setTicketsErrorIds((prev) => ({ ...prev, [nuevoPedido.id]: false }));
+              } else {
+                setTicketsErrorIds((prev) => ({ ...prev, [nuevoPedido.id]: true }));
+              }
+            }, 120);
+          }
         } catch (err) {
           console.error("Error procesando pedido_creado SSE:", err);
         }
@@ -258,7 +310,7 @@ export default function KDSPage() {
         eventSource.close();
       }
     };
-  }, [sucursalSeleccionadaId]);
+  }, [sucursalSeleccionadaId, mesasMap, sucursales]);
 
   // Cambio de sucursal desde el header
   function handleCambiarSucursal(sucId: string) {
@@ -374,6 +426,50 @@ export default function KDSPage() {
     []
   );
 
+  // Handlers de impresión térmica (US-67)
+  const handleCambiarAnchoTicket = useCallback((nuevoAncho: AnchoTicketTermico) => {
+    setAnchoTicket(nuevoAncho);
+    setAnchoTicketTermico(nuevoAncho);
+  }, []);
+
+  const handleCambiarAutoPrint = useCallback((activo: boolean) => {
+    setAutoPrint(activo);
+    setAutoPrintEnabled(activo);
+  }, []);
+
+  const handleAbrirImpresionTicket = useCallback(
+    (pedidosGrupo: PedidoAPI[], numeroMesa: number, nombreSector?: string) => {
+      const principalId = pedidosGrupo[0]?.id || "";
+      const yaImpreso = Boolean(principalId && ticketsImpresosIds[principalId]);
+      const sucActual = sucursales.find((s) => s.id === sucursalSeleccionadaId);
+      const datos = construirDatosTicketDesdePedidos(pedidosGrupo, numeroMesa, {
+        sector: nombreSector,
+        sucursalNombre: sucActual?.nombre,
+        mostrarPrecios: false,
+        esReimpresion: yaImpreso,
+      });
+      setTicketActual(datos);
+      setErrorImpresionTicket(null);
+      setModalTicketAbierto(true);
+    },
+    [sucursalSeleccionadaId, sucursales, ticketsImpresosIds]
+  );
+
+  const handleEjecutarImpresion = useCallback(() => {
+    if (!ticketActual) return;
+    const ok = dispararImpresionNavegador();
+    if (ok) {
+      setErrorImpresionTicket(null);
+      setTicketsImpresosIds((prev) => ({ ...prev, [ticketActual.id]: true }));
+      setTicketsErrorIds((prev) => ({ ...prev, [ticketActual.id]: false }));
+    } else {
+      setErrorImpresionTicket(
+        "No se pudo comunicar con la cola de impresión. Verificá que la impresora térmica esté encendida y volvé a intentar."
+      );
+      setTicketsErrorIds((prev) => ({ ...prev, [ticketActual.id]: true }));
+    }
+  }, [ticketActual]);
+
   // 5. Clasificación Kanban por columnas (US-65)
   // Ordenamiento FIFO: más antiguas primero (created_at ascendente)
   const { pendientes, enPreparacion, listos } = useMemo(() => {
@@ -419,6 +515,10 @@ export default function KDSPage() {
         totalComandasActivas={pedidosActivos.length}
         totalDespachadas={pedidosDespachados.length}
         onAbrirHistorial={() => setDrawerHistorialAbierto(true)}
+        autoPrint={autoPrint}
+        onToggleAutoPrint={() => handleCambiarAutoPrint(!autoPrint)}
+        anchoTicket={anchoTicket}
+        onCambiarAnchoTicket={handleCambiarAnchoTicket}
       />
 
       {/* CONTENIDO PRINCIPAL */}
@@ -473,6 +573,7 @@ export default function KDSPage() {
                 ) : (
                   pendientes.map((grupo) => {
                     const mesaInfo = mesasMap[grupo.mesaId];
+                    const pid = grupo.pedidos[0]?.id || "";
                     return (
                       <ComandaCard
                         key={grupo.id}
@@ -482,6 +583,9 @@ export default function KDSPage() {
                         onCambiarEstadoItem={handleCambiarEstadoItem}
                         onComandasCompletasLista={handleComandasCompletasLista}
                         onDespacharComandas={handleDespacharComandas}
+                        onImprimirTicket={handleAbrirImpresionTicket}
+                        ticketImpreso={Boolean(ticketsImpresosIds[pid])}
+                        errorImpresion={Boolean(ticketsErrorIds[pid])}
                       />
                     );
                   })
@@ -517,6 +621,7 @@ export default function KDSPage() {
                 ) : (
                   enPreparacion.map((grupo) => {
                     const mesaInfo = mesasMap[grupo.mesaId];
+                    const pid = grupo.pedidos[0]?.id || "";
                     return (
                       <ComandaCard
                         key={grupo.id}
@@ -526,6 +631,9 @@ export default function KDSPage() {
                         onCambiarEstadoItem={handleCambiarEstadoItem}
                         onComandasCompletasLista={handleComandasCompletasLista}
                         onDespacharComandas={handleDespacharComandas}
+                        onImprimirTicket={handleAbrirImpresionTicket}
+                        ticketImpreso={Boolean(ticketsImpresosIds[pid])}
+                        errorImpresion={Boolean(ticketsErrorIds[pid])}
                       />
                     );
                   })
@@ -561,6 +669,7 @@ export default function KDSPage() {
                 ) : (
                   listos.map((grupo) => {
                     const mesaInfo = mesasMap[grupo.mesaId];
+                    const pid = grupo.pedidos[0]?.id || "";
                     return (
                       <ComandaCard
                         key={grupo.id}
@@ -570,6 +679,9 @@ export default function KDSPage() {
                         onCambiarEstadoItem={handleCambiarEstadoItem}
                         onComandasCompletasLista={handleComandasCompletasLista}
                         onDespacharComandas={handleDespacharComandas}
+                        onImprimirTicket={handleAbrirImpresionTicket}
+                        ticketImpreso={Boolean(ticketsImpresosIds[pid])}
+                        errorImpresion={Boolean(ticketsErrorIds[pid])}
                       />
                     );
                   })
@@ -588,6 +700,20 @@ export default function KDSPage() {
         mesasMap={mesasMap}
         onReabrir={handleReabrirComanda}
       />
+
+      {/* MODAL Y PORTAL DE IMPRESIÓN TÉRMICA (US-67) */}
+      <TicketTermicoModal
+        isOpen={modalTicketAbierto}
+        datos={ticketActual}
+        ancho={anchoTicket}
+        onCambiarAncho={handleCambiarAnchoTicket}
+        autoPrint={autoPrint}
+        onCambiarAutoPrint={handleCambiarAutoPrint}
+        errorImpresion={errorImpresionTicket}
+        onImprimir={handleEjecutarImpresion}
+        onClose={() => setModalTicketAbierto(false)}
+      />
+      <TicketTermicoPrintPortal datos={ticketActual} ancho={anchoTicket} />
     </div>
   );
 }

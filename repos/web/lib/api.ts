@@ -391,16 +391,45 @@ export interface MesaAPI {
   updated_at: string;
 }
 
+export type EstadoUsuario = 'activo' | 'bloqueado' | 'archivado';
+
 export interface UsuarioAPI {
   id: string;
   tenant_id: string;
   sucursal_id?: string;
+  sucursal_nombre?: string;
+  username?: string;
   nombre: string;
   email: string;
   rol: 'admin' | 'encargado' | 'mozo' | 'cocina';
-  activo: boolean;
+  estado?: EstadoUsuario;
+  activo?: boolean;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
+}
+
+export interface NegocioPublicoAuth {
+  id: string;
+  slug: string;
+  nombre: string;
+  nombre_fantasia?: string;
+  rubro?: string;
+  logo_url?: string | null;
+  color_primario?: string | null;
+  estilo_visual?: string | null;
+}
+
+export interface LoginStaffResponse {
+  token: string;
+  redirect_to: string;
+  usuario: {
+    id: string;
+    tenant_id: string;
+    sucursal_id?: string;
+    username?: string;
+    nombre: string;
+    rol: 'admin' | 'encargado' | 'mozo' | 'cocina';
+  };
 }
 
 export interface MesaPublica {
@@ -900,7 +929,7 @@ export const api = {
     });
   },
 
-  // 6. Equipo / Usuarios (US-40)
+  // 6. Equipo / Usuarios (US-40 & US-83 & US-84)
   listarUsuarios: async () => {
     return apiFetch<UsuarioAPI[]>('/usuarios');
   },
@@ -917,17 +946,78 @@ export const api = {
     });
   },
 
+  crearUsuarioStaff: async (data: {
+    nombre: string;
+    username: string;
+    email?: string;
+    rol: 'encargado' | 'mozo' | 'cocina';
+    sucursal_id?: string;
+    password: string;
+  }) => {
+    return apiFetch<UsuarioAPI>('/usuarios/staff', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  resetearPasswordUsuario: async (id: string, nuevaPassword: string) => {
+    return apiFetch<{ ok: boolean }>(`/usuarios/${encodeURIComponent(id)}/password`, {
+      method: 'PATCH',
+      body: JSON.stringify({ nueva_password: nuevaPassword }),
+    });
+  },
+
+  cambiarEstadoUsuario: async (id: string, estado: EstadoUsuario) => {
+    return apiFetch<UsuarioAPI>(`/usuarios/${encodeURIComponent(id)}/estado`, {
+      method: 'PATCH',
+      body: JSON.stringify({ estado }),
+    });
+  },
+
   eliminarUsuario: async (id: string) => {
     return apiFetch<void>(`/usuarios/${id}`, {
       method: 'DELETE',
     });
   },
 
-  actualizarUsuario: async (id: string, data: { nombre?: string; rol?: 'admin' | 'encargado' | 'mozo' | 'cocina' }) => {
+  actualizarUsuario: async (
+    id: string,
+    data: {
+      nombre?: string;
+      username?: string;
+      email?: string;
+      rol?: 'admin' | 'encargado' | 'mozo' | 'cocina';
+      sucursal_id?: string;
+    }
+  ) => {
     return apiFetch<UsuarioAPI>(`/usuarios/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
+  },
+
+  obtenerNegocioPublico: async (slug: string) => {
+    return apiFetch<NegocioPublicoAuth>(`/publica/negocio/${encodeURIComponent(slug.trim().toLowerCase())}`);
+  },
+
+  autenticarStaffNegocio: async (slug: string, username: string, password: string) => {
+    const res = await apiFetch<LoginStaffResponse>(
+      `/publica/negocio/${encodeURIComponent(slug.trim().toLowerCase())}/login`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          username: username.trim().replace(/^@/, '').toLowerCase(),
+          password,
+        }),
+      }
+    );
+    if (res.token) {
+      guardarSesion(res.token);
+    }
+    if (typeof window !== 'undefined' && res.usuario?.sucursal_id) {
+      localStorage.setItem('kds_sucursal_id', res.usuario.sucursal_id);
+    }
+    return res;
   },
 
   // 7. Flujo Público Comensal (US-42, US-43, US-44)
