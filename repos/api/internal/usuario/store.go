@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/db"
@@ -25,12 +26,23 @@ type Store interface {
 	AceptarInvitacion(context.Context, string, string, string, time.Time) (*Usuario, error)
 }
 
+// StaffCredentialStore extiende Store con las operaciones de alta por
+// credenciales (usuario/clave), reseteo de contraseña, edición completa y
+// cambio de estado operativo (activo, bloqueado, archivado).
+type StaffCredentialStore interface {
+	ObtenerPrimeraSucursalID(ctx context.Context, tenantID string) (string, error)
+	CrearStaff(ctx context.Context, tenantID string, input CrearUsuarioStaffInput) (*Usuario, error)
+	ActualizarUsuarioDetalle(ctx context.Context, tenantID, id string, input ActualizarUsuarioInput) (*Usuario, error)
+	ResetearPassword(ctx context.Context, tenantID, id, passwordHash string) error
+	CambiarEstado(ctx context.Context, tenantID, id, nuevoEstado string) (*Usuario, error)
+}
+
 type pgStore struct{}
 
 func NuevoStore() Store { return &pgStore{} }
 
-const selectUsuario = `SELECT u.id,u.tenant_id,u.sucursal_id,s.nombre,u.email,u.nombre,
- u.rol,u.estado,u.created_at,u.updated_at
+const selectUsuario = `SELECT u.id,u.tenant_id,u.sucursal_id,s.nombre,u.username,COALESCE(u.email,''),u.nombre,
+ u.rol,COALESCE(u.estado,'activo'),u.created_at,u.updated_at
  FROM usuarios u LEFT JOIN sucursales s ON s.id=u.sucursal_id`
 
 const selectInvitacion = `SELECT i.id,i.tenant_id,t.nombre_fantasia,t.slug,i.sucursal_id,
@@ -40,7 +52,7 @@ const selectInvitacion = `SELECT i.id,i.tenant_id,t.nombre_fantasia,t.slug,i.suc
 
 func scanUsuario(row pgx.Row) (*Usuario, error) {
 	var u Usuario
-	err := row.Scan(&u.ID, &u.TenantID, &u.SucursalID, &u.SucursalNombre, &u.Email,
+	err := row.Scan(&u.ID, &u.TenantID, &u.SucursalID, &u.SucursalNombre, &u.Username, &u.Email,
 		&u.Nombre, &u.Rol, &u.Estado, &u.CreatedAt, &u.UpdatedAt)
 	return &u, err
 }
@@ -52,10 +64,50 @@ func scanInvitacion(row pgx.Row) (*Invitacion, error) {
 	return &i, err
 }
 
+func clasificarUniqueErr(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		if strings.Contains(pgErr.ConstraintName, "username") {
+			return ErrUsernameConflict
+		}
+		return ErrEmailConflict
+	}
+	return nil
+}
+
 func (s *pgStore) SucursalPertenece(ctx context.Context, tenantID, sucursalID string) (bool, error) {
 	var existe bool
 	err := db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM sucursales WHERE id=$1 AND tenant_id=$2)`, sucursalID, tenantID).Scan(&existe)
 	return existe, err
+}
+
+func (s *pgStore) ObtenerPrimeraSucursalID(ctx context.Context, tenantID string) (string, error) {
+	var id string
+	err := db.Pool.QueryRow(ctx,
+		`SELECT id FROM sucursales WHERE tenant_id=$1 ORDER BY created_at ASC, id ASC LIMIT 1`,
+		tenantID,
+	).Scan(&id)
+	if err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+func (s *pgStore) CrearStaff(ctx context.Context, tenantID string, input CrearUsuarioStaffInput) (*Usuario, error) {
+	var id string
+	err := db.Pool.QueryRow(ctx,
+		`INSERT INTO usuarios (tenant_id, username, email, nombre, rol, sucursal_id, password_hash, estado)
+		 VALUES ($1, $2, NULLIF($3, ''), $4, $5, $6, $7, 'activo')
+		 RETURNING id`,
+		tenantID, input.Username, input.Email, input.Nombre, input.Rol, input.SucursalID, input.PasswordHash,
+	).Scan(&id)
+	if err != nil {
+		if conflictErr := clasificarUniqueErr(err); conflictErr != nil {
+			return nil, conflictErr
+		}
+		return nil, fmt.Errorf("crear miembro de staff: %w", err)
+	}
+	return s.ObtenerUsuario(ctx, tenantID, id)
 }
 
 func (s *pgStore) CrearInvitacion(ctx context.Context, tenantID, sucursalID, email, rol, tokenHash, actorID string, expiresAt time.Time) (*Invitacion, error) {
@@ -63,15 +115,14 @@ func (s *pgStore) CrearInvitacion(ctx context.Context, tenantID, sucursalID, ema
 	err := db.Pool.QueryRow(ctx, `INSERT INTO invitaciones_equipo
 	 (tenant_id,sucursal_id,email,rol,token_hash,invitado_por_id,invitado_por_nombre,expires_at)
 	 SELECT $1,$2,$3,$4,$5,$6,COALESCE((SELECT nombre FROM usuarios WHERE id=$6),'Equipo'),$7
-	 WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE tenant_id=$1 AND lower(email)=lower($3))
+	 WHERE NOT EXISTS (SELECT 1 FROM usuarios WHERE tenant_id=$1 AND email IS NOT NULL AND lower(email)=lower($3) AND deleted_at IS NULL)
 	 RETURNING id`, tenantID, sucursalID, email, rol, tokenHash, actorID, expiresAt).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrEmailConflict
 	}
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return nil, ErrEmailConflict
+		if conflictErr := clasificarUniqueErr(err); conflictErr != nil {
+			return nil, conflictErr
 		}
 		return nil, fmt.Errorf("crear invitación: %w", err)
 	}
@@ -79,7 +130,7 @@ func (s *pgStore) CrearInvitacion(ctx context.Context, tenantID, sucursalID, ema
 }
 
 func (s *pgStore) ListarUsuarios(ctx context.Context, tenantID, sucursalID string) ([]Usuario, error) {
-	query, args := selectUsuario+` WHERE u.tenant_id=$1`, []any{tenantID}
+	query, args := selectUsuario+` WHERE u.tenant_id=$1 AND u.deleted_at IS NULL`, []any{tenantID}
 	if sucursalID != "" {
 		query += ` AND u.sucursal_id=$2`
 		args = append(args, sucursalID)
@@ -123,7 +174,7 @@ func (s *pgStore) ListarInvitaciones(ctx context.Context, tenantID, sucursalID s
 }
 
 func (s *pgStore) ObtenerUsuario(ctx context.Context, tenantID, id string) (*Usuario, error) {
-	u, err := scanUsuario(db.Pool.QueryRow(ctx, selectUsuario+` WHERE u.tenant_id=$1 AND u.id=$2`, tenantID, id))
+	u, err := scanUsuario(db.Pool.QueryRow(ctx, selectUsuario+` WHERE u.tenant_id=$1 AND u.id=$2 AND u.deleted_at IS NULL`, tenantID, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -133,9 +184,122 @@ func (s *pgStore) ObtenerUsuario(ctx context.Context, tenantID, id string) (*Usu
 func (s *pgStore) ActualizarUsuario(ctx context.Context, tenantID, id, nombre, estado string) (*Usuario, error) {
 	tag, err := db.Pool.Exec(ctx, `UPDATE usuarios SET nombre=$3,estado=$4,
 	 session_version=session_version+CASE WHEN estado<>$4 THEN 1 ELSE 0 END,updated_at=now()
-	 WHERE tenant_id=$1 AND id=$2`, tenantID, id, nombre, estado)
+	 WHERE tenant_id=$1 AND id=$2 AND deleted_at IS NULL`, tenantID, id, nombre, estado)
 	if err != nil {
 		return nil, fmt.Errorf("actualizar usuario: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, ErrNotFound
+	}
+	return s.ObtenerUsuario(ctx, tenantID, id)
+}
+
+func (s *pgStore) ActualizarUsuarioDetalle(ctx context.Context, tenantID, id string, input ActualizarUsuarioInput) (*Usuario, error) {
+	u, err := s.ObtenerUsuario(ctx, tenantID, id)
+	if err != nil {
+		return nil, err
+	}
+
+	nombre := u.Nombre
+	if input.Nombre != nil {
+		nombre = *input.Nombre
+	}
+	rol := u.Rol
+	if input.Rol != nil && *input.Rol != "" {
+		rol = *input.Rol
+	}
+	estado := u.Estado
+	if input.Estado != nil && *input.Estado != "" {
+		estado = *input.Estado
+	}
+	username := u.Username
+	if input.Username != nil {
+		trimmed := strings.TrimSpace(*input.Username)
+		if trimmed == "" {
+			username = nil
+		} else {
+			username = &trimmed
+		}
+	}
+	email := u.Email
+	if input.Email != nil {
+		email = strings.TrimSpace(*input.Email)
+	}
+	sucursalID := u.SucursalID
+	if input.SucursalID != nil {
+		trimmed := strings.TrimSpace(*input.SucursalID)
+		if trimmed != "" {
+			sucursalID = &trimmed
+		}
+	}
+
+	revocar := estado != u.Estado || rol != u.Rol ||
+		(sucursalID == nil) != (u.SucursalID == nil) ||
+		(sucursalID != nil && u.SucursalID != nil && *sucursalID != *u.SucursalID)
+
+	inc := 0
+	if revocar {
+		inc = 1
+	}
+
+	tag, err := db.Pool.Exec(ctx,
+		`UPDATE usuarios
+		    SET nombre = $1,
+		        rol = $2,
+		        estado = $3,
+		        username = $4,
+		        email = NULLIF($5, ''),
+		        sucursal_id = $6,
+		        session_version = session_version + $7,
+		        updated_at = NOW()
+		  WHERE tenant_id = $8 AND id = $9 AND deleted_at IS NULL`,
+		nombre, rol, estado, username, email, sucursalID, inc, tenantID, id,
+	)
+	if err != nil {
+		if conflictErr := clasificarUniqueErr(err); conflictErr != nil {
+			return nil, conflictErr
+		}
+		return nil, fmt.Errorf("actualizar usuario: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, ErrNotFound
+	}
+	return s.ObtenerUsuario(ctx, tenantID, id)
+}
+
+func (s *pgStore) ResetearPassword(ctx context.Context, tenantID, id, passwordHash string) error {
+	tag, err := db.Pool.Exec(ctx,
+		`UPDATE usuarios
+		    SET password_hash = $1,
+		        session_version = session_version + 1,
+		        updated_at = NOW()
+		  WHERE tenant_id = $2 AND id = $3 AND deleted_at IS NULL`,
+		passwordHash, tenantID, id,
+	)
+	if err != nil {
+		return fmt.Errorf("resetear contraseña de usuario: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	_, _ = db.Pool.Exec(ctx,
+		`UPDATE magic_tokens SET used_at = NOW() WHERE usuario_id = $1 AND used_at IS NULL`,
+		id,
+	)
+	return nil
+}
+
+func (s *pgStore) CambiarEstado(ctx context.Context, tenantID, id, nuevoEstado string) (*Usuario, error) {
+	tag, err := db.Pool.Exec(ctx,
+		`UPDATE usuarios
+		    SET estado = $1,
+		        session_version = session_version + 1,
+		        updated_at = NOW()
+		  WHERE tenant_id = $2 AND id = $3 AND deleted_at IS NULL`,
+		nuevoEstado, tenantID, id,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("cambiar estado de usuario: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return nil, ErrNotFound
@@ -248,9 +412,8 @@ func (s *pgStore) AceptarInvitacion(ctx context.Context, tokenHash, googleSub, n
 	err = tx.QueryRow(ctx, `INSERT INTO usuarios (tenant_id,sucursal_id,email,nombre,rol,estado,google_sub)
 	 VALUES ($1,$2,$3,$4,$5,'activo',$6) RETURNING id`, tenantID, sucursalID, email, nombre, rol, googleSub).Scan(&usuarioID)
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return nil, ErrEmailConflict
+		if conflictErr := clasificarUniqueErr(err); conflictErr != nil {
+			return nil, conflictErr
 		}
 		return nil, err
 	}

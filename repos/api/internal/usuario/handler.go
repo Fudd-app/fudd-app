@@ -31,6 +31,20 @@ func (h *Handlers) Invitar(w http.ResponseWriter, r *http.Request) {
 	jsonRespuesta(w, respuesta, http.StatusCreated)
 }
 
+func (h *Handlers) CrearStaff(w http.ResponseWriter, r *http.Request) {
+	var input CrearUsuarioStaffInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		jsonError(w, "body inválido", http.StatusBadRequest)
+		return
+	}
+	u, err := h.svc.CrearStaff(r.Context(), auth.ClaimsFromContext(r.Context()), input)
+	if err != nil {
+		responderError(w, r, err)
+		return
+	}
+	jsonRespuesta(w, u, http.StatusCreated)
+}
+
 func (h *Handlers) Listar(w http.ResponseWriter, r *http.Request) {
 	equipo, err := h.svc.Listar(r.Context(), auth.ClaimsFromContext(r.Context()))
 	if err != nil {
@@ -47,6 +61,39 @@ func (h *Handlers) Actualizar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, err := h.svc.Actualizar(r.Context(), auth.ClaimsFromContext(r.Context()), r.PathValue("id"), input)
+	if err != nil {
+		responderError(w, r, err)
+		return
+	}
+	jsonRespuesta(w, u, http.StatusOK)
+}
+
+func (h *Handlers) ResetearPassword(w http.ResponseWriter, r *http.Request) {
+	var input ResetPasswordInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		jsonError(w, "body inválido", http.StatusBadRequest)
+		return
+	}
+	if err := h.svc.ResetearPassword(r.Context(), auth.ClaimsFromContext(r.Context()), r.PathValue("id"), input.NuevaPassword); err != nil {
+		responderError(w, r, err)
+		return
+	}
+	jsonRespuesta(w, map[string]bool{"ok": true}, http.StatusOK)
+}
+
+func (h *Handlers) CambiarEstado(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromContext(r.Context())
+	id := r.PathValue("id")
+	if claims != nil && id == claims.UsuarioID {
+		jsonError(w, "no puedes bloquear ni archivar tu propia cuenta", http.StatusBadRequest)
+		return
+	}
+	var input CambiarEstadoUsuarioInput
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		jsonError(w, "body inválido", http.StatusBadRequest)
+		return
+	}
+	u, err := h.svc.CambiarEstado(r.Context(), claims, id, input.Estado)
 	if err != nil {
 		responderError(w, r, err)
 		return
@@ -102,7 +149,7 @@ func (h *Handlers) Aceptar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	auth.EscribirSesion(w, r, &auth.UsuarioAuth{
-		ID: u.ID, TenantID: u.TenantID, Email: u.Email, Nombre: u.Nombre, Rol: u.Rol,
+		ID: u.ID, TenantID: u.TenantID, Username: u.Username, Email: u.Email, Nombre: u.Nombre, Rol: u.Rol,
 		SucursalID: u.SucursalID, Estado: u.Estado, SessionVersion: 1,
 	})
 }
@@ -115,7 +162,7 @@ func responderError(w http.ResponseWriter, r *http.Request, err error) {
 		jsonError(w, "sin permisos para esta operación", http.StatusForbidden)
 	case errors.Is(err, ErrNotFound):
 		jsonError(w, "usuario no encontrado", http.StatusNotFound)
-	case errors.Is(err, ErrEmailConflict):
+	case errors.Is(err, ErrEmailConflict), errors.Is(err, ErrUsernameConflict):
 		jsonError(w, err.Error(), http.StatusConflict)
 	case errors.Is(err, ErrInvitacionExpirada):
 		jsonError(w, err.Error(), http.StatusGone)

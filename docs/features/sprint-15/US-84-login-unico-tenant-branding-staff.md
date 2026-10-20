@@ -1,35 +1,38 @@
-# US-84: Login de staff acotado al negocio
+# US-84: Portal de Login Único por Negocio con Branding del Comercio y Acceso Dual de Staff
 
-> **Sprint**: 15
-> **Estado**: Implementada junto con US-83
+> **Sprint**: Sprint 15 (05/10 – 11/10/2026)  
+> **Épica**: Seguridad, Gestión de Personal & Multi-Tenancy  
+> **Tipo**: `Fullstack / Integración`  
+> **Estado**: ✅ **Resuelta (Unificada)**  
 > **Ruta web**: `/{slug}/login`
-## Historia
 
-Como integrante invitado quiero volver a entrar al negocio con mi cuenta de Google, sin contraseña y sin poder elegir otro tenant o sucursal.
+---
 
-## Flujo definitivo
+## 1. Descripción de la Historia
 
-1. La URL incluye el slug del negocio.
-2. El miembro elige su cuenta de Google.
-3. La API busca `google_sub` o email verificado únicamente dentro del tenant identificado por ese slug.
-4. Solo se autentican usuarios staff ya creados mediante una invitación aceptada y en estado `activo`.
-5. El tenant, rol y sucursal se toman de la base; nunca del navegador.
-6. La sesión redirige a Dashboard o KDS según rol.
+**Como** integrante del equipo de un local gastronómico (mozo, cocinero o encargado),  
+**quiero** contar con una página de inicio de sesión propia de mi lugar de trabajo (ej: `mesaclick.com/mi-restaurante/login`) que muestre el logo, nombre y colores del comercio y me permita ingresar tanto con mi usuario y contraseña asignados como con mi cuenta de Google,  
+**para** entrar rápidamente a mi turno de trabajo y ser redirigido automáticamente a mi pantalla operativa (KDS de Cocina o Salón/Dashboard).
 
-Un mismo email puede trabajar en negocios distintos porque el slug desambigua el acceso. El login global `/login` permanece reservado a dueños/administradores.
+---
 
-## Seguridad
+## 2. Flujo y Criterios de Aceptación
 
-- Cookie `session` HttpOnly, Secure en producción, SameSite=Lax y vigencia de 30 días.
-- No se guarda JWT en `localStorage` ni se agrega a URLs SSE.
-- Las conexiones SSE usan credenciales de cookie.
-- El backend revalida usuario activo, tenant, sucursal, rol y `session_version` en cada request.
-- Bloquear, eliminar o cerrar sesión invalida inmediatamente JWT emitidos anteriormente.
+### CA-1: Cabecera Pública de Branding (`GET /publica/negocio/{slug}`)
+- Devuelve `id`, `slug`, `nombre`, `nombre_fantasia`, `rubro`, `logo_url`, `color_primario` y `estilo_visual` del comercio.
+- Si el `slug` no existe, `/{slug}/login` muestra una pantalla clara de *"Comercio no encontrado"*.
 
-## Criterios de aceptación
+### CA-2: Acceso Dual Acotado al Tenant
+1. **Ingreso con Usuario y Clave (`POST /publica/negocio/{slug}/login` / `POST /auth/negocios/{slug}/password`)**:
+   - Autentica por `username` (con o sin `@`) o `email` + `password` exclusivamente dentro del `tenant_id` correspondiente al `slug`.
+   - Un mismo nombre de usuario (ej. `cocina1` o `mozo_juan`) puede existir en distintos comercios sin colisión.
+2. **Ingreso con Google (`POST /auth/negocios/{slug}/google`)**:
+   - Autentica mediante `google_sub` o email verificado de Google exclusivamente dentro del `tenant_id` correspondiente al `slug`.
 
-- [x] Login Google tenant-scoped en `POST /auth/negocios/{slug}/google`.
-- [x] Usuario inexistente, bloqueado o perteneciente a otro tenant no obtiene sesión.
-- [x] Staff no puede iniciar con contraseña o magic link.
-- [x] Navegación responsive y acciones visibles según rol.
-- [x] La API sigue siendo la autoridad aunque se manipule la UI.
+### CA-3: Seguridad de Sesión y Redirección por Rol
+- Emite cookie `session` `HttpOnly`, `Secure` (en HTTPS/producción), `SameSite` adaptativo y vigencia de 30 días, con `session_version` revalidada en cada request.
+- Usuarios con estado `bloqueado` reciben HTTP 403 con mensaje explícito de suspensión temporal.
+- Usuarios con estado `archivado` o inexistentes no obtienen sesión.
+- Redirección automática según rol:
+  - Rol **`cocina`** → `/kds`
+  - Rol **`mozo`** / **`encargado`** → `/dashboard`

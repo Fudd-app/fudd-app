@@ -9,6 +9,7 @@ var (
 	ErrNotFound            = errors.New("usuario no encontrado")
 	ErrValidation          = errors.New("error de validación")
 	ErrEmailConflict       = errors.New("el email ya pertenece al equipo")
+	ErrUsernameConflict    = errors.New("el nombre de usuario ya está en uso en este comercio")
 	ErrForbidden           = errors.New("sin permisos para gestionar este miembro")
 	ErrInvitacionNoValida  = errors.New("invitación inválida")
 	ErrInvitacionExpirada  = errors.New("invitación expirada")
@@ -20,12 +21,31 @@ type Usuario struct {
 	TenantID       string    `json:"tenant_id"`
 	SucursalID     *string   `json:"sucursal_id,omitempty"`
 	SucursalNombre *string   `json:"sucursal_nombre,omitempty"`
+	Username       *string   `json:"username,omitempty"`
 	Email          string    `json:"email"`
 	Nombre         string    `json:"nombre"`
 	Rol            string    `json:"rol"`
 	Estado         string    `json:"estado"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+type CrearUsuarioStaffInput struct {
+	Nombre       string  `json:"nombre"`
+	Username     string  `json:"username"`
+	Email        string  `json:"email,omitempty"`
+	Rol          string  `json:"rol"`
+	SucursalID   *string `json:"sucursal_id,omitempty"`
+	Password     string  `json:"password"`
+	PasswordHash string  `json:"-"`
+}
+
+type ResetPasswordInput struct {
+	NuevaPassword string `json:"nueva_password"`
+}
+
+type CambiarEstadoUsuarioInput struct {
+	Estado string `json:"estado"`
 }
 
 type Invitacion struct {
@@ -67,6 +87,10 @@ type Equipo struct {
 }
 
 type ActualizarUsuarioInput struct {
-	Nombre *string `json:"nombre,omitempty"`
-	Estado *string `json:"estado,omitempty"`
+	Nombre     *string `json:"nombre,omitempty"`
+	Username   *string `json:"username,omitempty"`
+	Email      *string `json:"email,omitempty"`
+	Rol        *string `json:"rol,omitempty"`
+	SucursalID *string `json:"sucursal_id,omitempty"`
+	Estado     *string `json:"estado,omitempty"`
 }
