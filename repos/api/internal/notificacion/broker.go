@@ -28,23 +28,41 @@ func (b *Broker) Suscribir(canal string) (chan Evento, func()) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 
-	ch := make(chan Evento, 10)
+	ch := make(chan Evento, 128)
 	if _, ok := b.suscriptores[canal]; !ok {
 		b.suscriptores[canal] = make(map[chan Evento]bool)
 	}
 	b.suscriptores[canal][ch] = true
 
+	var once sync.Once
 	desuscribir := func() {
-		b.mutex.Lock()
-		defer b.mutex.Unlock()
-		delete(b.suscriptores[canal], ch)
-		close(ch)
-		if len(b.suscriptores[canal]) == 0 {
-			delete(b.suscriptores, canal)
-		}
+		once.Do(func() {
+			b.mutex.Lock()
+			defer b.mutex.Unlock()
+			if subs, ok := b.suscriptores[canal]; ok {
+				if _, existe := subs[ch]; existe {
+					delete(subs, ch)
+					close(ch)
+				}
+				if len(subs) == 0 {
+					delete(b.suscriptores, canal)
+				}
+			}
+		})
 	}
 
 	return ch, desuscribir
+}
+
+func (b *Broker) Estadisticas() (canales int, suscriptores int) {
+	b.mutex.RLock()
+	defer b.mutex.RUnlock()
+
+	canales = len(b.suscriptores)
+	for _, subs := range b.suscriptores {
+		suscriptores += len(subs)
+	}
+	return canales, suscriptores
 }
 
 func (b *Broker) Publicar(canal string, nombreEvento string, data any) {

@@ -37,8 +37,13 @@ export default function GuestCartSheet({
         if (e.target === e.currentTarget && !enviando) onClose();
       }}
     >
-      <section className="guest-sheet cart-sheet" role="dialog" aria-modal="true">
-        <span className="sheet-handle" />
+      <section
+        className="guest-sheet cart-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Tu pedido de la Mesa ${mesaNumero}`}
+      >
+        <span className="sheet-handle" aria-hidden="true" />
 
         <div className="cart-title">
           <div>
@@ -57,7 +62,7 @@ export default function GuestCartSheet({
         </div>
 
         <div className="cart-person">
-          <span>{initial}</span>
+          <span aria-hidden="true">{initial}</span>
           <strong>Tus elecciones ({dinerName || "Invitado"})</strong>
         </div>
 
@@ -74,7 +79,7 @@ export default function GuestCartSheet({
                   {variantesTexto && <small>{variantesTexto}</small>}
                   {item.nota && <small className="italic text-muted">“{item.nota}”</small>}
                   {agotado && (
-                    <small className="font-bold text-red-600">
+                    <small className="font-bold text-red-600" role="alert">
                       ⚠️ Producto agotado en cocina. Por favor quitalo.
                     </small>
                   )}

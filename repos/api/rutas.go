@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -252,20 +253,41 @@ func handlerHealth(w http.ResponseWriter, r *http.Request) {
 	dbEstado := "ok"
 	status := http.StatusOK
 
+	var poolStats map[string]any
 	if db.Pool != nil {
 		if err := db.Pool.Ping(r.Context()); err != nil {
 			dbEstado = "error: " + err.Error()
 			status = http.StatusServiceUnavailable
 		}
+		st := db.Pool.Stat()
+		poolStats = map[string]any{
+			"max_conns":           st.MaxConns(),
+			"total_conns":         st.TotalConns(),
+			"acquired_conns":      st.AcquiredConns(),
+			"idle_conns":          st.IdleConns(),
+			"empty_acquire_count": st.EmptyAcquireCount(),
+		}
 	} else {
 		dbEstado = "desconectado"
 	}
 
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	canalesSSE, suscriptoresSSE := notificacion.Instancia.Estadisticas()
+
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(map[string]any{
-		"servicio":  "mesa-click-api",
-		"estado":    "ok",
-		"database":  dbEstado,
-		"timestamp": time.Now().Format(time.RFC3339),
+		"servicio":      "mesa-click-api",
+		"estado":        "ok",
+		"database":      dbEstado,
+		"timestamp":     time.Now().Format(time.RFC3339),
+		"goroutines":    runtime.NumGoroutine(),
+		"heap_alloc_mb": float64(mem.HeapAlloc) / (1024 * 1024),
+		"sys_mb":        float64(mem.Sys) / (1024 * 1024),
+		"sse": map[string]any{
+			"canales":      canalesSSE,
+			"suscriptores": suscriptoresSSE,
+		},
+		"db_pool": poolStats,
 	})
 }
