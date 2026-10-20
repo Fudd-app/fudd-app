@@ -1,19 +1,21 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import CartaSection from "@/components/dashboard/CartaSection";
-import CartaLecturaSection from "@/components/dashboard/CartaLecturaSection";
-import MesasSection from "@/components/dashboard/MesasSection";
-import RecepcionistaSection from "@/components/dashboard/RecepcionistaSection";
-import ConfiguracionSection from "@/components/dashboard/ConfiguracionSection";
-import MetricasSection from "@/components/dashboard/MetricasSection";
-import ReputacionSection from "@/components/dashboard/ReputacionSection";
-import EquipoSection from "@/components/dashboard/EquipoSection";
 import Logo from "@/components/brand/Logo";
 import { api, cerrarSesion, SesionUsuario, Tenant } from "@/lib/api";
 import { ToastProvider, ConfirmProvider } from "@/components/ui";
-import OnboardingTour from "@/components/dashboard/OnboardingTour";
+
+const CartaLecturaSection = dynamic(() => import("@/components/dashboard/CartaLecturaSection"));
+const MesasSection = dynamic(() => import("@/components/dashboard/MesasSection"));
+const RecepcionistaSection = dynamic(() => import("@/components/dashboard/RecepcionistaSection"));
+const ConfiguracionSection = dynamic(() => import("@/components/dashboard/ConfiguracionSection"));
+const MetricasSection = dynamic(() => import("@/components/dashboard/MetricasSection"));
+const ReputacionSection = dynamic(() => import("@/components/dashboard/ReputacionSection"));
+const EquipoSection = dynamic(() => import("@/components/dashboard/EquipoSection"));
+const OnboardingTour = dynamic(() => import("@/components/dashboard/OnboardingTour"), { ssr: false });
 
 type Section = 'carta' | 'mesas' | 'recepcionista' | 'equipo' | 'metricas' | 'resenas' | 'configuracion';
 
@@ -102,14 +104,22 @@ export default function DashboardPage() {
     <ConfirmProvider>
     <ToastProvider>
     <div className="flex h-screen flex-col overflow-hidden bg-ghost-fog/45 font-inter">
+      <a
+        href="#dashboard-main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-8 focus:left-8 focus:z-50 focus:rounded-lg focus:bg-ash-graphite focus:px-16 focus:py-8 focus:text-13 focus:font-semibold focus:text-canvas-white"
+      >
+        Saltar al contenido principal
+      </a>
       <header className="z-30 flex h-64 shrink-0 items-center justify-between border-b border-concrete bg-canvas-white px-12 shadow-sm sm:px-20">
         <div className="flex min-w-0 items-center gap-8 sm:gap-12">
           <button
+            type="button"
             onClick={() => setIsExpanded(!isExpanded)}
             className="flex h-44 w-44 shrink-0 items-center justify-center rounded-lg text-ash-graphite transition-colors hover:bg-ghost-fog"
             aria-label={isExpanded ? "Contraer navegación" : "Expandir navegación"}
+            aria-expanded={isExpanded}
           >
-            <span className="material-symbols-outlined text-20">{isExpanded ? 'menu_open' : 'menu'}</span>
+            <span className="material-symbols-outlined text-20" aria-hidden="true">{isExpanded ? 'menu_open' : 'menu'}</span>
           </button>
           <Link
             href="/"
@@ -148,42 +158,62 @@ export default function DashboardPage() {
         </div>
         <div className="flex shrink-0 items-center gap-4 sm:gap-8">
           <button
+            type="button"
             className="flex h-44 w-44 items-center justify-center rounded-lg text-ash-graphite transition-colors hover:bg-ghost-fog"
             aria-label="Notificaciones"
           >
-            <span className="material-symbols-outlined text-20">notifications</span>
+            <span className="material-symbols-outlined text-20" aria-hidden="true">notifications</span>
           </button>
           <div className="relative">
             <button
+              type="button"
               onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
               className="flex h-44 w-44 items-center justify-center rounded-lg border border-concrete bg-canvas-white transition-all hover:border-stone hover:bg-ghost-fog"
               aria-label="Abrir menú de usuario"
               aria-expanded={isUserMenuOpen}
+              aria-haspopup="menu"
             >
-              <span className="material-symbols-outlined text-20 text-ash-graphite">person</span>
+              <span className="material-symbols-outlined text-20 text-ash-graphite" aria-hidden="true">person</span>
             </button>
             {isUserMenuOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setIsUserMenuOpen(false)} />
-                <div className="absolute right-0 z-20 mt-8 w-[240px] overflow-hidden rounded-xl border border-concrete bg-canvas-white py-6 shadow-xl">
+                <div
+                  role="menu"
+                  aria-label="Menú de usuario"
+                  className="absolute right-0 z-20 mt-8 w-[240px] overflow-hidden rounded-xl border border-concrete bg-canvas-white py-6 shadow-xl"
+                >
                   <div className="mb-4 border-b border-ghost-fog px-16 py-10">
                     <p className="truncate text-13 font-semibold text-ash-graphite">{tenant ? tenant.nombre : "Administrador"}</p>
                     <p className="mt-2 truncate text-11 text-sage-green">Sesión activa</p>
                   </div>
                   <UserMenuItem icon="account_circle" label="Perfil" />
-					{sesion?.rol === 'admin' && <div onClick={() => { setConfiguracionTab("planes"); setActiveSection("configuracion"); setIsUserMenuOpen(false); }}>
-                    <UserMenuItem icon="credit_card" label="Planes y suscripción" />
-					</div>}
-					{sesion?.rol !== 'mozo' && <Link href="/kds" target="_blank" onClick={() => setIsUserMenuOpen(false)}>
-                    <UserMenuItem icon="skillet" label="Pantalla Cocina (KDS) ↗" />
-					</Link>}
-                  <div onClick={() => { setIsTourOpen(true); setIsUserMenuOpen(false); }}>
-                    <UserMenuItem icon="school" label="Recorrido tutorial" />
-                  </div>
+					{sesion?.rol === 'admin' && (
+                    <UserMenuItem
+                      icon="credit_card"
+                      label="Planes y suscripción"
+                      onClick={() => {
+                        setConfiguracionTab("planes");
+                        setActiveSection("configuracion");
+                        setIsUserMenuOpen(false);
+                      }}
+                    />
+                  )}
+					{sesion?.rol !== 'mozo' && (
+                    <Link href="/kds" target="_blank" onClick={() => setIsUserMenuOpen(false)}>
+                      <UserMenuItem icon="skillet" label="Pantalla Cocina (KDS) ↗" asSpan />
+                    </Link>
+                  )}
+                  <UserMenuItem
+                    icon="school"
+                    label="Recorrido tutorial"
+                    onClick={() => {
+                      setIsTourOpen(true);
+                      setIsUserMenuOpen(false);
+                    }}
+                  />
                   <div className="mt-8 pt-8 border-t border-ghost-fog">
-                    <div onClick={handleLogout}>
-                      <UserMenuItem icon="logout" label="Salir" isDanger />
-                    </div>
+                    <UserMenuItem icon="logout" label="Salir" isDanger onClick={handleLogout} />
                   </div>
                 </div>
               </>
@@ -203,6 +233,7 @@ export default function DashboardPage() {
 
         {/* Mobile Drawer (Slide-out) */}
         <aside
+          aria-label="Menú lateral móvil"
           className={`fixed inset-y-0 left-0 z-50 flex w-240 flex-col border-r border-concrete bg-canvas-white py-16 shadow-2xl transition-transform duration-300 ease-in-out md:hidden ${
             isExpanded ? "translate-x-0" : "-translate-x-full"
           }`}
@@ -216,14 +247,16 @@ export default function DashboardPage() {
               <Logo className="w-22 h-22" />
               <span className="font-bold uppercase text-14">Menú Principal</span>
             </Link>
-            <button 
+            <button
+              type="button"
               onClick={() => setIsExpanded(false)}
+              aria-label="Cerrar menú de navegación"
               className="flex h-44 w-44 items-center justify-center rounded-lg text-ash-graphite hover:bg-ghost-fog"
             >
-              <span className="material-symbols-outlined text-20">close</span>
+              <span className="material-symbols-outlined text-20" aria-hidden="true">close</span>
             </button>
           </div>
-          <nav className="space-y-4 flex-1 px-8">
+          <nav className="space-y-4 flex-1 px-8" aria-label="Secciones principales móvil">
 			{seccionesVisibles.map((s) => (
               <NavItem
                 key={s.id}
@@ -246,8 +279,9 @@ export default function DashboardPage() {
               className="flex min-h-44 items-center gap-12 rounded-lg px-12 py-8 text-sage-green transition-all hover:bg-ghost-fog hover:text-ash-graphite"
               onClick={() => setIsExpanded(false)}
               title="Abrir Pantalla de Cocina (KDS)"
+              aria-label="Abrir Pantalla de Cocina (KDS) en nueva pestaña"
             >
-              <span className="material-symbols-outlined text-20">skillet</span>
+              <span className="material-symbols-outlined text-20" aria-hidden="true">skillet</span>
               <span className="flex-1 text-13 font-medium">Cocina (KDS)</span>
               <span className="rounded border border-concrete bg-ghost-fog px-6 py-1 text-10 font-bold text-sage-green">PRO ↗</span>
 			</Link>}
@@ -290,11 +324,12 @@ export default function DashboardPage() {
 
         {/* Desktop Sidebar */}
         <aside
+          aria-label="Barra lateral de navegación"
           className={`${
             isExpanded ? "w-200" : "w-72"
           } hidden shrink-0 flex-col overflow-x-hidden overflow-y-auto border-r border-concrete bg-canvas-white py-16 transition-all duration-300 ease-in-out md:flex`}
         >
-          <nav className={`space-y-4 flex-1 flex flex-col ${isExpanded ? "px-8" : "items-center"}`}>
+          <nav className={`space-y-4 flex-1 flex flex-col ${isExpanded ? "px-8" : "items-center"}`} aria-label="Secciones del panel">
 			{seccionesVisibles.map((s) => (
               <NavItem
                 key={s.id}
@@ -315,8 +350,9 @@ export default function DashboardPage() {
                 isExpanded ? "w-full gap-12 px-12 py-8" : "w-44 justify-center"
               }`}
               title="Abrir Pantalla de Cocina (KDS) en nueva pestaña"
+              aria-label="Abrir Pantalla de Cocina (KDS) en nueva pestaña"
             >
-              <span className="material-symbols-outlined text-20">skillet</span>
+              <span className="material-symbols-outlined text-20" aria-hidden="true">skillet</span>
               {isExpanded && (
                 <div className="flex items-center justify-between flex-1 min-w-0">
                   <span className="text-13 font-medium whitespace-nowrap">Cocina (KDS)</span>
@@ -352,7 +388,7 @@ export default function DashboardPage() {
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1 overflow-hidden">
+        <main id="dashboard-main" className="min-w-0 flex-1 overflow-hidden">
 			{renderSection(activeSection, configuracionTab, setTenant, sesion)}
         </main>
       </div>
@@ -387,17 +423,20 @@ function NavItem({
   dataTour?: string;
 }) {
   return (
-    <div
+    <button
+      type="button"
       data-tour={dataTour}
       title={!expanded ? label : undefined}
+      aria-label={label}
+      aria-current={active ? "page" : undefined}
       onClick={onClick}
-      className={`flex min-h-44 cursor-pointer items-center rounded-lg transition-all ${
+      className={`flex min-h-44 cursor-pointer items-center rounded-lg text-left transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ash-graphite ${
         expanded ? "w-full gap-12 px-12 py-8" : "h-44 w-44 justify-center"
       } ${active ? "bg-ash-graphite text-canvas-white shadow-sm" : "text-sage-green hover:bg-ghost-fog hover:text-ash-graphite"}`}
     >
-      <span className="material-symbols-outlined text-20">{icon}</span>
+      <span className="material-symbols-outlined text-20" aria-hidden="true">{icon}</span>
       {expanded && <span className="text-13 font-medium whitespace-nowrap">{label}</span>}
-    </div>
+    </button>
   );
 }
 
@@ -405,19 +444,32 @@ function UserMenuItem({
   icon,
   label,
   isDanger = false,
+  onClick,
+  asSpan = false,
 }: {
   icon: string;
   label: string;
   isDanger?: boolean;
+  onClick?: () => void;
+  asSpan?: boolean;
 }) {
+  const className = `flex w-full min-h-44 cursor-pointer items-center gap-12 px-16 py-8 text-left transition-colors ${
+    isDanger ? "text-alert-red hover:bg-warm-pink/20" : "text-ash-graphite hover:bg-ghost-fog"
+  }`;
+
+  if (asSpan) {
+    return (
+      <span role="menuitem" className={className}>
+        <span className="material-symbols-outlined text-18" aria-hidden="true">{icon}</span>
+        <span className="text-13 font-medium">{label}</span>
+      </span>
+    );
+  }
+
   return (
-    <div
-      className={`flex min-h-44 cursor-pointer items-center gap-12 px-16 py-8 transition-colors ${
-        isDanger ? "text-alert-red hover:bg-warm-pink/20" : "text-ash-graphite hover:bg-ghost-fog"
-      }`}
-    >
-      <span className="material-symbols-outlined text-18">{icon}</span>
+    <button type="button" role="menuitem" onClick={onClick} className={className}>
+      <span className="material-symbols-outlined text-18" aria-hidden="true">{icon}</span>
       <span className="text-13 font-medium">{label}</span>
-    </div>
+    </button>
   );
 }

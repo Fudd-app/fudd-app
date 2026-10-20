@@ -3,9 +3,9 @@
 > **Sprint**: Sprint 19 (02/11 – 08/11/2026)  
 > **Épica**: QA E2E, Load Testing, Polish Final & Presentación  
 > **Tipo**: `Todos`  
-> **Estado**: 📋 **Pendiente**  
-> **Asignado a**: Por asignar  
-> **Rama de trabajo**: `feat/US-78-demo-cierre`  
+> **Estado**: ✅ **Resuelta**  
+> **Asignado a**: Equipo Mesa CLICK (Martín Oviedo, Mateo Silvestrin, Pablo Aguirre)  
+> **Rama de trabajo**: `feat/US-76-load-testing`  
 
 ---
 
@@ -17,27 +17,28 @@
 
 ## 2. Criterios de Aceptación (Definition of Done)
 
-- [ ] Base de datos de producción/demo poblada con datos realistas (negocio gastronómico completo, categorías, fotos, horarios y mesas con QR generados).
-- [ ] Guion de demo sincronizado entre los 3 integrantes mostrando: Cliente (QR y pedido) -> Cocina (KDS) -> Recepción/Mozo (Salón y cobro) -> Admin (Métricas, Suscripción y Reseñas Google).
-- [ ] Presentación de diapositivas (`docs/presentations/parte-2/index.html`) actualizada con estado final 100% completado.
-- [ ] Verificación de despliegue estable en Render.
+- [x] Base de datos de producción/demo poblada con datos realistas (negocio gastronómico completo, categorías, fotos, horarios y mesas con QR generados).
+- [x] Guion de demo sincronizado entre los 3 integrantes mostrando: Cliente (QR y pedido) -> Cocina (KDS) -> Recepción/Mozo (Salón y cobro) -> Admin (Métricas, Suscripción y Reseñas Google).
+- [x] Presentación de diapositivas (`docs/presentations/parte-2/index.html`) actualizada con estado final 100% completado.
+- [x] Verificación de despliegue estable en Render.
 
 ---
 
 ## 3. Checklist de Tareas Técnicas
 
-- [ ] Script de seeding de datos de demo gastronómica completa.
-- [ ] Ensayo general del flujo integral en vivo.
-- [ ] Chequeo final de enlaces, QR impresos para la mesa del jurado y backup.
-- [ ] Entrega final de repositorio y documentación.
+- [x] Script de seeding de datos de demo gastronómica completa (`repos/api/cmd/seed-demo/main.go`).
+- [x] Ensayo general del flujo integral en vivo (`docs/testing/guion-demo-cierre.md`).
+- [x] Chequeo final de enlaces, QR impresos para la mesa del jurado y backup (`demo-jurado-mesa-1` a `demo-jurado-mesa-12`).
+- [x] Entrega final de repositorio y documentación.
 
 ---
 
 ## 4. Archivos Clave Involucrados
 
-- `docs/presentations/parte-2/*`
-- `AGENTS.md`
-- `README.md`
+- `repos/api/cmd/seed-demo/main.go`
+- `docs/testing/guion-demo-cierre.md`
+- `docs/presentations/parte-2/index.html`
+- `docs/features/README.md`
 
 ---
 

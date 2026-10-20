@@ -1,0 +1,192 @@
+{
+  "started_at": "2026-10-20T20:15:10-03:00",
+  "finished_at": "2026-10-20T20:20:12-03:00",
+  "duration_sec": 300,
+  "simulated_tables": 55,
+  "total_sse_streams": 59,
+  "sse_connected_ok": 59,
+  "sse_events_received": 103440,
+  "sse_errors": 0,
+  "total_requests": 36423,
+  "total_success_2xx": 36423,
+  "total_errors": 0,
+  "overall_rps": 121.41,
+  "global_p50_ms": 4.54,
+  "global_p90_ms": 9.43,
+  "global_p95_ms": 11.44,
+  "global_p99_ms": 17.06,
+  "all_p95_under_300ms": true,
+  "zero_errors": true,
+  "health_baseline": {
+    "timestamp": "2026-10-20T20:15:10-03:00",
+    "goroutines": 6,
+    "heap_alloc_mb": 5.830329895019531,
+    "sys_mb": 29.98828125,
+    "sse": {
+      "canales": 0,
+      "suscriptores": 0
+    },
+    "db_pool": {
+      "acquired_conns": 0,
+      "empty_acquire_count": 1,
+      "idle_conns": 10,
+      "max_conns": 50,
+      "total_conns": 10
+    }
+  },
+  "health_peak": {
+    "timestamp": "2026-10-20T20:17:40-03:00",
+    "goroutines": 133,
+    "heap_alloc_mb": 6.049888610839844,
+    "sys_mb": 29.98828125,
+    "sse": {
+      "canales": 58,
+      "suscriptores": 114
+    },
+    "db_pool": {
+      "acquired_conns": 1,
+      "empty_acquire_count": 1,
+      "idle_conns": 9,
+      "max_conns": 50,
+      "total_conns": 10
+    }
+  },
+  "health_after": {
+    "timestamp": "2026-10-20T20:20:12-03:00",
+    "goroutines": 24,
+    "heap_alloc_mb": 5.971809387207031,
+    "sys_mb": 29.98828125,
+    "sse": {
+      "canales": 0,
+      "suscriptores": 0
+    },
+    "db_pool": {
+      "acquired_conns": 0,
+      "empty_acquire_count": 1,
+      "idle_conns": 10,
+      "max_conns": 50,
+      "total_conns": 10
+    }
+  },
+  "endpoints": [
+    {
+      "endpoint": "GET /publica/mesas/{qr_token}",
+      "total_reqs": 5065,
+      "status_200": 5065,
+      "status_201": 0,
+      "errors": 0,
+      "error_rate_pct": 0,
+      "rps": 16.88,
+      "min_ms": 0,
+      "avg_ms": 1.42,
+      "p50_ms": 1.23,
+      "p90_ms": 2.26,
+      "p95_ms": 2.79,
+      "p99_ms": 5.59,
+      "max_ms": 25.05,
+      "pass_p95_lt_300ms": true
+    },
+    {
+      "endpoint": "GET /publica/sucursales/{id}/carta",
+      "total_reqs": 5051,
+      "status_200": 5051,
+      "status_201": 0,
+      "errors": 0,
+      "error_rate_pct": 0,
+      "rps": 16.84,
+      "min_ms": 0,
+      "avg_ms": 3.61,
+      "p50_ms": 3.25,
+      "p90_ms": 5.28,
+      "p95_ms": 6.29,
+      "p99_ms": 10.57,
+      "max_ms": 40.78,
+      "pass_p95_lt_300ms": true
+    },
+    {
+      "endpoint": "POST /pedidos",
+      "total_reqs": 5036,
+      "status_200": 0,
+      "status_201": 5036,
+      "errors": 0,
+      "error_rate_pct": 0,
+      "rps": 16.79,
+      "min_ms": 1.26,
+      "avg_ms": 7.1,
+      "p50_ms": 6.13,
+      "p90_ms": 11.78,
+      "p95_ms": 14.57,
+      "p99_ms": 21.99,
+      "max_ms": 107.89,
+      "pass_p95_lt_300ms": true
+    },
+    {
+      "endpoint": "GET /publica/mesas/{qr_token}/pedidos",
+      "total_reqs": 5024,
+      "status_200": 5024,
+      "status_201": 0,
+      "errors": 0,
+      "error_rate_pct": 0,
+      "rps": 16.75,
+      "min_ms": 0,
+      "avg_ms": 3.71,
+      "p50_ms": 3.32,
+      "p90_ms": 5.45,
+      "p95_ms": 6.41,
+      "p99_ms": 11.43,
+      "max_ms": 38.24,
+      "pass_p95_lt_300ms": true
+    },
+    {
+      "endpoint": "PATCH /pedidos/items/{id}/estado",
+      "total_reqs": 15058,
+      "status_200": 15058,
+      "status_201": 0,
+      "errors": 0,
+      "error_rate_pct": 0,
+      "rps": 50.19,
+      "min_ms": 1.55,
+      "avg_ms": 6.75,
+      "p50_ms": 5.83,
+      "p90_ms": 10.59,
+      "p95_ms": 12.35,
+      "p99_ms": 17.78,
+      "max_ms": 69.83,
+      "pass_p95_lt_300ms": true
+    },
+    {
+      "endpoint": "GET /pedidos?sucursal_id={id}",
+      "total_reqs": 199,
+      "status_200": 199,
+      "status_201": 0,
+      "errors": 0,
+      "error_rate_pct": 0,
+      "rps": 0.66,
+      "min_ms": 1.74,
+      "avg_ms": 10.96,
+      "p50_ms": 9.85,
+      "p90_ms": 18.03,
+      "p95_ms": 23.3,
+      "p99_ms": 33.05,
+      "max_ms": 35.37,
+      "pass_p95_lt_300ms": true
+    },
+    {
+      "endpoint": "POST /mesas/{id}/cerrar-cuenta",
+      "total_reqs": 990,
+      "status_200": 990,
+      "status_201": 0,
+      "errors": 0,
+      "error_rate_pct": 0,
+      "rps": 3.3,
+      "min_ms": 0.54,
+      "avg_ms": 4.51,
+      "p50_ms": 3.78,
+      "p90_ms": 6.8,
+      "p95_ms": 9.26,
+      "p99_ms": 16.34,
+      "max_ms": 26.88,
+      "pass_p95_lt_300ms": true
+    }
+  ]
+}
