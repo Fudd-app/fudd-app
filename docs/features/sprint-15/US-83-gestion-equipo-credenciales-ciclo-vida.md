@@ -1,67 +1,67 @@
-# US-83: Acceso del equipo por invitación, rol y sucursal
+# US-83: Gestión de Equipo de Trabajo (Credenciales Operativas + Invitación Google) y Control de Ciclo de Vida
 
-> **Sprint**: 15
-> **Estado**: Implementada en `feat/US-83-acceso-equipo`
-> **Integraciones obligatorias**: US-84 (login por negocio) y US-85 (Google + sesión segura)
+> **Sprint**: Sprint 15 (05/10 – 11/10/2026)  
+> **Épica**: Seguridad, Gestión de Personal & Multi-Tenancy  
+> **Tipo**: `Fullstack / Integración`  
+> **Estado**: ✅ **Resuelta (Unificada)**  
+> **Integraciones**: US-84 (`/{slug}/login`) y US-85 (Google + sesión revocable)
 
-## Historia
+---
 
-Como dueño o encargado quiero invitar personas al equipo y asignarles un rol y una sucursal, para que cada integrante acceda solo a las funciones operativas que le corresponden.
+## 1. Descripción de la Historia
 
-## Decisiones definitivas
+**Como** dueño (`admin`) o encargado de un local gastronómico,  
+**quiero** dar de alta a los integrantes de mi equipo de trabajo (mozos, cocineros, encargados) tanto mediante credenciales operativas (usuario y contraseña con autogeneración de claves) como mediante invitaciones por correo electrónico vinculadas a Google, y disponer de herramientas para blanquear contraseñas, bloquear accesos temporales, archivar o eliminar cuentas,  
+**para** gestionar al personal operativo con flexibilidad y control total del acceso por rol y sucursal.
 
-- `admin` representa al dueño. No tiene sucursal fija y puede operar todo el tenant.
-- `encargado`, `mozo` y `cocina` pertenecen exactamente a una sucursal.
-- No existen usuario/contraseña para staff ni estado “archivado”.
-- Los estados son: invitación `pendiente` (con trazabilidad interna `usada`, `cancelada` o `reemplazada`) y usuario `activo` o `bloqueado`.
-- Eliminar un usuario es una baja física. Pedidos y auditoría conservan referencias anulables y snapshots de nombre.
+---
 
-## Matriz de permisos
+## 2. Matriz de Permisos y Alcance
 
 | Rol | Alcance | Permisos |
 |---|---|---|
-| Dueño (`admin`) | Todo el tenant | Configuración global, plan/facturación, sucursales, equipo y operación completa. Invita encargados, mozos y cocineros. |
+| Dueño (`admin`) | Todo el tenant | Configuración global, plan/facturación, sucursales, equipo y operación completa. Crea/invita encargados, mozos y cocineros. |
 | Encargado | Su sucursal | Administración y operación de la sede. Gestiona únicamente mozos y cocineros de su sucursal. |
-| Mozo | Su sucursal | Recepción/pedidos, gestión de carta y consulta del estado de mesas. No crea, edita ni elimina mesas/QR. |
+| Mozo | Su sucursal | Recepción/pedidos (incluyendo pedidos asistidos), gestión de carta y consulta del estado de mesas. No crea, edita ni elimina mesas/QR. |
 | Cocinero (`cocina`) | Su sucursal | Carta en solo lectura y KDS; solo cambia estados de ítems. |
 
-El backend vuelve a validar usuario activo, tenant, sucursal, rol y versión de sesión en cada request protegido. Ocultar una acción en el frontend no reemplaza este control.
+El backend revalida usuario activo, tenant, sucursal, rol y `session_version` en cada request protegido.
 
-## Invitaciones
+---
 
-1. Dueño: elige email, rol y sucursal.
-2. Encargado: elige email y rol `mozo`/`cocina`; su sucursal se asigna automáticamente.
-3. La invitación no crea un usuario activo. Se guarda un hash del token, vence a las 48 horas y es de un solo uso.
-4. Solo puede existir una invitación pendiente para el mismo email dentro del tenant. El email puede participar en tenants distintos.
-5. Reenviar reemplaza el token anterior; cancelar invalida la invitación pendiente.
-6. El enlace se envía al email invitado y también queda visible para que el dueño o encargado pueda copiarlo. La UI diferencia entrega confirmada de modo local o fallo del proveedor.
-7. `GET /publica/invitaciones/{token}` muestra negocio, sucursal, rol y email sin consumir el token.
-8. Al aceptar, Google debe devolver exactamente el email invitado. El nombre sugerido por Google puede editarse.
-9. La creación del usuario, vinculación de `google_sub`, consumo de la invitación y primera sesión ocurren como una única operación lógica; rol y sucursal nunca provienen del cliente que acepta.
+## 3. Dos Modalidades de Alta Coexistentes
 
-## Pedido asistido
+### A. Alta Directa con Credenciales Operativas (`POST /usuarios/staff`)
+1. Formulario con **Nombre completo**, **Nombre de usuario (`@username`)** único dentro del tenant, **Rol**, **Sucursal**, **Email opcional** y **Contraseña** (con botón de autogeneración segura y copiado al portapapeles para WhatsApp).
+2. Hash de contraseña mediante **`bcrypt`** (`HashPasswordStaff`, mínimo 8 caracteres con letras y números).
+3. Permite blanquear/cambiar la contraseña en cualquier momento (`PATCH /usuarios/{id}/password`), incrementando `session_version` para revocar sesiones previas inmediatamente.
 
-Dueño, encargado o mozo pueden cargar un pedido real para una mesa de su alcance desde Recepcionista. Usa artículos, variantes, disponibilidad, notas y alias opcional de la carta real; publica los mismos eventos SSE/KDS que un pedido del comensal y registra:
+### B. Invitación por Correo y Aceptación con Google (`POST /usuarios`)
+1. Envía enlace único (`/invitacion/{token}`) con vigencia de 48 horas y hash SHA-256 en `invitaciones_equipo`.
+2. Permite vista previa no destructiva (`GET /publica/invitaciones/{token}`), reenvío (`POST /usuarios/invitaciones/{id}/reenviar`) y cancelación (`DELETE /usuarios/invitaciones/{id}`).
+3. Al aceptar (`POST /publica/invitaciones/{token}/aceptar`), verifica que el correo de Google coincida con el email invitado y crea el usuario activo en una transacción atómica.
 
-- `origen = mozo`
-- `creado_por_usuario_id`
-- `creado_por_nombre` (snapshot histórico)
+---
 
-## Criterios de aceptación
+## 4. Ciclo de Vida y Pedido Asistido
 
-- [x] Invitación pendiente, preview no destructiva, aceptación Google, expiración, cancelación y reenvío.
-- [x] Email repetible entre tenants pero no duplicado dentro del mismo tenant.
-- [x] Bloqueo y baja revocan acceso inmediatamente.
-- [x] Dueño y encargado respetan la matriz de gestión de equipo.
-- [x] Mozo puede cargar pedidos asistidos; cocinero no.
-- [x] Historial de pedidos conserva el origen y creador aunque el usuario se elimine.
-- [x] UI responsive para gestión del equipo, invitación y pedido asistido.
-- [x] Envío al email indicado con enlace manual disponible y estado de entrega explícito.
+- **Estados de miembro (`PATCH /usuarios/{id}/estado` y `PATCH /usuarios/{id}`)**:
+  - `activo`: Acceso habilitado.
+  - `bloqueado`: Suspensión inmediata con revocación de `session_version`.
+  - `archivado`: Inactivo / fin de temporada (ocultable en el listado, sin acceso al sistema).
+- **Baja (`DELETE /usuarios/{id}`)**: Elimina el acceso preservando el historial de pedidos (`creado_por_usuario_id ON DELETE SET NULL` y snapshot `creado_por_nombre`).
+- **Pedido asistido (`POST /pedidos/asistido`)**: Dueño, encargado o mozo pueden cargar pedidos para una mesa de su alcance registrando `origen = 'mozo'`, `creado_por_usuario_id` y `creado_por_nombre`.
 
-## Persistencia y API
+---
 
-- Migración: `031_staff_invitations_sessions_and_waiter_orders.sql`.
-- Equipo: `GET/POST /usuarios`, `PATCH/DELETE /usuarios/{id}`.
-- Invitaciones: `POST /usuarios/invitaciones/{id}/reenviar`, `DELETE /usuarios/invitaciones/{id}`.
-- Aceptación pública: `GET/POST /publica/invitaciones/{token}`.
-- Pedido asistido: `POST /pedidos/asistido`.
+## 5. Persistencia y API
+
+- Migraciones:
+  - `031_staff_invitations_sessions_and_waiter_orders.sql`
+  - `032_unify_staff_credentials_and_lifecycle.sql`
+- Endpoints:
+  - `GET /usuarios`, `POST /usuarios`, `POST /usuarios/staff`
+  - `PATCH /usuarios/{id}`, `PATCH /usuarios/{id}/password`, `PATCH /usuarios/{id}/estado`, `DELETE /usuarios/{id}`
+  - `POST /usuarios/invitaciones/{id}/reenviar`, `DELETE /usuarios/invitaciones/{id}`
+  - `GET /publica/invitaciones/{token}`, `POST /publica/invitaciones/{token}/aceptar`
+  - `POST /pedidos/asistido`

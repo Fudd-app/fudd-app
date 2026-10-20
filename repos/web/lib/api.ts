@@ -371,17 +371,36 @@ export interface MesaAPI {
   updated_at: string;
 }
 
+export type EstadoUsuario = 'activo' | 'bloqueado' | 'archivado';
+
 export interface UsuarioAPI {
   id: string;
   tenant_id: string;
   sucursal_id?: string;
-	 sucursal_nombre?: string;
+  sucursal_nombre?: string;
+  username?: string;
   nombre: string;
   email: string;
   rol: 'admin' | 'encargado' | 'mozo' | 'cocina';
-	estado: 'activo' | 'bloqueado';
+  estado: EstadoUsuario;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
+}
+
+export interface NegocioPublicoAuth {
+  id: string;
+  slug: string;
+  nombre: string;
+  nombre_fantasia?: string;
+  rubro?: string;
+  logo_url?: string | null;
+  color_primario?: string | null;
+  estilo_visual?: string | null;
+}
+
+export interface LoginStaffResponse {
+  redirect_to?: string;
+  usuario: SesionUsuario & { username?: string };
 }
 
 export interface SesionUsuario {
@@ -930,11 +949,70 @@ export const api = {
     });
   },
 
-	actualizarUsuario: async (id: string, data: { nombre?: string; estado?: 'activo' | 'bloqueado' }) => {
+  crearUsuarioStaff: async (data: {
+    nombre: string;
+    username: string;
+    email?: string;
+    rol: 'encargado' | 'mozo' | 'cocina';
+    sucursal_id?: string;
+    password: string;
+  }) => {
+    return apiFetch<UsuarioAPI>('/usuarios/staff', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  resetearPasswordUsuario: async (id: string, nuevaPassword: string) => {
+    return apiFetch<{ ok: boolean }>(`/usuarios/${encodeURIComponent(id)}/password`, {
+      method: 'PATCH',
+      body: JSON.stringify({ nueva_password: nuevaPassword }),
+    });
+  },
+
+  cambiarEstadoUsuario: async (id: string, estado: EstadoUsuario) => {
+    return apiFetch<UsuarioAPI>(`/usuarios/${encodeURIComponent(id)}/estado`, {
+      method: 'PATCH',
+      body: JSON.stringify({ estado }),
+    });
+  },
+
+  actualizarUsuario: async (
+    id: string,
+    data: {
+      nombre?: string;
+      username?: string;
+      email?: string;
+      rol?: 'admin' | 'encargado' | 'mozo' | 'cocina';
+      sucursal_id?: string;
+      estado?: EstadoUsuario;
+    },
+  ) => {
     return apiFetch<UsuarioAPI>(`/usuarios/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
+  },
+
+  obtenerNegocioPublico: async (slug: string) => {
+    return apiFetch<NegocioPublicoAuth>(`/publica/negocio/${encodeURIComponent(slug.trim().toLowerCase())}`);
+  },
+
+  autenticarStaffNegocio: async (slug: string, username: string, password: string) => {
+    const res = await apiFetch<LoginStaffResponse>(
+      `/publica/negocio/${encodeURIComponent(slug.trim().toLowerCase())}/login`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          username: username.trim().replace(/^@/, '').toLowerCase(),
+          password,
+        }),
+      },
+    );
+    if (typeof window !== 'undefined' && res.usuario?.sucursal_id) {
+      localStorage.setItem('kds_sucursal_id', res.usuario.sucursal_id);
+    }
+    return res;
   },
 
 	cancelarInvitacion: async (id: string) => apiFetch<void>(`/usuarios/invitaciones/${id}`, { method: 'DELETE' }),

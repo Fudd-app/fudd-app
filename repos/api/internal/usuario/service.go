@@ -9,11 +9,14 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
 )
+
+var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_.-]{3,50}$`)
 
 type Service struct {
 	store Store
@@ -23,6 +26,81 @@ type Service struct {
 
 func NuevoService(s Store, authSvc *auth.Service, email auth.EmailSender) *Service {
 	return &Service{store: s, auth: authSvc, email: email}
+}
+
+func NormalizarUsername(username string) string {
+	return strings.ToLower(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(username), "@")))
+}
+
+func (svc *Service) CrearStaff(ctx context.Context, actor *auth.Claims, input CrearUsuarioStaffInput) (*Usuario, error) {
+	if actor == nil || (actor.Rol != auth.RolDuenio && actor.Rol != auth.RolEncargado) {
+		return nil, ErrForbidden
+	}
+
+	input.Nombre = strings.TrimSpace(input.Nombre)
+	if input.Nombre == "" {
+		return nil, fmt.Errorf("%w: el nombre completo es requerido", ErrValidation)
+	}
+
+	input.Username = NormalizarUsername(input.Username)
+	if input.Username == "" || !usernameRegex.MatchString(input.Username) {
+		return nil, fmt.Errorf("%w: el nombre de usuario debe tener entre 3 y 50 caracteres alfanuméricos (letras, números, guion o punto)", ErrValidation)
+	}
+
+	input.Rol = strings.ToLower(strings.TrimSpace(input.Rol))
+	if input.Rol != auth.RolEncargado && input.Rol != auth.RolMozo && input.Rol != auth.RolCocinero {
+		return nil, fmt.Errorf("%w: rol operativo inválido (debe ser encargado, mozo o cocina)", ErrValidation)
+	}
+
+	if actor.Rol == auth.RolEncargado {
+		if input.Rol == auth.RolEncargado {
+			return nil, ErrForbidden
+		}
+		suc := actor.SucursalID
+		input.SucursalID = &suc
+	}
+
+	input.Email = auth.NormalizarEmail(input.Email)
+	if input.Email != "" && !strings.Contains(input.Email, "@") {
+		return nil, fmt.Errorf("%w: el email ingresado no es válido", ErrValidation)
+	}
+
+	credStore, ok := svc.store.(StaffCredentialStore)
+	if !ok {
+		return nil, errors.New("store sin soporte para alta por credenciales")
+	}
+
+	if input.SucursalID != nil {
+		trimmed := strings.TrimSpace(*input.SucursalID)
+		if trimmed == "" {
+			input.SucursalID = nil
+		} else {
+			input.SucursalID = &trimmed
+		}
+	}
+	if input.SucursalID == nil {
+		if defID, err := credStore.ObtenerPrimeraSucursalID(ctx, actor.TenantID); err == nil && defID != "" {
+			input.SucursalID = &defID
+		}
+	}
+	if input.SucursalID != nil && *input.SucursalID != "" {
+		pertenece, err := svc.store.SucursalPertenece(ctx, actor.TenantID, *input.SucursalID)
+		if err != nil {
+			return nil, err
+		}
+		if !pertenece {
+			return nil, ErrForbidden
+		}
+	}
+
+	hash, err := auth.HashPasswordStaff(input.Password)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s", ErrValidation, err.Error())
+	}
+	input.PasswordHash = hash
+	input.Password = ""
+
+	return credStore.CrearStaff(ctx, actor.TenantID, input)
 }
 
 func (svc *Service) Invitar(ctx context.Context, actor *auth.Claims, input InvitarInput) (*InvitacionCreada, error) {
@@ -104,14 +182,99 @@ func (svc *Service) Actualizar(ctx context.Context, actor *auth.Claims, id strin
 		if nombre == "" {
 			return nil, fmt.Errorf("%w: nombre vacío", ErrValidation)
 		}
+		input.Nombre = &nombre
 	}
 	if input.Estado != nil {
 		estado = strings.ToLower(strings.TrimSpace(*input.Estado))
-		if estado != "activo" && estado != "bloqueado" {
+		if estado != "activo" && estado != "bloqueado" && estado != "archivado" {
 			return nil, fmt.Errorf("%w: estado inválido", ErrValidation)
 		}
+		input.Estado = &estado
+	}
+	if input.Username != nil {
+		norm := NormalizarUsername(*input.Username)
+		if norm != "" && !usernameRegex.MatchString(norm) {
+			return nil, fmt.Errorf("%w: nombre de usuario inválido", ErrValidation)
+		}
+		input.Username = &norm
+	}
+	if input.Email != nil {
+		normEmail := auth.NormalizarEmail(*input.Email)
+		if normEmail != "" && !strings.Contains(normEmail, "@") {
+			return nil, fmt.Errorf("%w: email inválido", ErrValidation)
+		}
+		input.Email = &normEmail
+	}
+	if input.Rol != nil {
+		rol := strings.ToLower(strings.TrimSpace(*input.Rol))
+		if rol != auth.RolEncargado && rol != auth.RolMozo && rol != auth.RolCocinero {
+			return nil, fmt.Errorf("%w: rol inválido", ErrValidation)
+		}
+		if actor.Rol == auth.RolEncargado && rol == auth.RolEncargado {
+			return nil, ErrForbidden
+		}
+		input.Rol = &rol
+	}
+	if input.SucursalID != nil {
+		trimmed := strings.TrimSpace(*input.SucursalID)
+		if trimmed != "" {
+			if actor.Rol == auth.RolEncargado && trimmed != actor.SucursalID {
+				return nil, ErrForbidden
+			}
+			pertenece, err := svc.store.SucursalPertenece(ctx, actor.TenantID, trimmed)
+			if err != nil {
+				return nil, err
+			}
+			if !pertenece {
+				return nil, ErrForbidden
+			}
+		}
+		input.SucursalID = &trimmed
+	}
+
+	if credStore, ok := svc.store.(StaffCredentialStore); ok {
+		return credStore.ActualizarUsuarioDetalle(ctx, actor.TenantID, id, input)
 	}
 	return svc.store.ActualizarUsuario(ctx, actor.TenantID, id, nombre, estado)
+}
+
+func (svc *Service) ResetearPassword(ctx context.Context, actor *auth.Claims, id string, nuevaPassword string) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("%w: id de usuario requerido", ErrValidation)
+	}
+	if _, err := svc.targetAutorizado(ctx, actor, id); err != nil {
+		return err
+	}
+	hash, err := auth.HashPasswordStaff(nuevaPassword)
+	if err != nil {
+		return fmt.Errorf("%w: %s", ErrValidation, err.Error())
+	}
+	credStore, ok := svc.store.(StaffCredentialStore)
+	if !ok {
+		return errors.New("store sin soporte para reseteo de contraseña")
+	}
+	return credStore.ResetearPassword(ctx, actor.TenantID, id, hash)
+}
+
+func (svc *Service) CambiarEstado(ctx context.Context, actor *auth.Claims, id string, nuevoEstado string) (*Usuario, error) {
+	if strings.TrimSpace(id) == "" {
+		return nil, fmt.Errorf("%w: id de usuario requerido", ErrValidation)
+	}
+	if actor == nil || id == actor.UsuarioID {
+		return nil, ErrForbidden
+	}
+	target, err := svc.targetAutorizado(ctx, actor, id)
+	if err != nil {
+		return nil, err
+	}
+	estado := strings.ToLower(strings.TrimSpace(nuevoEstado))
+	if estado != "activo" && estado != "bloqueado" && estado != "archivado" {
+		return nil, fmt.Errorf("%w: estado inválido (debe ser activo, bloqueado o archivado)", ErrValidation)
+	}
+	if credStore, ok := svc.store.(StaffCredentialStore); ok {
+		return credStore.CambiarEstado(ctx, actor.TenantID, id, estado)
+	}
+	return svc.store.ActualizarUsuario(ctx, actor.TenantID, id, target.Nombre, estado)
 }
 
 func (svc *Service) Eliminar(ctx context.Context, actor *auth.Claims, id string) error {
