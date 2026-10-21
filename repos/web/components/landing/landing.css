@@ -27,7 +27,7 @@
 /* Header */
 .landing .landing-header { position: sticky; z-index: 40; top: 0; height: 76px; max-width: 1440px; margin: 0 auto; padding: 0 6%; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--l-line); background: rgba(255,255,255,.9); backdrop-filter: blur(16px); }
 .landing .landing-brand { padding: 0; display: flex; align-items: center; gap: 8px; color: var(--l-ink); font-size: 18px; letter-spacing: -.04em; text-decoration: none; border: 0; background: transparent; cursor: pointer; }
-.landing .landing-brand > span { width: 34px; height: 34px; display: grid; place-items: center; color: white; border-radius: 11px; background: var(--l-brand); }
+.landing .landing-brand > span { width: 34px; height: 34px; display: grid; place-items: center; }
 .landing .landing-brand strong { margin-left: -5px; color: var(--l-ink); }
 .landing .landing-nav { display: flex; align-items: center; gap: 34px; }
 .landing .landing-nav a { color: var(--l-muted); font-size: 11px; font-weight: 600; text-decoration: none; transition: color .18s; }
