@@ -627,7 +627,7 @@ export default function CartaSection() {
 
   return (
     <div className="h-full space-y-24 overflow-y-auto bg-ghost-fog/45 p-16 font-inter sm:p-24 md:p-32">
-      <div className="flex flex-col justify-between gap-16 2xl:flex-row 2xl:items-center">
+      <div className="flex flex-col gap-14">
         <div className="min-w-0">
           <h2 className="text-24 font-semibold tracking-[-0.02em] text-ash-graphite sm:text-32">
             Gestión de Carta
@@ -647,47 +647,57 @@ export default function CartaSection() {
             )}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 2xl:flex 2xl:shrink-0">
+        <div className="grid grid-cols-2 gap-6 sm:flex sm:flex-wrap sm:items-center sm:gap-8">
           <button
             type="button"
             onClick={() => setMostrarFranjasHorarias(true)}
-            className="flex h-48 items-center justify-center gap-8 rounded-lg border border-concrete bg-canvas-white px-16 text-12 font-semibold text-ash-graphite shadow-sm transition-colors hover:border-stone hover:bg-vanilla-cream"
+            className="group flex h-40 min-w-0 items-center justify-center gap-6 whitespace-nowrap rounded-full border border-concrete bg-canvas-white px-10 pr-14 text-11 font-semibold text-ash-graphite shadow-xs transition-all hover:border-stone hover:bg-vanilla-cream sm:px-12 sm:pr-16 sm:text-12"
           >
-            <span className="material-symbols-outlined text-18">schedule</span>
+            <span className="flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-ghost-fog text-plain-green transition-colors group-hover:bg-canvas-white">
+              <span className="material-symbols-outlined text-16">schedule</span>
+            </span>
             Horarios
           </button>
           <button
             type="button"
             onClick={handleAbrirImportar}
-            className="flex h-48 items-center justify-center gap-8 rounded-lg border border-concrete bg-canvas-white px-16 text-12 font-semibold text-ash-graphite shadow-sm transition-colors hover:border-stone hover:bg-vanilla-cream"
+            className="group flex h-40 min-w-0 items-center justify-center gap-6 whitespace-nowrap rounded-full border border-concrete bg-canvas-white px-10 pr-14 text-11 font-semibold text-ash-graphite shadow-xs transition-all hover:border-stone hover:bg-vanilla-cream sm:px-12 sm:pr-16 sm:text-12"
           >
-            <span className="material-symbols-outlined text-18">upload_file</span>
+            <span className="flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-ghost-fog text-plain-green transition-colors group-hover:bg-canvas-white">
+              <span className="material-symbols-outlined text-16">upload_file</span>
+            </span>
             Importar CSV/Excel
           </button>
           <button
             type="button"
             onClick={() => setMostrarAjustePrecios(true)}
             disabled={loading || totalItems === 0}
-            className="flex h-48 items-center justify-center gap-8 rounded-lg border border-concrete bg-canvas-white px-16 text-12 font-semibold text-ash-graphite shadow-sm transition-colors hover:border-stone hover:bg-vanilla-cream disabled:cursor-not-allowed disabled:opacity-40"
+            className="group flex h-40 min-w-0 items-center justify-center gap-6 whitespace-nowrap rounded-full border border-concrete bg-canvas-white px-10 pr-14 text-11 font-semibold text-ash-graphite shadow-xs transition-all hover:border-stone hover:bg-vanilla-cream disabled:cursor-not-allowed disabled:opacity-40 sm:px-12 sm:pr-16 sm:text-12"
             title={totalItems === 0 ? "Agregá productos antes de ajustar precios" : undefined}
           >
-            <span className="material-symbols-outlined text-18">percent</span>
+            <span className="flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-ghost-fog text-plain-green transition-colors group-hover:bg-canvas-white">
+              <span className="material-symbols-outlined text-16">percent</span>
+            </span>
             Ajustar precios
           </button>
           <button
             type="button"
             onClick={() => setMostrarFormCat(true)}
-            className="flex h-48 items-center justify-center gap-8 rounded-lg border border-concrete bg-canvas-white px-16 text-12 font-semibold text-ash-graphite shadow-sm transition-colors hover:border-stone hover:bg-vanilla-cream"
+            className="group flex h-40 min-w-0 items-center justify-center gap-6 whitespace-nowrap rounded-full border border-plain-green bg-canvas-white px-10 pr-14 text-11 font-semibold text-plain-green shadow-xs transition-all hover:bg-vanilla-cream sm:px-12 sm:pr-16 sm:text-12"
           >
-            <span className="material-symbols-outlined text-18">add</span>
+            <span className="flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-ghost-fog text-plain-green transition-colors group-hover:bg-canvas-white">
+              <span className="material-symbols-outlined text-16">add</span>
+            </span>
             Nueva categoría
           </button>
           <button
             type="button"
             onClick={() => handleAbrirCrearItem()}
-            className="flex h-48 items-center justify-center gap-8 rounded-lg bg-plain-green px-20 text-13 font-semibold text-canvas-white shadow-sm transition-colors hover:bg-plain-green-muted"
+            className="col-span-2 flex h-40 min-w-0 items-center justify-center gap-6 whitespace-nowrap rounded-full bg-plain-green px-12 pr-16 text-12 font-semibold text-canvas-white shadow-sm transition-all hover:bg-plain-green-muted sm:col-span-1 sm:px-14 sm:pr-20 sm:text-13"
           >
-            <span className="material-symbols-outlined text-18">add</span>
+            <span className="flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-canvas-white/10 text-canvas-white">
+              <span className="material-symbols-outlined text-16">add</span>
+            </span>
             Nuevo artículo
           </button>
         </div>
