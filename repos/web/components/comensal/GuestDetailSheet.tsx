@@ -91,12 +91,17 @@ export default function GuestDetailSheet({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <section className="guest-sheet" role="dialog" aria-modal="true">
-        <span className="sheet-handle" />
+      <section
+        className="guest-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Personalizar ${item.nombre}`}
+      >
+        <span className="sheet-handle" aria-hidden="true" />
         <button
           type="button"
           className="sheet-close"
-          aria-label="Cerrar"
+          aria-label="Cerrar detalle del plato"
           onClick={onClose}
         >
           <ComensalIcon name="close" size={18} />
@@ -104,7 +109,13 @@ export default function GuestDetailSheet({
 
         {item.foto_url && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img className="sheet-photo" src={item.foto_url} alt={item.nombre} />
+          <img
+            className="sheet-photo"
+            src={item.foto_url}
+            alt={item.nombre}
+            loading="lazy"
+            decoding="async"
+          />
         )}
 
         <div className="sheet-content">
@@ -145,6 +156,7 @@ export default function GuestDetailSheet({
                         name={grupo.nombreGrupo}
                         checked={check}
                         onChange={() => {}}
+                        aria-label={v.nombre}
                       />
                     </label>
                   );
@@ -172,15 +184,19 @@ export default function GuestDetailSheet({
             <div className="flex items-center border border-[var(--line)] rounded-xl h-52 px-12 gap-14 bg-[var(--canvas)]">
               <button
                 type="button"
+                aria-label="Disminuir cantidad"
                 className="text-18 font-bold text-[var(--muted)] hover:text-[var(--ink)]"
                 onClick={() => setCantidad((c) => Math.max(1, c - 1))}
                 disabled={cantidad <= 1}
               >
                 −
               </button>
-              <span className="font-bold text-14 min-w-[20px] text-center">{cantidad}</span>
+              <span className="font-bold text-14 min-w-[20px] text-center" aria-live="polite">
+                {cantidad}
+              </span>
               <button
                 type="button"
+                aria-label="Aumentar cantidad"
                 className="text-18 font-bold text-[var(--muted)] hover:text-[var(--ink)]"
                 onClick={() => setCantidad((c) => c + 1)}
               >

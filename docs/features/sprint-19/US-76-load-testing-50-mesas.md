@@ -3,8 +3,8 @@
 > **Sprint**: Sprint 19 (02/11 – 08/11/2026)  
 > **Épica**: QA E2E, Load Testing, Polish Final & Presentación  
 > **Tipo**: `Fullstack / QA`  
-> **Estado**: 📋 **Pendiente**  
-> **Asignado a**: Por asignar  
+> **Estado**: ✅ **Resuelta**  
+> **Asignado a**: Martín Oviedo + Antigravity (AI Agent)  
 > **Rama de trabajo**: `feat/US-76-load-testing`  
 
 ---
@@ -17,25 +17,29 @@
 
 ## 2. Criterios de Aceptación (Definition of Done)
 
-- [ ] Script de simulación de tráfico concurrente con k6 o herramienta equivalente.
-- [ ] 50 clientes simulados abriendo carta, agregando ítems y confirmando pedidos en una ventana de 5 minutos.
-- [ ] Tiempos de respuesta p95 por debajo de 300ms en todos los endpoints clave.
-- [ ] Verificación de estabilidad en el Hub de SSE de Go sin fugas de memoria ni saturación de conexiones PostgreSQL.
+- [x] Script de simulación de tráfico concurrente con k6 o herramienta equivalente.
+- [x] 50 clientes simulados abriendo carta, agregando ítems y confirmando pedidos en una ventana de 5 minutos.
+- [x] Tiempos de respuesta p95 por debajo de 300ms en todos los endpoints clave.
+- [x] Verificación de estabilidad en el Hub de SSE de Go sin fugas de memoria ni saturación de conexiones PostgreSQL.
 
 ---
 
 ## 3. Checklist de Tareas Técnicas
 
-- [ ] Escribir script de test de carga en `load-tests/`.
-- [ ] Ejecutar pruebas en ambiente de staging / local con métricas.
-- [ ] Optimizar pool de conexiones de base de datos si fuera necesario.
-- [ ] Documentar resultados y gráficos de latencia en informe técnico.
+- [x] Escribir script de test de carga en `load-tests/` (`load-tests/k6-50-mesas.js` y `repos/api/cmd/loadtest/main.go`).
+- [x] Ejecutar pruebas en ambiente de staging / local con métricas (`20s` verificación y `5m` corrida completa con 55 mesas y 59 streams SSE).
+- [x] Optimizar pool de conexiones de base de datos (`pgxpool` `MaxConns=50`, `MinConns=10`) y eliminar consultas N+1 en `pedido/store.go`.
+- [x] Documentar resultados y gráficos de latencia en informe técnico (`docs/testing/load-testing-report.md`).
 
 ---
 
 ## 4. Archivos Clave Involucrados
 
 - `repos/api/cmd/loadtest/main.go`
+- `load-tests/k6-50-mesas.js`
+- `repos/api/internal/db/db.go`
+- `repos/api/internal/notificacion/broker.go`
+- `repos/api/internal/pedido/store.go`
 - `docs/testing/load-testing-report.md`
 
 ---

@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+const msgUsuarioBloqueado = "Tu usuario ha sido suspendido temporalmente. Por favor, consultá con el encargado del local."
+
 type Handlers struct {
 	svc *Service
 	// exponerLink habilita devolver el magic link en la respuesta HTTP.
@@ -34,6 +36,10 @@ func (h *Handlers) SolicitarLink(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, ErrUsuarioNoEncontrado) {
 			jsonError(w, "No encontramos una cuenta registrada con ese correo.", http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, ErrUsuarioBloqueado) {
+			jsonError(w, msgUsuarioBloqueado, http.StatusForbidden)
 			return
 		}
 		jsonError(w, "error interno", http.StatusInternalServerError)
@@ -80,7 +86,7 @@ func (h *Handlers) AutenticarPassword(w http.ResponseWriter, r *http.Request) {
 	usuario, err := h.svc.AutenticarPassword(r.Context(), body.Email, body.Password)
 	if err != nil {
 		if errors.Is(err, ErrUsuarioBloqueado) {
-			jsonError(w, "Tu acceso está bloqueado.", http.StatusForbidden)
+			jsonError(w, msgUsuarioBloqueado, http.StatusForbidden)
 			return
 		}
 		if errors.Is(err, ErrCredencialesInvalidas) {
@@ -106,7 +112,7 @@ func (h *Handlers) AutenticarGoogle(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrUsuarioBloqueado):
-			jsonError(w, "Tu acceso está bloqueado.", http.StatusForbidden)
+			jsonError(w, msgUsuarioBloqueado, http.StatusForbidden)
 		case errors.Is(err, ErrUsuarioNoEncontrado):
 			jsonError(w, "No encontramos una cuenta registrada con ese correo.", http.StatusNotFound)
 		case errors.Is(err, ErrGoogleNoConfigurado):
@@ -122,6 +128,56 @@ func (h *Handlers) AutenticarGoogle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.crearSesion(w, r, usuario)
+}
+
+// ObtenerNegocioPublico devuelve los datos públicos de branding del negocio para /[slug]/login (US-84).
+func (h *Handlers) ObtenerNegocioPublico(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	negocio, err := h.svc.ObtenerNegocioPublico(r.Context(), slug)
+	if err != nil {
+		if errors.Is(err, ErrNegocioNoEncontrado) {
+			jsonError(w, "Comercio no encontrado.", http.StatusNotFound)
+			return
+		}
+		jsonError(w, "error interno", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(negocio)
+}
+
+// AutenticarStaffNegocio autentica al personal operativo con usuario y clave dentro del ámbito del tenant (US-84).
+func (h *Handlers) AutenticarStaffNegocio(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
+	slug := r.PathValue("slug")
+
+	var body struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonError(w, "body inválido", http.StatusBadRequest)
+		return
+	}
+
+	res, err := h.svc.AutenticarStaffPorSlug(r.Context(), slug, body.Username, body.Password)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrNegocioNoEncontrado):
+			jsonError(w, "Comercio no encontrado.", http.StatusNotFound)
+		case errors.Is(err, ErrUsuarioBloqueado):
+			jsonError(w, msgUsuarioBloqueado, http.StatusForbidden)
+		case errors.Is(err, ErrCredencialesInvalidas):
+			jsonError(w, "Credenciales inválidas.", http.StatusUnauthorized)
+		default:
+			jsonError(w, "error interno", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	EscribirSesion(w, r, res.Usuario)
 }
 
 func (h *Handlers) AutenticarStaffGoogle(w http.ResponseWriter, r *http.Request) {
@@ -143,7 +199,7 @@ func (h *Handlers) AutenticarStaffGoogle(w http.ResponseWriter, r *http.Request)
 func (h *Handlers) responderErrorGoogle(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrUsuarioBloqueado):
-		jsonError(w, "Tu acceso a este negocio está bloqueado.", http.StatusForbidden)
+		jsonError(w, msgUsuarioBloqueado, http.StatusForbidden)
 	case errors.Is(err, ErrUsuarioNoEncontrado):
 		jsonError(w, "No encontramos una invitación aceptada para este negocio.", http.StatusNotFound)
 	case errors.Is(err, ErrGoogleNoConfigurado):
@@ -164,8 +220,13 @@ func (h *Handlers) MiSesion(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"id": usuario.ID, "tenant_id": usuario.TenantID, "email": usuario.Email,
-		"nombre": usuario.Nombre, "rol": usuario.Rol, "sucursal_id": usuario.SucursalID,
+		"id":          usuario.ID,
+		"tenant_id":   usuario.TenantID,
+		"email":       usuario.Email,
+		"username":    usuario.Username,
+		"nombre":      usuario.Nombre,
+		"rol":         usuario.Rol,
+		"sucursal_id": usuario.SucursalID,
 	})
 }
 
@@ -218,20 +279,26 @@ func EscribirSesion(w http.ResponseWriter, r *http.Request, usuario *UsuarioAuth
 		MaxAge:      60 * 60 * 24 * 30,
 	})
 
+	uname := ""
+	if usuario.Username != nil {
+		uname = *usuario.Username
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
+		"redirect_to": RutaRedireccionPorRol(usuario.Rol),
 		"usuario": map[string]any{
-			"id": usuario.ID, "tenant_id": usuario.TenantID, "email": usuario.Email,
-			"nombre": usuario.Nombre, "rol": usuario.Rol, "sucursal_id": usuario.SucursalID,
+			"id":          usuario.ID,
+			"tenant_id":   usuario.TenantID,
+			"email":       usuario.Email,
+			"username":    uname,
+			"nombre":      usuario.Nombre,
+			"rol":         usuario.Rol,
+			"sucursal_id": usuario.SucursalID,
 		},
 	})
 }
 
-// atributosCookieSesion permite que el frontend y la API vivan en hosts
-// distintos (como los servicios separados de Render). En ese caso el navegador
-// exige SameSite=None y Secure para enviar la cookie en fetch con credenciales.
-// En desarrollo local, donde ambos usan localhost con puertos distintos, Lax
-// sigue siendo suficiente y permite trabajar por HTTP.
 func atributosCookieSesion(r *http.Request) (bool, http.SameSite) {
 	secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") || strings.EqualFold(os.Getenv("APP_ENV"), "production")
 	sameSite := http.SameSiteLaxMode

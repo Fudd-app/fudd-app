@@ -34,6 +34,80 @@ func NuevoServiceConGoogle(s Store, e EmailSender, clientID string, verifier Ver
 	}
 }
 
+func RutaRedireccionPorRol(rol string) string {
+	if strings.EqualFold(strings.TrimSpace(rol), RolCocinero) {
+		return "/kds"
+	}
+	return "/dashboard"
+}
+
+func (svc *Service) ObtenerNegocioPublico(ctx context.Context, slug string) (*NegocioPublicoAuth, error) {
+	slug = strings.ToLower(strings.TrimSpace(slug))
+	if slug == "" {
+		return nil, ErrNegocioNoEncontrado
+	}
+	credStore, ok := svc.store.(StaffCredentialStore)
+	if !ok {
+		return nil, ErrNegocioNoEncontrado
+	}
+	return credStore.ObtenerNegocioPorSlug(ctx, slug)
+}
+
+func (svc *Service) AutenticarStaffPorSlug(ctx context.Context, slug, username, password string) (*LoginStaffResultado, error) {
+	slug = strings.ToLower(strings.TrimSpace(slug))
+	username = strings.ToLower(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(username), "@")))
+
+	if slug == "" {
+		return nil, ErrNegocioNoEncontrado
+	}
+	credStore, ok := svc.store.(StaffCredentialStore)
+	if !ok {
+		return nil, errors.New("store sin soporte para credenciales de equipo")
+	}
+
+	negocio, err := credStore.ObtenerNegocioPorSlug(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+
+	if username == "" || password == "" {
+		_ = CompararPassword(dummyPasswordHash, password)
+		return nil, ErrCredencialesInvalidas
+	}
+
+	usuario, err := credStore.ObtenerUsuarioPorTenantYUsername(ctx, negocio.ID, username)
+	if err != nil {
+		if errors.Is(err, ErrUsuarioNoEncontrado) {
+			_ = CompararPassword(dummyPasswordHash, password)
+			return nil, ErrCredencialesInvalidas
+		}
+		return nil, err
+	}
+
+	if strings.EqualFold(usuario.Estado, "archivado") {
+		_ = CompararPassword(dummyPasswordHash, password)
+		return nil, ErrCredencialesInvalidas
+	}
+
+	hash := dummyPasswordHash
+	if usuario.PasswordHash != nil && strings.TrimSpace(*usuario.PasswordHash) != "" {
+		hash = *usuario.PasswordHash
+	}
+	if err := CompararPassword(hash, password); err != nil || usuario.PasswordHash == nil {
+		return nil, ErrCredencialesInvalidas
+	}
+
+	if err := validarUsuarioActivo(usuario); err != nil {
+		return nil, err
+	}
+
+	return &LoginStaffResultado{
+		Usuario:    usuario,
+		Negocio:    negocio,
+		RedirectTo: RutaRedireccionPorRol(usuario.Rol),
+	}, nil
+}
+
 func (svc *Service) AutenticarPassword(ctx context.Context, email, password string) (*UsuarioAuth, error) {
 	email = NormalizarEmail(email)
 	if email == "" || password == "" {
@@ -48,6 +122,11 @@ func (svc *Service) AutenticarPassword(ctx context.Context, email, password stri
 			return nil, ErrCredencialesInvalidas
 		}
 		return nil, err
+	}
+
+	if strings.EqualFold(usuario.Estado, "archivado") {
+		_ = CompararPassword(dummyPasswordHash, password)
+		return nil, ErrCredencialesInvalidas
 	}
 
 	hash := dummyPasswordHash
@@ -114,16 +193,18 @@ func (svc *Service) AutenticarGoogle(ctx context.Context, credencial string) (*U
 		}
 		return nil, err
 	}
+	if err := validarUsuarioActivo(usuario); err != nil {
+		return nil, err
+	}
 	if err := svc.store.VincularGoogleSub(ctx, usuario.ID, identidad.Subject); err != nil {
 		return nil, err
 	}
 	usuario.GoogleSub = &identidad.Subject
-	return usuario, validarUsuarioActivo(usuario)
+	return usuario, nil
 }
 
 // AutenticarStaffGoogle exige el slug del negocio para desambiguar a una misma
-// persona que trabaja en más de un tenant. El alta solo puede existir por una
-// invitación previamente aceptada; nunca crea usuarios durante el login.
+// persona que trabaja en más de un tenant.
 func (svc *Service) AutenticarStaffGoogle(ctx context.Context, slug, credencial string) (*UsuarioAuth, error) {
 	identidad, err := svc.VerificarIdentidadGoogle(ctx, credencial)
 	if err != nil {
@@ -145,19 +226,25 @@ func (svc *Service) AutenticarStaffGoogle(ctx context.Context, slug, credencial 
 	if err != nil {
 		return nil, err
 	}
+	if err := validarUsuarioActivo(usuario); err != nil {
+		return nil, err
+	}
 	if err := svc.store.VincularGoogleSub(ctx, usuario.ID, identidad.Subject); err != nil {
 		return nil, err
 	}
 	usuario.GoogleSub = &identidad.Subject
-	return usuario, validarUsuarioActivo(usuario)
+	return usuario, nil
 }
 
 func validarUsuarioActivo(usuario *UsuarioAuth) error {
 	if usuario == nil {
 		return ErrUsuarioNoEncontrado
 	}
+	if strings.EqualFold(usuario.Estado, "archivado") {
+		return ErrUsuarioNoEncontrado
+	}
 	// El vacío solo existe en dobles de prueba anteriores a session_version.
-	if usuario.Estado != "" && usuario.Estado != "activo" {
+	if usuario.Estado != "" && !strings.EqualFold(usuario.Estado, "activo") {
 		return ErrUsuarioBloqueado
 	}
 	return nil
@@ -172,8 +259,6 @@ func (svc *Service) CerrarSesion(ctx context.Context, usuarioID string) error {
 }
 
 // SolicitarLink genera el magic link y lo envía por email.
-// Devuelve el link generado para que el handler pueda exponerlo en entornos de
-// desarrollo sin proveedor de email.
 func (svc *Service) SolicitarLink(ctx context.Context, email string) (string, error) {
 	email = NormalizarEmail(email)
 
@@ -184,6 +269,9 @@ func (svc *Service) SolicitarLink(ctx context.Context, email string) (string, er
 			return "", ErrUsuarioNoEncontrado
 		}
 		return "", fmt.Errorf("error buscando usuario: %w", err)
+	}
+	if err := validarUsuarioActivo(usuario); err != nil {
+		return "", err
 	}
 
 	token, err := generarTokenAleatorio()
@@ -206,8 +294,7 @@ func (svc *Service) SolicitarLink(ctx context.Context, email string) (string, er
 	return link, nil
 }
 
-// NormalizarEmail deja los emails en una forma canónica (minúsculas, sin espacios)
-// para que "Admin@Bar.com" y "admin@bar.com " sean la misma cuenta.
+// NormalizarEmail deja los emails en una forma canónica (minúsculas, sin espacios).
 func NormalizarEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -103,6 +104,9 @@ func registrarRutas(mux *http.ServeMux) {
 	mux.HandleFunc("POST /auth/password", authH.AutenticarPassword)
 	mux.HandleFunc("POST /auth/google", authH.AutenticarGoogle)
 	mux.HandleFunc("POST /auth/negocios/{slug}/google", authH.AutenticarStaffGoogle)
+	mux.HandleFunc("POST /auth/negocios/{slug}/password", authH.AutenticarStaffNegocio)
+	mux.HandleFunc("GET /publica/negocio/{slug}", authH.ObtenerNegocioPublico)
+	mux.HandleFunc("POST /publica/negocio/{slug}/login", authH.AutenticarStaffNegocio)
 	mux.HandleFunc("POST /auth/magic-link", authH.SolicitarLink)
 	mux.HandleFunc("GET /auth/verify", authH.VerificarToken)
 	requerirSesion := auth.RequerirSesion(authStore)
@@ -148,7 +152,10 @@ func registrarRutas(mux *http.ServeMux) {
 	usuarioH := usuario.NuevosHandlers(usuarioSvc)
 	mux.Handle("GET /usuarios", conRoles(usuarioH.Listar, auth.RolDuenio, auth.RolEncargado))
 	mux.Handle("POST /usuarios", conRoles(usuarioH.Invitar, auth.RolDuenio, auth.RolEncargado))
+	mux.Handle("POST /usuarios/staff", conRoles(usuarioH.CrearStaff, auth.RolDuenio, auth.RolEncargado))
 	mux.Handle("PATCH /usuarios/{id}", conRoles(usuarioH.Actualizar, auth.RolDuenio, auth.RolEncargado))
+	mux.Handle("PATCH /usuarios/{id}/password", conRoles(usuarioH.ResetearPassword, auth.RolDuenio, auth.RolEncargado))
+	mux.Handle("PATCH /usuarios/{id}/estado", conRoles(usuarioH.CambiarEstado, auth.RolDuenio, auth.RolEncargado))
 	mux.Handle("DELETE /usuarios/{id}", conRoles(usuarioH.Eliminar, auth.RolDuenio, auth.RolEncargado))
 	mux.Handle("POST /usuarios/invitaciones/{id}/reenviar", conRoles(usuarioH.Reenviar, auth.RolDuenio, auth.RolEncargado))
 	mux.Handle("DELETE /usuarios/invitaciones/{id}", conRoles(usuarioH.Cancelar, auth.RolDuenio, auth.RolEncargado))
@@ -252,20 +259,41 @@ func handlerHealth(w http.ResponseWriter, r *http.Request) {
 	dbEstado := "ok"
 	status := http.StatusOK
 
+	var poolStats map[string]any
 	if db.Pool != nil {
 		if err := db.Pool.Ping(r.Context()); err != nil {
 			dbEstado = "error: " + err.Error()
 			status = http.StatusServiceUnavailable
 		}
+		st := db.Pool.Stat()
+		poolStats = map[string]any{
+			"max_conns":           st.MaxConns(),
+			"total_conns":         st.TotalConns(),
+			"acquired_conns":      st.AcquiredConns(),
+			"idle_conns":          st.IdleConns(),
+			"empty_acquire_count": st.EmptyAcquireCount(),
+		}
 	} else {
 		dbEstado = "desconectado"
 	}
 
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	canalesSSE, suscriptoresSSE := notificacion.Instancia.Estadisticas()
+
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(map[string]any{
-		"servicio":  "mesa-click-api",
-		"estado":    "ok",
-		"database":  dbEstado,
-		"timestamp": time.Now().Format(time.RFC3339),
+		"servicio":      "mesa-click-api",
+		"estado":        "ok",
+		"database":      dbEstado,
+		"timestamp":     time.Now().Format(time.RFC3339),
+		"goroutines":    runtime.NumGoroutine(),
+		"heap_alloc_mb": float64(mem.HeapAlloc) / (1024 * 1024),
+		"sys_mb":        float64(mem.Sys) / (1024 * 1024),
+		"sse": map[string]any{
+			"canales":      canalesSSE,
+			"suscriptores": suscriptoresSSE,
+		},
+		"db_pool": poolStats,
 	})
 }

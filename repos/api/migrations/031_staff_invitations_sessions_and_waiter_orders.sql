@@ -53,7 +53,7 @@ CREATE INDEX IF NOT EXISTS idx_usuarios_sucursal_activos
     ON usuarios (sucursal_id, rol)
     WHERE estado = 'activo';
 
-CREATE TABLE invitaciones_equipo (
+CREATE TABLE IF NOT EXISTS invitaciones_equipo (
     id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id            UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     sucursal_id          UUID NOT NULL REFERENCES sucursales(id) ON DELETE CASCADE,
@@ -70,10 +70,10 @@ CREATE TABLE invitaciones_equipo (
     updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX idx_invitaciones_equipo_pendiente_tenant_email
+CREATE UNIQUE INDEX IF NOT EXISTS idx_invitaciones_equipo_pendiente_tenant_email
     ON invitaciones_equipo (tenant_id, lower(email))
     WHERE estado = 'pendiente';
-CREATE INDEX idx_invitaciones_equipo_tenant_sucursal
+CREATE INDEX IF NOT EXISTS idx_invitaciones_equipo_tenant_sucursal
     ON invitaciones_equipo (tenant_id, sucursal_id, created_at DESC);
 
 ALTER TABLE pedidos

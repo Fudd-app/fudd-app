@@ -38,6 +38,7 @@ export default function GuestFoodCard({
         type="button"
         className="food-info"
         onClick={() => onSelect(item)}
+        aria-label={`${item.nombre}, ${formatPrice(item.precio)}${agotado ? ", agotado" : ""}`}
       >
         {tagTexto && (
           <span className={`food-tag ${agotado ? "out-tag" : ""}`}>
@@ -60,16 +61,20 @@ export default function GuestFoodCard({
           <img
             src={item.foto_url}
             alt={item.nombre}
+            width={96}
+            height={96}
             className={agotado ? "grayscale" : ""}
             loading="lazy"
+            decoding="async"
           />
         ) : (
-          <div className="food-image-placeholder">
+          <div className="food-image-placeholder" aria-hidden="true">
             <span className="material-symbols-outlined text-32">restaurant</span>
           </div>
         )}
 
         <span
+          aria-hidden="true"
           className={`plus-badge ${
             agotado ? "out-badge" : cantidadEnCarrito > 0 ? "in-cart" : ""
           }`}

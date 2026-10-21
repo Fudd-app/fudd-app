@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -27,7 +29,34 @@ func Conectar() error {
 		return fmt.Errorf("DATABASE_URL no está configurada")
 	}
 
-	pool, err := pgxpool.New(context.Background(), url)
+	cfg, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		return fmt.Errorf("no se pudo parsear DATABASE_URL: %w", err)
+	}
+
+	maxConns := int32(50)
+	if v := os.Getenv("DB_MAX_CONNS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			maxConns = int32(n)
+		}
+	}
+	minConns := int32(10)
+	if v := os.Getenv("DB_MIN_CONNS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			minConns = int32(n)
+		}
+	}
+	if minConns > maxConns {
+		minConns = maxConns
+	}
+
+	cfg.MaxConns = maxConns
+	cfg.MinConns = minConns
+	cfg.MaxConnLifetime = 30 * time.Minute
+	cfg.MaxConnIdleTime = 5 * time.Minute
+	cfg.HealthCheckPeriod = 1 * time.Minute
+
+	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
 	if err != nil {
 		return fmt.Errorf("no se pudo crear el pool de conexiones: %w", err)
 	}
@@ -38,7 +67,7 @@ func Conectar() error {
 	}
 
 	Pool = pool
-	slog.Info("conexión a PostgreSQL establecida")
+	slog.Info("conexión a PostgreSQL establecida", "max_conns", cfg.MaxConns, "min_conns", cfg.MinConns)
 	return nil
 }
 

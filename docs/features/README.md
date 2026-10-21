@@ -10,10 +10,10 @@
 | Métrica | Valor |
 |---|---|
 | **Total de User Stories** | **38 US** (US-50 a US-87) |
-| **Completadas** | **27** (71%) |
-| **En Curso** | **1** |
-| **Pendientes** | **10** |
-| **Sprint Actual** | **Sprint 15 (05/10 – 11/10/2026)** · Sprints 16 y 17 completados por adelantado |
+| **Completadas** | **35** (92%) |
+| **En Curso** | **0** |
+| **Pendientes** | **3** |
+| **Sprint Actual** | **Sprint 19 (QA E2E, Load Testing, Polish Final & Presentación)** · Sprints 16, 17 y 19 completados |
 
 ---
 
@@ -124,13 +124,16 @@
 
 | ID | Tipo | Título | Estado | Asignado | Archivo |
 |---|---|---|---|---|---|
-| **US-76** | `Fullstack / QA` | Pruebas de Carga Simultáneas con 50+ Mesas en Tiempo Real | 📋 Pendiente | Por asignar | [Ver detalle](sprint-19/US-76-load-testing-50-mesas.md) |
-| **US-77** | `Frontend` | Auditorías de Lighthouse y Accesibilidad WCAG (>90) | 📋 Pendiente | Por asignar | [Ver detalle](sprint-19/US-77-auditoria-lighthouse-accesibilidad.md) |
-| **US-78** | `Todos` | Demo Interactiva en Vivo y Cierre de la Materia | 📋 Pendiente | Por asignar | [Ver detalle](sprint-19/US-78-demo-interactiva-cierre.md) |
+| **US-76** | `Fullstack / QA` | Pruebas de Carga Simultáneas con 50+ Mesas en Tiempo Real | ✅ Resuelta | Martín Oviedo + Antigravity (AI Agent) | [Ver detalle](sprint-19/US-76-load-testing-50-mesas.md) |
+| **US-77** | `Frontend` | Auditorías de Lighthouse y Accesibilidad WCAG (>90) | ✅ Resuelta | Martín Oviedo + Antigravity (AI Agent) | [Ver detalle](sprint-19/US-77-auditoria-lighthouse-accesibilidad.md) |
+| **US-78** | `Todos` | Demo Interactiva en Vivo y Cierre de la Materia | ✅ Resuelta | Equipo Mesa CLICK | [Ver detalle](sprint-19/US-78-demo-interactiva-cierre.md) |
 
 ---
 
 ## 💡 Documentos Complementarios y Propuestas
+- [Informe Técnico de Load Testing 50+ Mesas](../testing/load-testing-report.md) (US-76).
+- [Informe de Auditoría Lighthouse & Accesibilidad WCAG](../testing/lighthouse-accesibilidad-report.md) (US-77).
+- [Guion de Demo Interactiva y Seeding](../testing/guion-demo-cierre.md) (US-78).
 - [Propuesta de Reseñas al Local & Smart Google Funnel](reseñas-local.html) (Aporte de Martín para US-79 y US-80).
 - [Presentación Interactiva de Fase 4](../presentations/parte-2/index.html).
 - [Reglas y Arquitectura General](../../AGENTS.md).
