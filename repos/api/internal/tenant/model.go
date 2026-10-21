@@ -32,6 +32,7 @@ type Tenant struct {
 	Plan                string         `json:"plan"`
 	PlanDesde           *time.Time     `json:"plan_desde,omitempty"`
 	PlanHasta           *time.Time     `json:"plan_hasta,omitempty"`
+	TrialHasta          *time.Time     `json:"prueba_hasta,omitempty"`
 	UpgradeSolicitadoAt *time.Time     `json:"upgrade_solicitado_at,omitempty"`
 	UpgradeNota         *string        `json:"upgrade_nota,omitempty"`
 	MostrarMarcaAgua    bool           `json:"mostrar_marca_agua"`
@@ -87,6 +88,10 @@ type OnboardingInput struct {
 	Whatsapp         string         `json:"whatsapp"`
 	EmailSucursal    string         `json:"email_sucursal"`
 	Horarios         map[string]any `json:"horarios"`
+	Plan             string         `json:"-"`
+	PlanDesde        *time.Time     `json:"-"`
+	PlanHasta        *time.Time     `json:"-"`
+	TrialHasta       *time.Time     `json:"-"`
 }
 
 type ActualizarTenantInput struct {

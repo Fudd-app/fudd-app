@@ -17,6 +17,10 @@ const (
 const (
 	PlanFree = "free"
 	PlanPro  = "pro"
+
+	PrecioMensualProARS = 30000
+	MonedaPlanPro       = "ARS"
+	MesesPruebaInicial  = 3
 )
 
 const Ilimitado = -1
@@ -37,9 +41,17 @@ type EstadoCuotas struct {
 	Plan                string
 	PlanDesde           *time.Time
 	PlanHasta           *time.Time
+	TrialHasta          *time.Time
 	UpgradeSolicitadoAt *time.Time
 	UpgradeNota         *string
 	Uso                 map[Recurso]int
+}
+
+// NuevaPruebaInicial devuelve el período Pro que recibe un negocio al darse de alta.
+// Se usan meses calendario para que la prueba venza el mismo día tres meses después.
+func NuevaPruebaInicial(now time.Time) (time.Time, time.Time) {
+	desde := now.UTC()
+	return desde, desde.AddDate(0, MesesPruebaInicial, 0)
 }
 
 // PlanEfectivo: 'pro' solo si plan=='pro' Y (plan_hasta IS NULL OR > now).
@@ -52,6 +64,10 @@ func (e EstadoCuotas) PlanEfectivo(now time.Time) string {
 		return PlanFree
 	}
 	return PlanPro
+}
+
+func (e EstadoCuotas) EnPrueba(now time.Time) bool {
+	return e.PlanEfectivo(now) == PlanPro && e.TrialHasta != nil && e.TrialHasta.After(now)
 }
 
 func (e EstadoCuotas) Limite(rec Recurso) int {

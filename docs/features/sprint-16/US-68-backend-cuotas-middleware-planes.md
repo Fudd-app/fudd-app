@@ -18,6 +18,8 @@
 ## 2. Criterios de Aceptación (Definition of Done)
 
 - [x] Estructura de datos con plan del tenant (`plan: 'free' | 'pro'`) y fechas de validez.
+- [x] Todo tenant nuevo inicia con Plan Pro de prueba por 3 meses calendario y luego degrada a Free si no contrata.
+- [x] Catálogo comercial del backend: Plan Pro a $30.000 ARS mensuales.
 - [x] Límites plan Free: máx 10 mesas activas, máx 30 productos en carta, máx 1 sucursal.
 - [x] Middleware en Go que intercepta creación de mesas, artículos y sucursales.
 - [x] Retorno de error HTTP 403 Forbidden con código estructurado `PLAN_LIMIT_REACHED` y detalle de cuota.
@@ -27,6 +29,7 @@
 ## 3. Checklist de Tareas Técnicas
 
 - [x] Migración de base de datos para plan en tabla `tenants` (`024_plan_freemium_tenants.sql`).
+- [x] Migración de vigencia de prueba inicial (`033_add_trial_freemium_tenants.sql`).
 - [x] Middleware de verificación de límites de cuota en Go (`internal/tenant/middleware.go`).
 - [x] Pruebas unitarias de rechazo cuando se supera el límite en plan Free (`internal/tenant/middleware_test.go`, `plan_test.go`).
 - [x] Endpoint `GET /tenants/me/plan` con estado de cuotas y `POST /tenants/me/upgrade` para registrar solicitudes.

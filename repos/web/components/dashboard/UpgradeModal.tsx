@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { Progress } from "@/components/ui/Progress";
+import { formatearPrecioPlan, PLAN_MONEDA } from "@/lib/planes";
 
 export interface UpgradeModalProps {
   isOpen: boolean;
@@ -115,7 +116,7 @@ export default function UpgradeModal({
 
       const asunto = encodeURIComponent(`Solicitud Upgrade Pro - Límite de ${info.nombrePlural}`);
       const cuerpo = encodeURIComponent(
-        `Hola equipo de Mesa CLICK,\n\nAlcancé el límite de ${recurso} en mi plan Free y quiero pasar a Pro para seguir expandiendo mi negocio.\n\n¡Gracias!`
+        `Hola equipo de Mesa CLICK,\n\nAlcancé el límite de ${recurso} en mi plan Free y quiero pasar a Pro por ${formatearPrecioPlan()} ${PLAN_MONEDA} por mes para seguir expandiendo mi negocio.\n\n¡Gracias!`
       );
       const mailtoUrl = `mailto:supportmesaclick@gmail.com?subject=${asunto}&body=${cuerpo}`;
 
@@ -212,6 +213,9 @@ export default function UpgradeModal({
                 </li>
               ))}
             </ul>
+            <p className="border-t border-concrete pt-10 text-12 font-semibold text-ash-graphite">
+              {formatearPrecioPlan()} {PLAN_MONEDA} por mes
+            </p>
           </div>
         </div>
 

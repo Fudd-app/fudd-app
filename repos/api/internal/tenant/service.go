@@ -69,6 +69,11 @@ func (svc *Service) Crear(ctx context.Context, input OnboardingInput) (*Tenant, 
 	if input.Horarios == nil {
 		input.Horarios = make(map[string]any)
 	}
+	inicioPrueba, finPrueba := NuevaPruebaInicial(time.Now())
+	input.Plan = PlanPro
+	input.PlanDesde = &inicioPrueba
+	input.PlanHasta = &finPrueba
+	input.TrialHasta = &finPrueba
 	return svc.store.Crear(ctx, input)
 }
 
@@ -246,6 +251,12 @@ type EstadoPlanDTO struct {
 	PlanDesde           *time.Time      `json:"plan_desde"`
 	PlanHasta           *time.Time      `json:"plan_hasta"`
 	DiasRestantesPro    *int            `json:"dias_restantes_pro"`
+	EnPrueba            bool            `json:"en_prueba"`
+	PruebaHasta         *time.Time      `json:"prueba_hasta"`
+	DiasRestantesPrueba *int            `json:"dias_restantes_prueba"`
+	PrecioMensual       int             `json:"precio_mensual"`
+	Moneda              string          `json:"moneda"`
+	MesesPrueba         int             `json:"meses_prueba"`
 	UpgradeSolicitadoAt *time.Time      `json:"upgrade_solicitado_at"`
 	UpgradeNota         *string         `json:"upgrade_nota"`
 	Limites             map[string]int  `json:"limites"`
@@ -262,6 +273,7 @@ func (svc *Service) EstadoPlan(ctx context.Context, tenantID string) (*EstadoPla
 
 	now := time.Now()
 	planEfectivo := cuotas.PlanEfectivo(now)
+	enPrueba := cuotas.EnPrueba(now)
 
 	var diasRestantes *int
 	if planEfectivo == PlanPro && cuotas.PlanHasta != nil {
@@ -270,6 +282,15 @@ func (svc *Service) EstadoPlan(ctx context.Context, tenantID string) (*EstadoPla
 			dias = 0
 		}
 		diasRestantes = &dias
+	}
+
+	var diasRestantesPrueba *int
+	if enPrueba && cuotas.TrialHasta != nil {
+		dias := int(cuotas.TrialHasta.Sub(now).Hours() / 24)
+		if dias < 0 {
+			dias = 0
+		}
+		diasRestantesPrueba = &dias
 	}
 
 	usoMesas := cuotas.Uso[RecursoMesas]
@@ -281,6 +302,12 @@ func (svc *Service) EstadoPlan(ctx context.Context, tenantID string) (*EstadoPla
 		PlanDesde:           cuotas.PlanDesde,
 		PlanHasta:           cuotas.PlanHasta,
 		DiasRestantesPro:    diasRestantes,
+		EnPrueba:            enPrueba,
+		PruebaHasta:         cuotas.TrialHasta,
+		DiasRestantesPrueba: diasRestantesPrueba,
+		PrecioMensual:       PrecioMensualProARS,
+		Moneda:              MonedaPlanPro,
+		MesesPrueba:         MesesPruebaInicial,
 		UpgradeSolicitadoAt: cuotas.UpgradeSolicitadoAt,
 		UpgradeNota:         cuotas.UpgradeNota,
 		Uso: map[string]int{
