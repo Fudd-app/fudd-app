@@ -4,22 +4,32 @@ import QRCode from "qrcode";
 import { api, MesaAPI, Sucursal, EstadoPlan, esPlanLimitReached, detallePlanLimit, getErrorMessage } from "@/lib/api";
 import { EmptyState, Skeleton, useToast, useConfirm } from "@/components/ui";
 import UpgradeModal from "./UpgradeModal";
+import PedidoAsistidoModal from "./PedidoAsistidoModal";
 
-function QRCanvas({ token, mesaNumero }: { token: string; mesaNumero: number }) {
+interface QRCanvasProps {
+  token: string;
+  mesaNumero: number;
+  compacto?: boolean;
+  estado?: MesaAPI['estado'];
+  onTomarPedido?: () => void;
+}
+
+function QRCanvas({ token, mesaNumero, compacto = false, estado, onTomarPedido }: QRCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [publicUrl, setPublicUrl] = useState('');
   const [usaOrigenLocal, setUsaOrigenLocal] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
-    if (!canvasRef.current) return;
     const configuredOrigin = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, '');
     const origin = configuredOrigin || window.location.origin;
     const url = new URL(`/mesa/${encodeURIComponent(token)}`, `${origin}/`).toString();
     setPublicUrl(url);
     const hostname = new URL(url).hostname;
     setUsaOrigenLocal(hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1');
-    QRCode.toCanvas(canvasRef.current, url, { width: 180, margin: 1 });
+    if (canvasRef.current) {
+      void QRCode.toCanvas(canvasRef.current, url, { width: 180, margin: 1 });
+    }
   }, [token]);
 
   const handleDownload = () => {
@@ -40,6 +50,65 @@ function QRCanvas({ token, mesaNumero }: { token: string; mesaNumero: number }) 
       toast.error('No se pudo copiar el enlace.');
     }
   };
+
+  if (compacto) {
+    const mesaActiva = estado === 'activa';
+    return (
+      <div className="space-y-10">
+        <div className="flex items-center justify-between gap-8 rounded-lg border border-ghost-fog bg-ghost-fog/50 p-10 text-12 text-sage-green">
+          <span>Estado</span>
+          <strong className="text-ash-graphite">{mesaActiva ? 'Activa' : 'Inactiva'}</strong>
+        </div>
+
+        <div className="rounded-lg border border-concrete bg-[#F7F8F8] p-10">
+          <p className="mb-5 text-10 font-mono uppercase tracking-[0.12em] text-sage-green">Link de la carta</p>
+          <p className="break-all text-11 font-mono leading-relaxed text-ash-graphite" title={publicUrl}>
+            {publicUrl || 'Preparando enlace…'}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-8">
+          <a
+            href={publicUrl || undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-disabled={!publicUrl}
+            className="flex min-h-44 items-center justify-center gap-5 rounded-lg border border-concrete bg-canvas-white px-8 text-11 font-semibold text-ash-graphite transition-colors hover:border-stone hover:bg-ghost-fog aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          >
+            <span className="material-symbols-outlined text-16">menu_book</span>
+            Abrir carta
+          </a>
+          <button
+            type="button"
+            onClick={handleCopy}
+            disabled={!publicUrl}
+            className="flex min-h-44 items-center justify-center gap-5 rounded-lg border border-concrete bg-canvas-white px-8 text-11 font-semibold text-ash-graphite transition-colors hover:border-stone hover:bg-ghost-fog disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span className="material-symbols-outlined text-16">content_copy</span>
+            Copiar link
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={onTomarPedido}
+          disabled={!mesaActiva || !onTomarPedido}
+          className="flex min-h-46 w-full items-center justify-center gap-6 rounded-lg bg-plain-green px-10 text-12 font-semibold text-white shadow-sm transition-colors hover:bg-plain-green-muted disabled:cursor-not-allowed disabled:opacity-45"
+          title={mesaActiva ? 'Cargar un pedido asistido para esta mesa' : 'La mesa debe estar activa para cargar pedidos'}
+        >
+          <span className="material-symbols-outlined text-17">add_shopping_cart</span>
+          Tomar pedido
+        </button>
+
+        {usaOrigenLocal && (
+          <p className="flex items-start gap-5 rounded-lg border border-amber-300 bg-amber-50 px-9 py-7 text-10 leading-relaxed text-amber-800">
+            <span className="material-symbols-outlined text-14">warning</span>
+            Este link usa localhost y no abrirá desde otro celular.
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full flex-col gap-10">
@@ -107,6 +176,7 @@ export default function MesasSection({ readOnly = false }: { readOnly?: boolean 
   const [estadoPlan, setEstadoPlan] = useState<EstadoPlan | null>(null);
   const [modalUpgradeOpen, setModalUpgradeOpen] = useState(false);
   const [modalLimiteInfo, setModalLimiteInfo] = useState<{ limite?: number; uso?: number }>({});
+  const [mesaPedidoId, setMesaPedidoId] = useState<string | null>(null);
 
   const cargarPlan = useCallback(async () => {
     try {
@@ -257,11 +327,15 @@ export default function MesasSection({ readOnly = false }: { readOnly?: boolean 
         <div className="min-w-0">
           <h2 className="text-24 font-semibold tracking-[-0.02em] text-ash-graphite sm:text-32">Mesas & Códigos QR</h2>
           <p className="mt-4 text-13 text-sage-green sm:text-14">
-            {loading ? 'Cargando mesas...' : `${mesas.length} mesas configuradas con QR activo`}
+            {loading
+              ? 'Cargando mesas...'
+              : readOnly
+                ? `${mesas.length} mesas disponibles para consultar la carta y tomar pedidos`
+                : `${mesas.length} mesas configuradas con QR activo`}
           </p>
         </div>
 		<div className="flex items-center gap-8">
-			{readOnly && <span className="rounded-full border border-concrete bg-canvas-white px-10 py-4 text-11 text-sage-green">Solo lectura</span>}
+			{readOnly && <span className="rounded-full border border-concrete bg-canvas-white px-10 py-4 text-11 text-sage-green">Sin edición de mesas</span>}
 			{!readOnly && <>
           {limiteMesasAlcanzado && (
             <span
@@ -392,9 +466,13 @@ export default function MesasSection({ readOnly = false }: { readOnly?: boolean 
 					</details>}
                 </div>
 				<div className="px-14 pb-14">
-					{readOnly ? (
-						<div className="rounded-lg border border-ghost-fog bg-ghost-fog/50 p-12 text-12 text-sage-green">Estado: <strong className="text-ash-graphite">{mesa.estado === 'activa' ? 'Activa' : 'Inactiva'}</strong></div>
-					) : <QRCanvas token={mesa.qr_token} mesaNumero={mesa.numero} />}
+					<QRCanvas
+            token={mesa.qr_token}
+            mesaNumero={mesa.numero}
+            compacto={readOnly}
+            estado={mesa.estado}
+            onTomarPedido={readOnly ? () => setMesaPedidoId(mesa.id) : undefined}
+          />
                 </div>
               </article>
             ))}
@@ -420,6 +498,15 @@ export default function MesasSection({ readOnly = false }: { readOnly?: boolean 
         uso={modalLimiteInfo.uso ?? estadoPlan?.uso?.mesas ?? mesas.length}
         onUpgradeSolicitado={() => void cargarPlan()}
 		/>}
+    {readOnly && (
+      <PedidoAsistidoModal
+        abierto={mesaPedidoId !== null}
+        mesas={mesas.filter((mesa) => mesa.estado === 'activa')}
+        mesaInicialId={mesaPedidoId ?? undefined}
+        onClose={() => setMesaPedidoId(null)}
+        onCreado={() => toast.success('Pedido enviado a cocina.')}
+      />
+    )}
     </div>
   );
 }

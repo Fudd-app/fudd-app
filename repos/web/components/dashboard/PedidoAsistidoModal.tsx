@@ -3,7 +3,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, ArticuloAPI, getErrorMessage, MesaAPI, VariantePublica } from "@/lib/api";
 
-export default function PedidoAsistidoModal({ abierto, mesas, onClose, onCreado }: { abierto: boolean; mesas: MesaAPI[]; onClose: () => void; onCreado: () => void }) {
+interface PedidoAsistidoModalProps {
+  abierto: boolean;
+  mesas: MesaAPI[];
+  mesaInicialId?: string;
+  onClose: () => void;
+  onCreado: () => void;
+}
+
+export default function PedidoAsistidoModal({ abierto, mesas, mesaInicialId, onClose, onCreado }: PedidoAsistidoModalProps) {
   const [articulos, setArticulos] = useState<ArticuloAPI[]>([]);
   const [variantes, setVariantes] = useState<VariantePublica[]>([]);
   const [mesaId, setMesaId] = useState('');
@@ -14,6 +22,13 @@ export default function PedidoAsistidoModal({ abierto, mesas, onClose, onCreado 
   const [seleccionadas, setSeleccionadas] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    if (!abierto) return;
+    const mesaInicialValida = mesas.some((mesa) => mesa.id === mesaInicialId);
+    setMesaId(mesaInicialValida ? mesaInicialId ?? '' : mesas[0]?.id ?? '');
+    setError('');
+  }, [abierto, mesaInicialId, mesas]);
 
   useEffect(() => {
     if (!abierto) return;
@@ -30,7 +45,7 @@ export default function PedidoAsistidoModal({ abierto, mesas, onClose, onCreado 
   }, [articuloId]);
 
   const articulo = useMemo(() => articulos.find((a) => a.id === articuloId), [articuloId, articulos]);
-  const mesaSeleccionada = mesaId || mesas[0]?.id || '';
+  const mesaSeleccionada = mesaId || mesaInicialId || mesas[0]?.id || '';
   if (!abierto) return null;
 
   const enviar = async (event: React.FormEvent) => {

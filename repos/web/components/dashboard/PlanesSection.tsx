@@ -79,7 +79,7 @@ export default function PlanesSection({ tenant, onTenantUpdate }: Props) {
         (nota.trim() ? `Nota: ${nota.trim()}` : "")
       );
 
-      const mailtoUrl = `mailto:soporte@mesaclick.com?subject=${encodeURIComponent(`Solicitud Upgrade Pro - ${nombreNegocio}`)}&body=${cuerpo}`;
+      const mailtoUrl = `mailto:supportmesaclick@gmail.com?subject=${encodeURIComponent(`Solicitud Upgrade Pro - ${nombreNegocio}`)}&body=${cuerpo}`;
       if (typeof window !== "undefined") {
         window.open(mailtoUrl, "_blank");
       }
