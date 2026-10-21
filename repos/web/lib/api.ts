@@ -347,8 +347,6 @@ export interface ArticuloAPI {
   foto_url?: string;
   activo: boolean;
   franja_horaria_id?: string;
-  disponible?: boolean;
-  reponer_diariamente?: boolean;
   orden: number;
   created_at: string;
   updated_at: string;
@@ -498,7 +496,6 @@ export interface ArticuloPublico {
   precio: number;
   foto_url?: string;
   activo: boolean;
-  disponible?: boolean;
   variantes?: VariantePublica[];
 }
 
@@ -835,18 +832,6 @@ export const api = {
     return apiFetch<void>(`/carta/franjas-horarias/${id}`, { method: 'DELETE' });
   },
 
-  actualizarDisponibilidadArticulo: async (id: string, disponible: boolean) => {
-    return apiFetch<ArticuloAPI>(`/carta/articulos/${id}/disponibilidad`, {
-      method: 'PATCH',
-      body: JSON.stringify({ disponible }),
-    });
-  },
-
-  reponerTodosLosArticulos: async () => {
-    return apiFetch<{ repuestos: number }>('/carta/reponer-todos', {
-      method: 'POST',
-    });
-  },
   ajustarPrecios: async (data: AjustePreciosInput) => {
     return apiFetch<AjustePreciosResultado>('/carta/precios/ajuste-porcentual', {
       method: 'PATCH',
