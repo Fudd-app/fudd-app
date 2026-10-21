@@ -116,7 +116,7 @@ export default function UpgradeModal({
 
       const asunto = encodeURIComponent(`Solicitud Upgrade Pro - Límite de ${info.nombrePlural}`);
       const cuerpo = encodeURIComponent(
-        `Hola equipo de Mesa CLICK,\n\nAlcancé el límite de ${recurso} en mi plan Free y quiero pasar a Pro por ${formatearPrecioPlan()} ${PLAN_MONEDA} por mes para seguir expandiendo mi negocio.\n\n¡Gracias!`
+        `Hola equipo de Zelko,\n\nAlcancé el límite de ${recurso} en mi plan Free y quiero pasar a Pro por ${formatearPrecioPlan()} ${PLAN_MONEDA} por mes para seguir expandiendo mi negocio.\n\n¡Gracias!`
       );
       const mailtoUrl = `mailto:supportmesaclick@gmail.com?subject=${asunto}&body=${cuerpo}`;
 

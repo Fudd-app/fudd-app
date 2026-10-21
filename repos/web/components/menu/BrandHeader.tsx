@@ -94,7 +94,7 @@ function getInitials(name: string) {
     .map((word) => word[0]?.toUpperCase())
     .join("");
 
-  return initials || "MC";
+  return initials || "ZK";
 }
 
 export function BrandMark({ branding, className = "h-44 w-44" }: { branding: MesaBranding; className?: string }) {

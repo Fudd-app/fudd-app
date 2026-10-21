@@ -3,8 +3,8 @@ import LegalDocument, { legalLinkClass, type LegalSection } from "@/components/l
 import { LEGAL } from "@/lib/legal";
 
 export const metadata: Metadata = {
-  title: "Política de Privacidad | Mesa CLICK",
-  description: "Cómo Mesa CLICK recopila, usa, protege y comparte datos personales.",
+  title: "Política de Privacidad | Zelko",
+  description: "Cómo Zelko recopila, usa, protege y comparte datos personales.",
   alternates: { canonical: "/privacidad" },
 };
 
@@ -29,13 +29,13 @@ const sections: LegalSection[] = [
     content: (
       <>
         <p>
-          Mesa CLICK actúa como responsable respecto de los datos necesarios para crear cuentas, autenticar usuarios, administrar la relación contractual, proteger la plataforma y brindar soporte.
+          Zelko actúa como responsable respecto de los datos necesarios para crear cuentas, autenticar usuarios, administrar la relación contractual, proteger la plataforma y brindar soporte.
         </p>
         <p>
-          Cada comercio adherido decide qué información solicita a sus comensales, cómo gestiona pedidos, facturación, alergias, preferencias y atención al cliente. Para esos tratamientos, el comercio es el responsable y Mesa CLICK opera como proveedor tecnológico siguiendo sus instrucciones, salvo cuando la ley determine otra función.
+          Cada comercio adherido decide qué información solicita a sus comensales, cómo gestiona pedidos, facturación, alergias, preferencias y atención al cliente. Para esos tratamientos, el comercio es el responsable y Zelko opera como proveedor tecnológico siguiendo sus instrucciones, salvo cuando la ley determine otra función.
         </p>
         <p>
-          Mercado Pago, Google y otros terceros procesan datos bajo sus propias políticas para prestar sus servicios. Mesa CLICK no controla sus decisiones independientes de tratamiento.
+          Mercado Pago, Google y otros terceros procesan datos bajo sus propias políticas para prestar sus servicios. Zelko no controla sus decisiones independientes de tratamiento.
         </p>
       </>
     ),
@@ -77,7 +77,7 @@ const sections: LegalSection[] = [
       <>
         <ul className="list-disc space-y-6 pl-20">
           <li>Crear y administrar cuentas, negocios, sucursales, cartas y permisos de equipo.</li>
-          <li>Autenticar administradores mediante correo y contraseña de Mesa CLICK o Google, gestionar enlaces de invitación del equipo y prevenir accesos no autorizados.</li>
+          <li>Autenticar administradores mediante correo y contraseña de Zelko o Google, gestionar enlaces de invitación del equipo y prevenir accesos no autorizados.</li>
           <li>Recibir, preparar, entregar y cerrar pedidos; mostrar su estado en tiempo real.</li>
           <li>Facilitar pagos solicitados por el comercio a través de Mercado Pago.</li>
           <li>Producir métricas operativas del propio comercio, sin vender perfiles a terceros.</li>
@@ -96,7 +96,7 @@ const sections: LegalSection[] = [
     content: (
       <>
         <p>
-          El acceso con Google se utiliza exclusivamente para confirmar identidad y permitir el ingreso de administradores o integrantes de equipo que ya estén registrados en Mesa CLICK. Se reciben únicamente el identificador estable de Google, el correo y su estado de verificación. No solicitamos acceso a Gmail, Drive, contactos, calendario ni otros contenidos de la cuenta.
+          El acceso con Google se utiliza exclusivamente para confirmar identidad y permitir el ingreso de administradores o integrantes de equipo que ya estén registrados en Zelko. Se reciben únicamente el identificador estable de Google, el correo y su estado de verificación. No solicitamos acceso a Gmail, Drive, contactos, calendario ni otros contenidos de la cuenta.
         </p>
         <p>
           Esa información no se vende, no se utiliza para publicidad, evaluación crediticia, seguimiento ajeno al servicio ni entrenamiento de modelos de inteligencia artificial. Sólo se comparte con proveedores indispensables para operar o cuando exista obligación legal. El uso de información recibida de las API de Google cumple la <a className={legalLinkClass} href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noreferrer">Google API Services User Data Policy</a>, incluidos sus requisitos de uso limitado.
@@ -130,7 +130,7 @@ const sections: LegalSection[] = [
         <ul className="list-disc space-y-6 pl-20">
           <li>El comercio y su personal autorizado, para administrar su operación y atender pedidos.</li>
           <li>Proveedores de infraestructura y alojamiento, actualmente servicios desplegados en Render.</li>
-          <li>Proveedores de correo transaccional configurados por Mesa CLICK, como Brevo, SMTP o Resend.</li>
+          <li>Proveedores de correo transaccional configurados por Zelko, como Brevo, SMTP o Resend.</li>
           <li>Google, para la autenticación solicitada por la persona.</li>
           <li>Mercado Pago, cuando el comercio habilita y el comensal elige ese medio de pago.</li>
           <li>Asesores profesionales, auditores o proveedores de seguridad sujetos a confidencialidad.</li>
@@ -231,7 +231,7 @@ export default function PrivacidadPage() {
     <LegalDocument
       eyebrow="Privacidad y protección de datos"
       title="Política de privacidad"
-      description="Explicamos qué datos trata Mesa CLICK, para qué se utilizan, con quién pueden compartirse y cómo ejercer tus derechos."
+      description="Explicamos qué datos trata Zelko, para qué se utilizan, con quién pueden compartirse y cómo ejercer tus derechos."
       sections={sections}
       alternateHref="/terminos"
       alternateLabel="Ver términos"

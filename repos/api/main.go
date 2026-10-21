@@ -1,6 +1,6 @@
 // cmd/server/main.go
 //
-// Punto de entrada del servidor Mesa CLICK.
+// Punto de entrada del servidor Zelko.
 // Cuando corrés "go run ./cmd/server" esto es lo primero que ejecuta Go.
 //
 // Responsabilidades:

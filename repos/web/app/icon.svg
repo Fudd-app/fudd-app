@@ -1,20 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect x="2" y="2" width="96" height="96" rx="26" fill="#144336" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 88">
+  <rect width="88" height="88" rx="20" fill="#7F77DD" />
   <path
-    d="M21 74 V36 A8 8 0 0 1 29 28 H70 A8 8 0 0 1 78 36 V60"
+    d="M 24 26 H 64 L 24 62 H 64"
     fill="none"
-    stroke="#f7f6f2"
-    stroke-width="10.5"
+    stroke="#EEEDFE"
+    stroke-width="7"
     stroke-linecap="round"
     stroke-linejoin="round"
-  />
-  <path
-    d="M0 0 V30 L7.5 23.5 L12.5 34 L18 31.5 L13 21.5 H23 Z"
-    transform="translate(52 50) scale(.95)"
-    fill="#f7f6f2"
-    stroke="#144336"
-    stroke-width="5"
-    stroke-linejoin="round"
-    paint-order="stroke"
   />
 </svg>

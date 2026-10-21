@@ -39,12 +39,12 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Mesa CLICK | Carta Digital QR, KDS de Cocina y Gestión Gastronómica",
+  title: "Zelko | Carta Digital QR, KDS de Cocina y Gestión Gastronómica",
   description:
     "Plataforma web PWA para digitalizar pedidos por QR en bares, cafeterías y restaurantes con salón en vivo, KDS de cocina y analítica.",
   metadataBase: new URL("https://mesa-click-web.onrender.com"),
   icons: {
-    icon: [{ url: "/icon.svg?v=20261020", type: "image/svg+xml", sizes: "any" }],
+    icon: [{ url: "/icon.svg?v=20261021", type: "image/svg+xml", sizes: "any" }],
     apple: "/mesa-click-logo-120.png",
   },
 };

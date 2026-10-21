@@ -36,7 +36,7 @@ export default function RegistroPage() {
       const res = await api.verificarEmailAdminDisponible(correo);
       if (!res.disponible) {
         setEmailEnUso(true);
-        setError("Ese correo ya tiene un negocio registrado en Mesa CLICK.");
+        setError("Ese correo ya tiene un negocio registrado en Zelko.");
         return false;
       }
       return true;
@@ -229,7 +229,7 @@ export default function RegistroPage() {
           <div className="auth-story-overlay">
             <span className="story-label"><i /> Configuración simple</span>
             <blockquote>“En pocos minutos tenés tu salón listo para recibir el primer pedido.”</blockquote>
-            <div><span className="story-avatar">MC</span><p><strong>Tu operación, conectada</strong><small>Salón · Cocina · Comensales</small></p></div>
+            <div><span className="story-avatar">ZK</span><p><strong>Tu operación, conectada</strong><small>Salón · Cocina · Comensales</small></p></div>
           </div>
           <div className="story-card">
             <span><LandingIcon name="check" /></span>

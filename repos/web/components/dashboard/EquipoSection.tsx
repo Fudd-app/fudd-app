@@ -181,7 +181,7 @@ export default function EquipoSection({
 
   const armarTextoCredenciales = (user: string, pass: string, nombreStaff?: string) => {
     const urlLinea = portalUrl ? `\nPortal de ingreso: ${portalUrl}` : "";
-    return `Hola${nombreStaff ? ` ${nombreStaff}` : ""}! Tus datos de acceso a Mesa CLICK (${tenant?.nombre || "Local"}):${urlLinea}\nUsuario: ${user}\nClave: ${pass}`;
+    return `Hola${nombreStaff ? ` ${nombreStaff}` : ""}! Tus datos de acceso a Zelko (${tenant?.nombre || "Local"}):${urlLinea}\nUsuario: ${user}\nClave: ${pass}`;
   };
 
   const handleSubmitAlta = async (event: React.FormEvent) => {

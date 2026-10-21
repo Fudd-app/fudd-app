@@ -108,7 +108,7 @@ export default function StepBusiness({ data, errors = {}, onChange, onNext }: St
                     Dominio
                   </span>
                   <div className="h-40 px-12 bg-ghost-fog border border-ash-graphite rounded-md text-12 font-mono text-sage-green flex items-center min-w-0">
-                    <span className="truncate">{host ? `${host}/` : "mesa-click/"}</span>
+                    <span className="truncate">{host ? `${host}/` : "zelko/"}</span>
                   </div>
                 </div>
                 <div>

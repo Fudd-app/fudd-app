@@ -1,26 +1,32 @@
 @import "tailwindcss";
 
 @theme {
-  /* ── Rediseño US-53 · sistema monocromático (docs/diseño) ──────────────
+  /* ── Identidad Zelko · Paleta Violeta (docs/diseño/zelko) ──────────────
      Se conservan los NOMBRES de token; cambian los valores.
-     `plain-green` pasa a ser la TINTA primaria (negro). El verde de marca
-     vive ahora en `success` / `success-muted` y se usa SOLO para
-     estados de éxito / confirmación. */
+     `plain-green` representa el color primario de marca y botones (#7F77DD),
+     con `plain-green-muted` para hover y bordes de acento (#534AB7). */
   --color-canvas-white: #ffffff;
-  --color-ghost-fog: #f4f4f4;        /* relleno sutil (antes menta) */
-  --color-vanilla-cream: #eeeeee;    /* superficie (antes crema) */
-  --color-ash-graphite: #0a0a0a;     /* tinta / texto principal */
+  --color-ghost-fog: #f4f4f4;        /* relleno sutil */
+  --color-vanilla-cream: #eeeeee;    /* superficie */
+  --color-ash-graphite: #2c2c2a;     /* neutro principal de Zelko */
   --color-deep-forest: #333333;      /* texto secundario fuerte */
   --color-sage-green: #595959;       /* texto atenuado */
   --color-stone: #808080;            /* texto terciario / helper */
   --color-concrete: #d9d9d9;         /* bordes, divisores, inputs */
   --color-system-black: #000000;
-  --color-plain-green: #0a0a0a;          /* = acción primaria (tinta) */
-  --color-plain-green-muted: #262626;    /* hover de acción primaria */
+  --color-plain-green: #7f77dd;          /* = acción primaria de marca Zelko (Violeta) */
+  --color-plain-green-muted: #534ab7;    /* hover de acción primaria y bordes de marca */
   --color-alert-red: #360003;
   --color-warm-pink: #ffbac3;
 
-  /* Éxito / confirmación — único color del sistema */
+  /* Paleta completa Zelko Violeta */
+  --color-zelko-dark: #534ab7;
+  --color-zelko: #7f77dd;
+  --color-zelko-light: #afa9ec;
+  --color-zelko-tint: #eeedfe;
+  --color-zelko-neutral: #2c2c2a;
+
+  /* Éxito / confirmación semántica */
   --color-success: #1ad379;
   --color-success-muted: #17b267;
 
@@ -103,7 +109,7 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #0a0a0a;
+  --foreground: #2c2c2a;
 }
 
 body {
@@ -140,7 +146,7 @@ input, select, textarea {
 }
 
 input:focus, select:focus, textarea:focus {
-  border-color: var(--color-system-black);
+  border-color: var(--color-plain-green);
 }
 
 /* Material Symbols is bundled locally from the official Google font. */

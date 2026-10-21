@@ -1,6 +1,6 @@
-# Mesa CLICK — Frontend (Next.js)
+# Zelko — Frontend (Next.js)
 
-Frontend web de Mesa CLICK. Permite a los admins configurar su negocio y a los clientes hacer pedidos desde la mesa escaneando un QR.
+Frontend web de Zelko. Permite a los admins configurar su negocio y a los clientes hacer pedidos desde la mesa escaneando un QR.
 
 Para el contexto completo del proyecto, ver el [README raíz](../../README.md) y [AGENTS.md](../../AGENTS.md).
 

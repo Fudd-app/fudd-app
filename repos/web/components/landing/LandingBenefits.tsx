@@ -14,7 +14,7 @@ export default function LandingBenefits() {
         <div className="benefit-copy">
           <span className="landing-eyebrow">Menos fricción, más servicio</span>
           <h2>Tu equipo recupera tiempo para lo que realmente importa</h2>
-          <p>Mesa CLICK no reemplaza la hospitalidad: elimina las tareas repetitivas que se interponen en el camino.</p>
+          <p>Zelko no reemplaza la hospitalidad: elimina las tareas repetitivas que se interponen en el camino.</p>
           <ul>
             <li><span><LandingIcon name="check" /></span><div><strong>Pedidos claros, desde el inicio</strong><p>Menos errores de carga y notas que llegan completas a cocina.</p></div></li>
             <li><span><LandingIcon name="check" /></span><div><strong>Información en tiempo real</strong><p>Todos saben qué está pasando, sin depender de recorridas o gritos.</p></div></li>

@@ -62,7 +62,7 @@ func registrarRutas(mux *http.ServeMux) {
 		}
 		senderName := os.Getenv("BREVO_SENDER_NAME")
 		if senderName == "" {
-			senderName = "Mesa CLICK"
+			senderName = "Zelko"
 		}
 		emailSender = auth.NuevoBrevoEmailSender(brevoAPIKey, senderName, senderEmail)
 		proveedorReal = true

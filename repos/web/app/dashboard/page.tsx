@@ -127,7 +127,7 @@ export default function DashboardPage() {
             aria-label="Ir al inicio"
           >
             <Logo className="h-24 w-24" />
-            <h1 className="hidden text-15 font-bold uppercase tracking-tight sm:block">Mesa CLICK</h1>
+            <h1 className="hidden text-17 font-medium lowercase tracking-[-0.03em] sm:block">zelko</h1>
           </Link>
           <span className="max-w-[90px] truncate border-l border-concrete pl-8 text-12 font-medium text-sage-green sm:max-w-[260px] sm:pl-12">
             {tenant ? tenant.nombre : "Admin"}

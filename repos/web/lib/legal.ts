@@ -1,6 +1,6 @@
 export const LEGAL = {
-  brand: "Mesa CLICK",
-  operator: "Mesa CLICK",
+  brand: "Zelko",
+  operator: "Zelko",
   country: "República Argentina",
   supportEmail: "supportmesaclick@gmail.com",
   effectiveDate: "6 de octubre de 2026",

@@ -160,7 +160,7 @@ export function HistorialDespachoDrawer({
         {/* Footer */}
         <div className="border-t border-concrete bg-[#F7F8F8] p-16 text-center">
           <p className="text-11 text-sage-green">
-            KDS Mesa CLICK · Pantalla dedicada de cocina
+            KDS Zelko · Pantalla dedicada de cocina
           </p>
         </div>
       </aside>

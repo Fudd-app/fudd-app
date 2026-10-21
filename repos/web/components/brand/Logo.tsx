@@ -1,38 +1,28 @@
 import React from "react";
 
-const FOREST = "#144336";
-const PAPER = "#f7f6f2";
+const ZELKO_PRIMARY = "#7F77DD";
+const ZELKO_TINT = "#EEEDFE";
 
 /**
- * Marca Mesa CLICK — arco de mesa + puntero sobre tile verde bosque.
- * El borde del puntero va en el color del tile para "cortar" el arco donde se apoya.
+ * Marca Zelko — símbolo Z sobre tile violeta (#7F77DD / #EEEDFE).
  */
 export default function Logo({
   className = "w-28 h-28",
-  title = "Mesa CLICK",
+  title = "Zelko",
 }: {
   className?: string;
   title?: string;
 }) {
   return (
-    <svg viewBox="0 0 100 100" className={className} role="img" aria-label={title}>
-      <rect x="2" y="2" width="96" height="96" rx="26" fill={FOREST} />
+    <svg viewBox="0 0 88 88" className={className} role="img" aria-label={title}>
+      <rect width="88" height="88" rx="20" fill={ZELKO_PRIMARY} />
       <path
-        d="M21 74 V36 A8 8 0 0 1 29 28 H70 A8 8 0 0 1 78 36 V60"
+        d="M 24 26 H 64 L 24 62 H 64"
         fill="none"
-        stroke={PAPER}
-        strokeWidth="10.5"
+        stroke={ZELKO_TINT}
+        strokeWidth="7"
         strokeLinecap="round"
         strokeLinejoin="round"
-      />
-      <path
-        d="M0 0 V30 L7.5 23.5 L12.5 34 L18 31.5 L13 21.5 H23 Z"
-        transform="translate(52 50) scale(.95)"
-        fill={PAPER}
-        stroke={FOREST}
-        strokeWidth="5"
-        strokeLinejoin="round"
-        paintOrder="stroke"
       />
     </svg>
   );
@@ -49,7 +39,7 @@ export function Wordmark({
   return (
     <span className={`inline-flex items-center gap-8 ${className}`}>
       <Logo className={markClassName} />
-      <span className="text-16 font-bold tracking-tight uppercase">Mesa CLICK</span>
+      <span className="text-17 font-medium tracking-[-0.03em] lowercase">zelko</span>
     </span>
   );
 }

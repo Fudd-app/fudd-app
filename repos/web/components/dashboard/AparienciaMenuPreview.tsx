@@ -38,7 +38,7 @@ function DemoWatermark({ visible }: { visible: boolean }) {
 
   return (
     <div className="shrink-0 py-[4px] text-center text-[7px] font-semibold tracking-[0.09em] text-[var(--mesa-muted)]">
-      POTENCIADO POR MESA CLICK
+      POTENCIADO POR ZELKO
     </div>
   );
 }

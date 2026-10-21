@@ -237,7 +237,7 @@ export function TicketTermico({
       </div>
 
       <div className="mt-3 border-t border-dashed border-black pt-2 text-center text-[9.5px] font-semibold">
-        <p>MESA CLICK · COMANDA TÉRMICA ({ancho})</p>
+        <p>ZELKO · COMANDA TÉRMICA ({ancho})</p>
       </div>
     </div>
   );

@@ -152,7 +152,7 @@ export default function LoginPage() {
                       autoComplete="current-password"
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
-                      placeholder="Tu contraseña de Mesa CLICK"
+                      placeholder="Tu contraseña de Zelko"
                     />
                     <button type="button" onClick={() => setMostrarPassword((actual) => !actual)}>
                       {mostrarPassword ? "Ocultar" : "Ver"}
@@ -259,7 +259,7 @@ export default function LoginPage() {
             )}
 
             <small className="auth-terms">
-              Mesa CLICK nunca te pedirá la contraseña de tu cuenta de Google. Al ingresar aceptás los{" "}
+              Zelko nunca te pedirá la contraseña de tu cuenta de Google. Al ingresar aceptás los{" "}
               <Link href="/terminos">Términos de uso</Link> y la <Link href="/privacidad">Política de privacidad</Link>.
             </small>
             <p className="auth-mobile-alternate">
@@ -273,7 +273,7 @@ export default function LoginPage() {
           <div className="auth-story-overlay">
             <span className="story-label"><i /> Todo tu servicio, en un lugar</span>
             <blockquote>“Gestioná sucursales, mesas, carta y pedidos en vivo desde un único panel.”</blockquote>
-            <div><span className="story-avatar">MC</span><p><strong>Tu operación, conectada</strong><small>Salón · Cocina · Comensales</small></p></div>
+            <div><span className="story-avatar">ZK</span><p><strong>Tu operación, conectada</strong><small>Salón · Cocina · Comensales</small></p></div>
           </div>
           <div className="story-card">
             <span><LandingIcon name="bell" /></span>
