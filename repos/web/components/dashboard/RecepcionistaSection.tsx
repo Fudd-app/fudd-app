@@ -15,7 +15,6 @@ import {
   setAnchoTicketTermico,
   setAutoPrintEnabled,
 } from "@/components/kds/TicketTermico";
-import StockModal from "./StockModal";
 import PedidoAsistidoModal from "./PedidoAsistidoModal";
 
 export interface PedidoVista {
@@ -530,7 +529,6 @@ export default function RecepcionistaSection() {
   const [sseConectado, setSseConectado] = useState(false);
   const [mesaAccionEnCurso, setMesaAccionEnCurso] = useState<'todo-listo' | 'cerrar-cuenta' | 'habilitar-pago' | null>(null);
   const [mesaDetalleKey, setMesaDetalleKey] = useState<string | null>(null);
-  const [stockModalAbierto, setStockModalAbierto] = useState(false);
   const [pedidoAsistidoAbierto, setPedidoAsistidoAbierto] = useState(false);
   const [anchoTicket, setAnchoTicket] = useState<AnchoTicketTermico>("80mm");
   const [autoPrint, setAutoPrint] = useState<boolean>(false);
@@ -1030,13 +1028,6 @@ export default function RecepcionistaSection() {
             <span>🍳</span>
             <span>KDS Cocina ↗</span>
           </a>
-          <button
-            onClick={() => setStockModalAbierto(true)}
-            className="flex h-44 items-center gap-6 rounded-lg border border-concrete bg-canvas-white px-14 text-12 font-medium text-ash-graphite shadow-2xs hover:bg-ghost-fog active:scale-95 transition-all"
-          >
-            <span className="material-symbols-outlined text-18">inventory_2</span>
-            <span>Stock (86)</span>
-          </button>
           <div className="flex h-44 items-center gap-8 rounded-full border border-concrete bg-canvas-white px-14 shadow-sm">
             <span
               className={`h-8 w-8 rounded-full ${sseConectado ? 'bg-success animate-pulse' : 'bg-sage-green'}`}
@@ -1165,10 +1156,6 @@ export default function RecepcionistaSection() {
         />
       )}
 
-      <StockModal
-        isOpen={stockModalAbierto}
-        onClose={() => setStockModalAbierto(false)}
-      />
       <PedidoAsistidoModal
         abierto={pedidoAsistidoAbierto}
         mesas={Object.values(mesas).filter((m) => m.estado === 'activa')}

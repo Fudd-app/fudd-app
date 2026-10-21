@@ -450,18 +450,6 @@ export default function MesaPage() {
   const skipNextPersistRef = useRef(false);
   const hydratedTokenRef = useRef<string | null>(null);
 
-  const itemsAgotadosIds = useMemo(() => {
-    const set = new Set<string>();
-    for (const cat of menu) {
-      for (const item of cat.items) {
-        if (item.disponible === false) {
-          set.add(item.id);
-        }
-      }
-    }
-    return set;
-  }, [menu]);
-
   // Lista de nombres de comensales ya activos en esta mesa
   const nombresComensalesActivos = useMemo(() => {
     const set = new Set<string>();
@@ -614,7 +602,6 @@ export default function MesaPage() {
                   descripcion: a.descripcion,
                   foto_url: a.foto_url,
                   precio: a.precio,
-                  disponible: a.disponible !== false && a.activo !== false,
                   variantes: a.variantes,
                   tag: c.nombre,
                 })),
@@ -659,34 +646,6 @@ export default function MesaPage() {
     eventSource.onopen = () => {
       void sincronizarPedidosMesa();
     };
-
-    eventSource.addEventListener("articulo_disponibilidad_cambiada", (event: MessageEvent<string>) => {
-      try {
-        const payload: unknown = JSON.parse(event.data);
-        if (!isRecord(payload) || typeof payload.id !== "string") return;
-        const artId = payload.id;
-        const disponible = payload.disponible !== false;
-        setMenu((prevMenu) =>
-          prevMenu.map((cat) => ({
-            ...cat,
-            items: cat.items.map((item) =>
-              item.id === artId ? { ...item, disponible } : item
-            ),
-          }))
-        );
-      } catch (error) {
-        console.warn("Error parseando articulo_disponibilidad_cambiada:", error);
-      }
-    });
-
-    eventSource.addEventListener("carta_repuesta", () => {
-      setMenu((prevMenu) =>
-        prevMenu.map((cat) => ({
-          ...cat,
-          items: cat.items.map((item) => ({ ...item, disponible: true })),
-        }))
-      );
-    });
 
     eventSource.addEventListener("pedido_creado", (event: MessageEvent<string>) => {
       try {
@@ -841,21 +800,6 @@ export default function MesaPage() {
     if (!mesa || state.items.length === 0 || state.cuentaSolicitada) return;
     if (!comensal) {
       setEditandoComensal(true);
-      return;
-    }
-
-    // Validación preventiva de stock (86)
-    const itemsAgotados = state.items.filter((cartItem) => {
-      for (const cat of menu) {
-        const found = cat.items.find((i) => i.id === cartItem.articuloId);
-        if (found && found.disponible === false) return true;
-      }
-      return false;
-    });
-
-    if (itemsAgotados.length > 0) {
-      const nombres = itemsAgotados.map((i) => `"${i.nombre}"`).join(", ");
-      alert(`El producto ${nombres} se encuentra agotado (86). Por favor quitalo de tu pedido para confirmar.`);
       return;
     }
 
@@ -1241,7 +1185,6 @@ export default function MesaPage() {
             mesaNumero={mesa.numero}
             dinerName={comensal?.nombre}
             items={state.items}
-            itemsAgotadosIds={itemsAgotadosIds}
             totalPrecio={totalPrecioCarrito}
             enviando={enviandoPedido}
             onClose={() => setCarritoAbierto(false)}

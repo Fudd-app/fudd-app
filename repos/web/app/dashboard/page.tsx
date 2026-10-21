@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -18,6 +18,13 @@ const EquipoSection = dynamic(() => import("@/components/dashboard/EquipoSection
 const OnboardingTour = dynamic(() => import("@/components/dashboard/OnboardingTour"), { ssr: false });
 
 type Section = 'carta' | 'mesas' | 'recepcionista' | 'equipo' | 'metricas' | 'resenas' | 'configuracion';
+type ConfiguracionTab = "negocio" | "apariencia" | "equipo" | "sucursales" | "planes" | "mercadopago";
+
+const DASHBOARD_TOUR_VERSION = "2026-10";
+
+function getDashboardTourStorageKey(tenantId: string, role: SesionUsuario["rol"]) {
+  return `mesaclick_dashboard_tour_${DASHBOARD_TOUR_VERSION}_${tenantId}_${role}`;
+}
 
 const SECTIONS: { id: Section; icon: string; label: string }[] = [
   { id: 'carta', icon: 'restaurant_menu', label: 'Carta' },
@@ -29,7 +36,7 @@ const SECTIONS: { id: Section; icon: string; label: string }[] = [
 
 function renderSection(
   section: Section,
-  configuracionTab: "negocio" | "apariencia" | "equipo" | "sucursales" | "planes" | "mercadopago",
+  configuracionTab: ConfiguracionTab,
   onTenantUpdate: (t: Tenant) => void,
 	sesion: SesionUsuario | null,
 ) {
@@ -47,7 +54,7 @@ function renderSection(
 export default function DashboardPage() {
   const router = useRouter();
   const [activeSection, setActiveSection] = useState<Section>('carta');
-  const [configuracionTab, setConfiguracionTab] = useState<"negocio" | "apariencia" | "equipo" | "sucursales" | "planes" | "mercadopago">("negocio");
+  const [configuracionTab, setConfiguracionTab] = useState<ConfiguracionTab>("negocio");
   const [isExpanded, setIsExpanded] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [tenant, setTenant] = useState<Tenant | null>(null);
@@ -55,36 +62,54 @@ export default function DashboardPage() {
   const [isTourOpen, setIsTourOpen] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    let tourTimer: ReturnType<typeof setTimeout> | undefined;
+
     async function loadTenant() {
 			try {
 				const sesionActual = await api.obtenerSesion();
-				setSesion(sesionActual);
-          const t = await api.obtenerMiTenant();
-          setTenant(t);
+				const t = await api.obtenerMiTenant();
+        if (cancelled) return;
 
-          // Si el usuario registrado aún no vio el recorrido para este tenant en esta versión
-          if (typeof window !== "undefined") {
-            try {
-              const tenantTourKey = `mesaclick_tour_seen_${t.id}`;
-              const globalTourKey = "mesaclick_admin_tour_completed";
-              const seen = localStorage.getItem(tenantTourKey) || localStorage.getItem(globalTourKey);
-              if (!seen) {
-                const timer = setTimeout(() => {
-                  setIsTourOpen(true);
-                }, 600);
-                return () => clearTimeout(timer);
-              }
-            } catch (err) {
-              console.warn("No se pudo verificar estado del tour:", err);
+				setSesion(sesionActual);
+        setTenant(t);
+
+        // La versión nueva vuelve a mostrarse una sola vez al administrador.
+        // Los demás roles pueden abrir su recorrido contextual desde el menú.
+        if (sesionActual.rol === "admin" && typeof window !== "undefined") {
+          try {
+            const storageKey = getDashboardTourStorageKey(t.id, sesionActual.rol);
+            if (!localStorage.getItem(storageKey)) {
+              tourTimer = setTimeout(() => {
+                if (!cancelled) setIsTourOpen(true);
+              }, 600);
             }
+          } catch (err) {
+            console.warn("No se pudo verificar estado del recorrido:", err);
           }
+        }
 			} catch (err) {
+				if (cancelled) return;
 				console.warn("No se pudo cargar la sesión:", err);
 				router.replace('/login');
 			}
     }
     loadTenant();
+
+		return () => {
+			cancelled = true;
+			if (tourTimer) clearTimeout(tourTimer);
+		};
 	}, [router]);
+
+	const handleTourNavigate = useCallback(
+		(section: Section, nextConfigurationTab?: ConfiguracionTab) => {
+			if (nextConfigurationTab) setConfiguracionTab(nextConfigurationTab);
+			setActiveSection(section);
+			setIsExpanded(false);
+		},
+		[]
+	);
 
 	const handleLogout = async () => {
 		const destino = sesion?.rol === 'admin' || !tenant ? '/login' : `/${tenant.slug}/login`;
@@ -396,10 +421,14 @@ export default function DashboardPage() {
       <OnboardingTour
         isOpen={isTourOpen}
         onClose={() => setIsTourOpen(false)}
-        activeSection={activeSection}
-        onNavigateSection={setActiveSection}
+        onNavigateSection={handleTourNavigate}
+        role={sesion?.rol ?? "admin"}
         tenantName={tenant?.nombre}
-        tenantId={tenant?.id}
+        storageKey={
+          tenant && sesion
+            ? getDashboardTourStorageKey(tenant.id, sesion.rol)
+            : undefined
+        }
       />
     </div>
     </ToastProvider>

@@ -293,7 +293,7 @@ export default function PlanesSection({ tenant, onTenantUpdate }: Props) {
                 </li>
                 <li className="flex items-center gap-8">
                   <span className="material-symbols-outlined text-18 text-ash-graphite">check</span>
-                  <span>Disponibilidad de ítems (86) en vivo</span>
+                  <span>Pedidos y carta sincronizados en tiempo real</span>
                 </li>
               </ul>
             </div>
