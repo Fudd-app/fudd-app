@@ -6,6 +6,7 @@ import { DEFAULT_MESA_PRIMARY } from "@/components/menu/BrandHeader";
 import EquipoSection from "./EquipoSection";
 import PlanesSection from "./PlanesSection";
 import UpgradeModal from "./UpgradeModal";
+import AparienciaMenuPreview from "./AparienciaMenuPreview";
 
 /* ─────────────────────────── contenedor ─────────────────────────── */
 
@@ -723,22 +724,9 @@ function AparienciaTab({
     e.target.value = "";
   };
 
-  const oscuro = estilo === "oscuro";
   const colorPrincipal = esColorHex(color) ? color : COLOR_DEFAULT;
   const colorCategorias = esColorHex(colorCategoria) ? colorCategoria : colorPrincipal;
   const colorBotonAccion = esColorHex(colorAccion) ? colorAccion : colorPrincipal;
-  const phoneScreenBg = oscuro ? "#111611" : "#f7f7f7";
-  const phonePanelBg = oscuro ? "#18201b" : "#ffffff";
-  const phoneHeaderBg = oscuro ? "#0c100d" : "#ffffff";
-  const phoneText = oscuro ? "#f5f5f5" : "#0a0a0a";
-  const phoneMutedText = oscuro ? "#b8beb9" : "#595959";
-  const phoneBorder = oscuro ? "#283229" : "#e6e6e6";
-  const previewFont =
-    tipoFuente === "system-ui"
-      ? "system-ui, sans-serif"
-      : tipoFuente
-      ? `${tipoFuente}, sans-serif`
-      : "inherit";
 
   return (
     <div className="flex flex-col space-y-16">
@@ -877,7 +865,7 @@ function AparienciaTab({
       <div className="order-1 overflow-hidden rounded-2xl border border-concrete bg-canvas-white p-16 sm:p-20 lg:p-28">
         <div className="mb-18 text-center">
           <p className="font-mono text-[12px] uppercase tracking-[0.08em] text-sage-green">Vista previa del menú</p>
-          <p className="mt-3 text-11 text-stone">Tocá los controles conectados al teléfono para editar en tiempo real.</p>
+          <p className="mt-3 text-11 text-stone">Editá en tiempo real y recorré Carta, Mi pedido y Cuenta dentro del teléfono.</p>
         </div>
 
         <div className="grid items-center gap-18 lg:grid-cols-[minmax(250px,1fr)_300px_minmax(250px,1fr)] lg:gap-12 xl:gap-20">
@@ -935,126 +923,16 @@ function AparienciaTab({
               </button>
             ))}
           </div>
-          <div className="mx-auto w-full max-w-[260px] rounded-[30px] bg-ash-graphite p-[6px] shadow-lg">
-            <div
-              className="flex h-[380px] flex-col overflow-hidden rounded-[24px]"
-              style={{ background: phoneScreenBg, color: phoneText, fontFamily: previewFont }}
-            >
-              <div className="relative flex h-[32px] shrink-0 items-start justify-between px-[16px] pt-[9px] text-[10px] font-bold leading-none font-sans">
-                <div className="absolute left-1/2 top-[12px] h-[4px] w-[64px] -translate-x-1/2 rounded-full bg-system-black opacity-70" />
-                <span>9:41</span>
-                <div className="flex items-center gap-[4px]">
-                  <span className="h-[4px] w-[8px] rounded-full border" style={{ borderColor: phoneText }} />
-                  <span className="h-[7px] w-[18px] rounded-sm border" style={{ borderColor: phoneText }}>
-                    <span className="block h-full w-[12px]" style={{ background: phoneText }} />
-                  </span>
-                </div>
-              </div>
-
-              <div className="shrink-0 px-[14px] pb-[12px] pt-[8px]" style={{ background: phoneHeaderBg }}>
-                <div className="flex items-center gap-[9px]">
-                  <div
-                    className="h-[38px] w-[38px] shrink-0 overflow-hidden rounded-lg border grid place-items-center"
-                    style={{ background: phonePanelBg, borderColor: phoneBorder }}
-                  >
-                    {logoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={logoUrl} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <span className="material-symbols-outlined text-20" style={{ color: phoneMutedText }}>
-                        restaurant_menu
-                      </span>
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-bold leading-[16px]">{nombreVisible || "Tu negocio"}</p>
-                    <p className="mt-2 text-[11px] leading-[14px]" style={{ color: phoneMutedText }}>
-                      Mesa 12
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {mostrarMarcaAgua && (
-                <div
-                  className="mx-[14px] mt-[8px] flex items-center justify-center gap-[4px] rounded-md border border-dashed py-[4px] text-center text-[9px] font-mono tracking-wider opacity-75 shrink-0"
-                  style={{ borderColor: phoneBorder, color: phoneMutedText, background: phonePanelBg }}
-                >
-                  <span>⚡ Digitalizado con</span>
-                  <span className="font-bold" style={{ color: phoneText }}>Mesa CLICK</span>
-                </div>
-              )}
-
-              <div className="min-h-0 flex-1 overflow-hidden px-[12px] py-[12px]">
-                <div className="mb-[10px] flex gap-[6px] overflow-hidden">
-                  <span
-                    className="grid h-[32px] shrink-0 place-items-center rounded-full px-[9px] text-[11px] font-bold leading-none text-white"
-                    style={{ background: colorCategorias }}
-                  >
-                    Cafés
-                  </span>
-                  <span
-                    className="grid h-[32px] shrink-0 place-items-center rounded-full border px-[9px] text-[11px] font-medium leading-none"
-                    style={{
-                      color: phoneMutedText,
-                      borderColor: phoneBorder,
-                      background: phonePanelBg,
-                    }}
-                  >
-                    Dulces
-                  </span>
-                  <span
-                    className="grid h-[32px] shrink-0 place-items-center rounded-full border px-[9px] text-[11px] font-medium leading-none"
-                    style={{ color: phoneMutedText, borderColor: phoneBorder, background: phonePanelBg }}
-                  >
-                    Bebidas
-                  </span>
-                </div>
-
-                <div className="space-y-[8px]">
-                  {[
-                    ["Latte vainilla", "Café, leche y vainilla", "$2.800"],
-                    ["Medialuna", "Manteca artesanal", "$900"],
-                  ].map(([titulo, descripcion, precio]) => (
-                    <div
-                      key={titulo}
-                      className="flex min-h-[64px] items-center gap-[7px] rounded-lg border p-[6px]"
-                      style={{ background: phonePanelBg, borderColor: phoneBorder }}
-                    >
-                      <div
-                        className="grid h-[46px] w-[46px] shrink-0 place-items-center overflow-hidden rounded-md"
-                        style={{ background: `linear-gradient(145deg, ${colorPrincipal}35, ${phoneHeaderBg})` }}
-                      >
-                        <span className="material-symbols-outlined text-[18px]" style={{ color: colorPrincipal }}>restaurant</span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[11px] font-bold leading-[14px]">{titulo}</p>
-                        <p className="mt-[2px] truncate text-[9px] leading-[11px]" style={{ color: phoneMutedText }}>
-                          {descripcion}
-                        </p>
-                        <p className="mt-[3px] text-[11px] font-bold leading-[13px]">{precio}</p>
-                      </div>
-                      <button
-                        className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full text-[15px] font-medium leading-none text-white"
-                        style={{ background: colorBotonAccion }}
-                        aria-label={`Agregar ${titulo}`}
-                      >
-                        +
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div
-                className="mx-[12px] mb-[10px] flex h-[36px] shrink-0 items-center justify-between rounded-full px-[12px] text-white"
-                style={{ background: colorPrincipal }}
-              >
-                <span className="text-[11px] font-bold leading-none">2 items</span>
-                <span className="text-[12px] font-bold leading-none">$3.700</span>
-              </div>
-            </div>
-          </div>
+          <AparienciaMenuPreview
+            nombre={nombreVisible || "Tu negocio"}
+            logoUrl={logoUrl}
+            colorPrincipal={colorPrincipal}
+            colorCategorias={colorCategorias}
+            colorAccion={colorBotonAccion}
+            estilo={estilo}
+            tipoFuente={tipoFuente}
+            mostrarMarcaAgua={mostrarMarcaAgua}
+          />
         </div>
 
           <div className="order-3 space-y-18">
