@@ -10,6 +10,7 @@ import LandingIcon from "@/components/landing/LandingIcon";
 import RegistroBrand from "@/components/registro/RegistroBrand";
 import { useRegistro } from "@/components/registro/RegistroContext";
 import { emailValido, errorPassword, esErrorDeConexion, leerIdentidadGoogle } from "@/components/registro/validaciones";
+import { PLAN_PRUEBA_MESES } from "@/lib/planes";
 
 type Errores = Partial<Record<"nombre" | "email" | "password", string>>;
 
@@ -110,9 +111,9 @@ export default function RegistroPage() {
       <main className="auth-layout">
         <section className="auth-form-panel">
           <div className="auth-form">
-            <span className="auth-eyebrow">Empezá gratis</span>
+            <span className="auth-eyebrow">{PLAN_PRUEBA_MESES} meses de Pro gratis</span>
             <h1>Creá tu cuenta</h1>
-            <p>Primero, tus datos de acceso. La información de tu restaurante la configuramos después, paso a paso.</p>
+            <p>Primero, tus datos de acceso. Al crear tu negocio activamos Pro durante {PLAN_PRUEBA_MESES} meses, sin cargo ni tarjeta.</p>
 
             <div className="google-slot">
               <GoogleSignInButton

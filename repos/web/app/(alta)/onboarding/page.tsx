@@ -9,10 +9,11 @@ import LandingIcon, { type LandingIconName } from "@/components/landing/LandingI
 import RegistroBrand from "@/components/registro/RegistroBrand";
 import { useRegistro } from "@/components/registro/RegistroContext";
 import { emailValido, esErrorDeConexion, generarSlug, limpiarSlugEscrito, SLUG_RE } from "@/components/registro/validaciones";
+import { formatearPrecioPlan, PLAN_MONEDA, PLAN_PRUEBA_MESES } from "@/lib/planes";
 
 const TOTAL_PASOS = 3;
-// Límite de mesas del plan Free (tenant.RequerirCuota); todo negocio nuevo empieza en Free.
-const MAX_MESAS_FREE = 10;
+// El alta inicial crea hasta 10 mesas en lote; durante la prueba Pro se pueden sumar más desde el panel.
+const MAX_MESAS_INICIALES = 10;
 const CAPACIDAD_MESA = 4;
 
 const RUBROS: { label: string; valor: string; icon: LandingIconName }[] = [
@@ -49,7 +50,7 @@ export default function OnboardingPage() {
   const [nombreSucursal, setNombreSucursal] = useState("Casa central");
   const [whatsapp, setWhatsapp] = useState("");
   const [emailSucursal, setEmailSucursal] = useState("");
-  const [mesas, setMesas] = useState(MAX_MESAS_FREE);
+  const [mesas, setMesas] = useState(MAX_MESAS_INICIALES);
   const [creando, setCreando] = useState("");
   const [magicLinkEnviado, setMagicLinkEnviado] = useState<{ email: string; devLink?: string } | null>(null);
   const [error, setError] = useState("");
@@ -342,9 +343,9 @@ export default function OnboardingPage() {
                 <div className="table-counter">
                   <button type="button" onClick={() => setMesas(Math.max(1, mesas - 1))} disabled={mesas <= 1} aria-label="Quitar una mesa">−</button>
                   <strong>{mesas}</strong>
-                  <button type="button" onClick={() => setMesas(Math.min(MAX_MESAS_FREE, mesas + 1))} disabled={mesas >= MAX_MESAS_FREE} aria-label="Agregar una mesa">+</button>
+                  <button type="button" onClick={() => setMesas(Math.min(MAX_MESAS_INICIALES, mesas + 1))} disabled={mesas >= MAX_MESAS_INICIALES} aria-label="Agregar una mesa">+</button>
                 </div>
-                <span className="table-limit">El plan Free incluye hasta {MAX_MESAS_FREE} mesas.</span>
+                <span className="table-limit">Creamos hasta {MAX_MESAS_INICIALES} ahora. Podés sumar más durante tus {PLAN_PRUEBA_MESES} meses de prueba Pro.</span>
               </div>
 
               <div className="schedule-choice">
@@ -368,6 +369,7 @@ export default function OnboardingPage() {
                   <h1>Revisá tu correo</h1>
                   <p>
                     Te enviamos un enlace de acceso seguro a <strong>{magicLinkEnviado.email}</strong> para entrar al panel de administración de <strong>{nombreNegocio.trim()}</strong>.
+                    Tu prueba Pro de {PLAN_PRUEBA_MESES} meses ya está activa.
                   </p>
 
                   {magicLinkEnviado.devLink && (
@@ -424,6 +426,11 @@ export default function OnboardingPage() {
                       </p>
                       <i><LandingIcon name="check" size={14} /></i>
                     </div>
+                    <div>
+                      <span><LandingIcon name="spark" /></span>
+                      <p><small>Plan inicial</small><strong>{PLAN_PRUEBA_MESES} meses de Pro gratis</strong><em>Después: Free o Pro por {formatearPrecioPlan()} {PLAN_MONEDA}/mes</em></p>
+                      <i><LandingIcon name="check" size={14} /></i>
+                    </div>
                   </div>
                   {error && (
                     <div role="alert" className="auth-alert">
@@ -434,7 +441,7 @@ export default function OnboardingPage() {
                   <button type="button" className="onboarding-primary finish" onClick={crearNegocio} disabled={Boolean(creando)}>
                     {creando || "Crear mi negocio"}
                   </button>
-                  <small>Después te guiamos dentro del panel para cargar tu primer plato.</small>
+                  <small>Tu prueba Pro de {PLAN_PRUEBA_MESES} meses comienza al crear el negocio. Después te guiamos para cargar tu primer plato.</small>
                 </div>
               )}
             </>

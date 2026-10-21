@@ -8,6 +8,46 @@ import (
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/tenant"
 )
 
+func TestNuevaPruebaInicial_TresMesesCalendario(t *testing.T) {
+	inicio := time.Date(2026, time.October, 20, 15, 30, 0, 0, time.FixedZone("ART", -3*60*60))
+	desde, hasta := tenant.NuevaPruebaInicial(inicio)
+
+	if desde.Location() != time.UTC {
+		t.Fatalf("el inicio debe normalizarse a UTC, obtenido %v", desde.Location())
+	}
+	esperado := desde.AddDate(0, tenant.MesesPruebaInicial, 0)
+	if !hasta.Equal(esperado) {
+		t.Fatalf("fin de prueba: obtenido %v, esperado %v", hasta, esperado)
+	}
+}
+
+func TestEstadoCuotas_EnPruebaSoloDuranteVigenciaInicial(t *testing.T) {
+	ahora := time.Now()
+	pasado := ahora.Add(-time.Hour)
+	futuro := ahora.Add(time.Hour)
+
+	casos := []struct {
+		nombre       string
+		planHasta    *time.Time
+		trialHasta   *time.Time
+		quieroPrueba bool
+	}{
+		{nombre: "prueba vigente", planHasta: &futuro, trialHasta: &futuro, quieroPrueba: true},
+		{nombre: "prueba vencida", planHasta: &pasado, trialHasta: &pasado, quieroPrueba: false},
+		{nombre: "Pro pago luego de la prueba", planHasta: &futuro, trialHasta: &pasado, quieroPrueba: false},
+		{nombre: "Pro contratado sin prueba", planHasta: &futuro, trialHasta: nil, quieroPrueba: false},
+	}
+
+	for _, caso := range casos {
+		t.Run(caso.nombre, func(t *testing.T) {
+			estado := tenant.EstadoCuotas{Plan: tenant.PlanPro, PlanHasta: caso.planHasta, TrialHasta: caso.trialHasta}
+			if obtenido := estado.EnPrueba(ahora); obtenido != caso.quieroPrueba {
+				t.Fatalf("EnPrueba(): obtenido %v, esperado %v", obtenido, caso.quieroPrueba)
+			}
+		})
+	}
+}
+
 func TestPlan_PermitidoYLimites(t *testing.T) {
 	ahora := time.Now()
 	pasado := ahora.Add(-24 * time.Hour)
@@ -180,8 +220,9 @@ func TestEstadoPlanDTO_Calculo(t *testing.T) {
 		store := &mockStore{
 			obtenerEstadoCuotasFn: func(ctx context.Context, tenantID string) (*tenant.EstadoCuotas, error) {
 				return &tenant.EstadoCuotas{
-					Plan:      tenant.PlanPro,
-					PlanHasta: &futuro,
+					Plan:       tenant.PlanPro,
+					PlanHasta:  &futuro,
+					TrialHasta: &futuro,
 					Uso: map[tenant.Recurso]int{
 						tenant.RecursoMesas:      15,
 						tenant.RecursoProductos:  60,
@@ -201,6 +242,12 @@ func TestEstadoPlanDTO_Calculo(t *testing.T) {
 		}
 		if dto.DiasRestantesPro == nil || *dto.DiasRestantesPro <= 0 {
 			t.Errorf("DiasRestantesPro: esperado > 0, obtenido %v", dto.DiasRestantesPro)
+		}
+		if !dto.EnPrueba || dto.PruebaHasta == nil || dto.DiasRestantesPrueba == nil || *dto.DiasRestantesPrueba <= 0 {
+			t.Errorf("se esperaba una prueba Pro activa, obtenido %+v", dto)
+		}
+		if dto.PrecioMensual != 30000 || dto.Moneda != "ARS" || dto.MesesPrueba != 3 {
+			t.Errorf("condiciones comerciales inesperadas: precio=%d moneda=%q meses=%d", dto.PrecioMensual, dto.Moneda, dto.MesesPrueba)
 		}
 		if dto.Limites["mesas"] != -1 || dto.Disponibles["mesas"] != -1 {
 			t.Errorf("Limites o Disponibles en Pro deben ser -1: %+v", dto)

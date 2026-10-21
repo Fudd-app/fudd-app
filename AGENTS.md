@@ -134,6 +134,7 @@ Los cambios de UI inspirados en la maqueta siguen la regla general: solo dentro 
  
 ### Fase 4 — Evolución, Monetización & Analítica (Actual - 2do Cuatrimestre)
 - **Control de Suscripciones (Freemium)**: El backend valida cuotas del plan (Free: 10 mesas activas, 30 productos, 1 sucursal; Pro: ilimitado) en middleware `tenant.RequerirCuota`. Al alcanzar el límite, responde HTTP 403 Forbidden con formato estructurado `{"error": "...", "codigo": "PLAN_LIMIT_REACHED", "detalle": {"recurso": "...", "limite": N, "actual": N}}`. El cliente frontend (`lib/api.ts`) detecta `PLAN_LIMIT_REACHED` y abre preventivamente `UpgradeModal` sin mostrar carteles de error genéricos.
+- **Condiciones comerciales Freemium**: Todo negocio nuevo comienza con una prueba completa del Plan Pro por 3 meses calendario. Al vencer, pasa al Plan Free salvo contratación. El Plan Pro cuesta $30.000 ARS por mes.
 - **Carga Masiva**: Las operaciones de importación de menús por CSV/Excel deben ser atómicas y devolver reportes claros de filas procesadas con error. Exclusivo de Plan Pro.
 - **Métricas**: Consultas de agregación SQL optimizadas con índices adecuados para no penalizar la performance del servidor.
 - **KDS (cocina)**: La pantalla de cocina es una vista independiente del dashboard de mozo. Los estados por ítem se propagan por SSE; la impresión térmica (ESC/POS 58/80 mm) debe tolerar fallos con reintento manual.
