@@ -126,8 +126,8 @@ export default function DashboardPage() {
             className="flex shrink-0 items-center gap-8 text-ash-graphite transition-opacity hover:opacity-70"
             aria-label="Ir al inicio"
           >
-            <Logo className="h-24 w-24" />
-            <h1 className="hidden text-15 font-bold tracking-tight sm:block">fudd</h1>
+            <Logo mark="full" className="h-24 w-auto" />
+            <h1 className="sr-only">fudd</h1>
           </Link>
           <span className="max-w-[90px] truncate border-l border-concrete pl-8 text-12 font-medium text-sage-green sm:max-w-[260px] sm:pl-12">
             {tenant ? tenant.nombre : "Admin"}

@@ -5,8 +5,8 @@ import { LandingHeaderActions } from "@/components/landing/SessionCta";
 
 export function LandingBrand() {
   return (
-    <Link href="/" className="landing-brand">
-      <span><Logo className="w-full h-full" /></span>fudd
+    <Link href="/" className="landing-brand" aria-label="fudd">
+      <Logo mark="full" className="h-28 w-auto" />
     </Link>
   );
 }

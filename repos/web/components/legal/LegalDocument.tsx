@@ -34,8 +34,8 @@ export default function LegalDocument({
       <header className="border-b border-concrete bg-canvas-white">
         <div className="mx-auto flex min-h-64 w-full max-w-[1240px] items-center justify-between gap-16 px-16 sm:px-24">
           <Link href="/" className="inline-flex items-center gap-8 whitespace-nowrap" aria-label="Volver a fudd">
-            <Logo className="h-28 w-28" />
-            <span className="text-15 font-bold tracking-tight">fudd</span>
+            <Logo mark="full" className="h-28 w-auto" />
+            <span className="sr-only">fudd</span>
           </Link>
           <nav className="flex items-center gap-10 whitespace-nowrap text-11 font-semibold sm:gap-16" aria-label="Navegación legal">
             <Link href={alternateHref} className="text-sage-green transition-colors hover:text-ash-graphite">

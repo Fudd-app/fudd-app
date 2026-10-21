@@ -168,8 +168,8 @@ export default function LoginEquipoPage() {
           href="/"
           className="flex items-center gap-8 text-ash-graphite transition-opacity hover:opacity-80"
         >
-          <Logo className="h-22 w-22" />
-          <span className="text-13 font-bold tracking-tight">fudd</span>
+          <Logo mark="full" className="h-24 w-auto" />
+          <span className="sr-only">fudd</span>
         </Link>
         <span className="rounded-full border border-concrete bg-ghost-fog px-10 py-4 font-mono text-11 text-sage-green">
           /{negocio.slug}/login

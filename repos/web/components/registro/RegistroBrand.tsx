@@ -4,8 +4,8 @@ import Logo from "@/components/brand/Logo";
 
 export default function RegistroBrand() {
   return (
-    <Link href="/" className="auth-brand">
-      <span><Logo className="w-full h-full" /></span>fudd
+    <Link href="/" className="reg-brand" aria-label="fudd">
+      <Logo mark="full" className="h-28 w-auto" />
     </Link>
   );
 }
