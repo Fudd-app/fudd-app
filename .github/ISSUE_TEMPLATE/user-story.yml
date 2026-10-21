@@ -1,0 +1,52 @@
+name: User Story
+description: Nueva historia de usuario para el backlog
+title: "US-XX: "
+labels: ["user-story"]
+body:
+  - type: dropdown
+    id: tipo
+    attributes:
+      label: Tipo
+      options:
+        - Backend
+        - Frontend
+        - Fullstack
+    validations:
+      required: true
+  - type: input
+    id: epica
+    attributes:
+      label: Épica
+      placeholder: "Kitchen Display System (KDS) & Impresión de Comandas"
+  - type: textarea
+    id: descripcion
+    attributes:
+      label: Descripción
+      value: |
+        **Como** ...
+        **quiero** ...
+        **para** ...
+    validations:
+      required: true
+  - type: textarea
+    id: criterios
+    attributes:
+      label: Criterios de aceptación (Definition of Done)
+      value: |
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: tareas
+    attributes:
+      label: Checklist de tareas técnicas
+      value: |
+        - [ ]
+  - type: textarea
+    id: archivos
+    attributes:
+      label: Archivos clave involucrados
+  - type: textarea
+    id: notas
+    attributes:
+      label: Notas y dependencias

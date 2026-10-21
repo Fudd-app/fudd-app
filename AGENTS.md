@@ -96,9 +96,10 @@ mesa-click/
 │   ├── flows/
 │   │   ├── happy-path-admin-negocio.md
 │   │   └── happy-path-cliente.md
-│   └── diseño/
-│       ├── maqueta/                       ← maqueta de referencia UX (ver "Guía de diseño")
-│       └── old/                           ← propuestas de diseño anteriores (histórico)
+│   ├── diseño/
+│   │   ├── maqueta/                       ← maqueta de referencia UX (ver "Guía de diseño")
+│   │   └── old/                           ← propuestas de diseño anteriores (histórico)
+│   └── agents/                            ← memoria, planes y specs generados con agentes (ver su README)
 └── AGENTS.md    ← este archivo (fuente de verdad principal)
 ```
 
