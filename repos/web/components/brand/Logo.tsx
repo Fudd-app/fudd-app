@@ -1,8 +1,11 @@
 import React from "react";
 
+const FOREST = "#144336";
+const PAPER = "#f7f6f2";
+
 /**
- * Marca Mesa CLICK — "mesa cenital" (docs/diseño, concepto E).
- * Monocromática: hereda el color con `currentColor`.
+ * Marca Mesa CLICK — arco de mesa + puntero sobre tile verde bosque.
+ * El borde del puntero va en el color del tile para "cortar" el arco donde se apoya.
  */
 export default function Logo({
   className = "w-28 h-28",
@@ -12,18 +15,25 @@ export default function Logo({
   title?: string;
 }) {
   return (
-    <svg
-      viewBox="0 0 100 100"
-      fill="none"
-      className={className}
-      role="img"
-      aria-label={title}
-    >
-      <rect x="16" y="16" width="68" height="68" rx="16" stroke="currentColor" strokeWidth="10" />
-      <circle cx="50" cy="33" r="5.5" fill="currentColor" />
-      <circle cx="67" cy="50" r="5.5" fill="currentColor" />
-      <circle cx="50" cy="67" r="5.5" fill="currentColor" />
-      <circle cx="33" cy="50" r="5.5" fill="currentColor" />
+    <svg viewBox="0 0 100 100" className={className} role="img" aria-label={title}>
+      <rect x="2" y="2" width="96" height="96" rx="26" fill={FOREST} />
+      <path
+        d="M21 74 V36 A8 8 0 0 1 29 28 H70 A8 8 0 0 1 78 36 V60"
+        fill="none"
+        stroke={PAPER}
+        strokeWidth="10.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M0 0 V30 L7.5 23.5 L12.5 34 L18 31.5 L13 21.5 H23 Z"
+        transform="translate(52 50) scale(.95)"
+        fill={PAPER}
+        stroke={FOREST}
+        strokeWidth="5"
+        strokeLinejoin="round"
+        paintOrder="stroke"
+      />
     </svg>
   );
 }

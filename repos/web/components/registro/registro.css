@@ -26,7 +26,7 @@
 /* Encabezado */
 .registro .auth-header { position: sticky; z-index: 20; top: 0; height: 72px; padding: 0 4.5%; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--r-line); background: rgba(255,255,255,.92); backdrop-filter: blur(12px); }
 .registro .auth-brand { padding: 0; display: flex; align-items: center; gap: 8px; color: var(--r-ink); font-size: 18px; letter-spacing: -.04em; text-decoration: none; border: 0; background: transparent; cursor: pointer; }
-.registro .auth-brand > span { width: 34px; height: 34px; display: grid; place-items: center; color: white; border-radius: 10px; background: var(--r-brand); }
+.registro .auth-brand > span { width: 34px; height: 34px; display: grid; place-items: center; }
 .registro .auth-brand strong { margin-left: -5px; }
 .registro .auth-header-link { color: var(--r-muted); font-size: 13px; }
 .registro .auth-header-link a, .registro .onboarding-exit { color: var(--r-ink); font-size: 13px; font-weight: 700; text-decoration: none; }
