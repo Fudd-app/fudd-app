@@ -18,6 +18,10 @@ if (Test-Path $localPsql) {
   Get-Content -Raw $seedPath | docker exec -i mesa_click_db psql -U postgres -d mesa_click -v ON_ERROR_STOP=1
 }
 
+if ($LASTEXITCODE -ne 0) {
+  throw "El seed local falló. Revisá el error SQL mostrado arriba."
+}
+
 Write-Host "Seed local aplicado." -ForegroundColor Green
 Write-Host "Usuario local: admin@mesaclick.local" -ForegroundColor Yellow
 Write-Host "Clave local:   MesaClick2026" -ForegroundColor Yellow

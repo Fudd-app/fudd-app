@@ -54,7 +54,9 @@ WITH tenant_upsert AS (
   INSERT INTO usuarios (tenant_id, email, nombre, rol, password_hash)
   SELECT id, 'admin@mesaclick.local', 'Admin Local', 'admin', crypt('MesaClick2026', gen_salt('bf', 10))
   FROM tenant_ref
-  ON CONFLICT (email) DO UPDATE SET
+  ON CONFLICT (tenant_id, lower(email))
+    WHERE email IS NOT NULL AND deleted_at IS NULL
+  DO UPDATE SET
     tenant_id = EXCLUDED.tenant_id,
     nombre = EXCLUDED.nombre,
     rol = EXCLUDED.rol,

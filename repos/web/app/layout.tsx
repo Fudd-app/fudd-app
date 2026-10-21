@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Geist_Mono, Anton } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
 const inter = Inter({
@@ -19,6 +20,16 @@ const anton = Anton({
   weight: "400",
   subsets: ["latin"],
   display: "swap",
+});
+
+const materialSymbols = localFont({
+  src: "./fonts/material-symbols-outlined.woff2",
+  variable: "--font-material-symbols-outlined",
+  weight: "400",
+  style: "normal",
+  display: "block",
+  preload: true,
+  adjustFontFallback: false,
 });
 
 export const viewport: Viewport = {
@@ -44,15 +55,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className={`${inter.variable} ${geistMono.variable} ${anton.variable} h-full antialiased`}>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
-        />
-      </head>
+    <html
+      lang="es"
+      className={`${inter.variable} ${geistMono.variable} ${anton.variable} ${materialSymbols.variable} h-full antialiased`}
+    >
       <body className="min-h-full flex flex-col bg-canvas-white text-ash-graphite">
         {children}
       </body>
