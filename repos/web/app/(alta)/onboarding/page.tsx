@@ -226,7 +226,7 @@ export default function OnboardingPage() {
           </nav>
           <div className="onboarding-help">
             <LandingIcon name="help" />
-            <span><strong>¿Te trabaste en algo?</strong><a href="mailto:soporte@mesaclick.com">Escribir a soporte</a></span>
+            <span><strong>¿Te trabaste en algo?</strong><a href="mailto:supportmesaclick@gmail.com">Escribir a soporte</a></span>
           </div>
         </aside>
 

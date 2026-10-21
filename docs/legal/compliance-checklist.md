@@ -5,7 +5,7 @@ Este documento es operativo e interno. Las páginas públicas reducen ambigüeda
 ## Bloqueantes antes de aceptar clientes pagos
 
 - [ ] Completar en los Términos y la Política la razón social o nombre completo del titular, CUIT y domicilio legal/constituido. No publicar datos inventados.
-- [ ] Confirmar que `soporte@mesaclick.com` existe, recibe mensajes y tiene responsables y tiempos de respuesta definidos.
+- [ ] Confirmar que `supportmesaclick@gmail.com` existe, recibe mensajes y tiene responsables y tiempos de respuesta definidos.
 - [ ] Obtener revisión de un abogado argentino con experiencia en protección de datos, comercio electrónico, consumo y SaaS B2B.
 - [ ] Determinar y cumplir la inscripción o documentación exigible para las bases de datos personales ante la AAIP.
 - [ ] Inventariar encargados y subencargados reales: Render, proveedor de correo, Google, Mercado Pago, monitoreo y cualquier analítica.
