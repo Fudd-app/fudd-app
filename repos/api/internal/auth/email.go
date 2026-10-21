@@ -152,7 +152,7 @@ func (s *SMTPEmailSender) EnviarMagicLink(ctx context.Context, toEmail, link str
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f5f3ec; margin: 0; padding: 24px; color: #12382c; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f5f3ec; margin: 0; padding: 24px; color: #12382c; }
     .card { max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 32px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
     .logo { font-size: 24px; font-weight: 800; letter-spacing: -0.03em; color: #12382c; margin-bottom: 20px; }
     .btn { display: inline-block; background-color: #12382c; color: #f5f3ec; font-weight: 700; text-decoration: none; padding: 12px 24px; border-radius: 8px; margin: 20px 0; font-size: 15px; }

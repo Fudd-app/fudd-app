@@ -2,7 +2,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { PedidoAPI } from "@/lib/api";
-import Logo from "@/components/brand/Logo";
 
 export type AnchoTicketTermico = "58mm" | "80mm";
 
@@ -135,9 +134,6 @@ export function TicketTermico({
     >
       {/* CABECERA COMANDA */}
       <div className="border-b-2 border-dashed border-black pb-2 text-center">
-        <div className="mb-1.5 flex justify-center">
-          <Logo mark="full" ink="#2A1D17" lens="#FFFFFF" className="h-[24px] w-auto" />
-        </div>
         <p className="text-[10px] font-bold tracking-widest uppercase">
           {datos.mostrarPrecios ? "TICKET DE MESA / PRE-CUENTA" : "COMANDA DE COCINA"}
         </p>

@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
 @theme {
-  /* ── Identidad fudd · Manual de marca (docs/diseño/fudd) ────────────────
-     Se conservan los NOMBRES de token; cambian los valores a la paleta fudd:
+  /* ── Identidad fudd · Paleta de color (docs/diseño/fudd) ────────────────
+     Se conservan los NOMBRES de token y las tipografías originales;
+     cambian únicamente los colores a la paleta fudd:
      - Albahaca (#12382C): Base, logo y texto
      - Tomate   (#FF6A3D): Lente, acción y avisos
      - Harina   (#F5F3EC): Fondo
@@ -98,10 +99,10 @@
   --spacing-200: 200px;
   --spacing-240: 240px;
 
-  /* Fonts (Outfit para títulos e interfaz + DM Mono para números, comandas y POS) */
-  --font-inter: var(--font-inter), "Outfit", "Helvetica Neue", Arial, sans-serif;
-  --font-mono: var(--font-mono), "DM Mono", ui-monospace, monospace;
-  --font-display: var(--font-inter), "Outfit", system-ui, sans-serif;
+  /* Fonts (Originales del proyecto) */
+  --font-inter: "Inter", sans-serif;
+  --font-mono: "Geist Mono", monospace;
+  --font-display: var(--font-anton), "Arial Narrow", system-ui, sans-serif; /* sustituto de Foggy */
 
   /* Border Radius */
   --radius-sm: 4px;
@@ -111,7 +112,7 @@
 }
 
 :root {
-  --background: #f5f3ec;
+  --background: #ffffff;
   --foreground: #12382c;
 }
 
@@ -125,16 +126,17 @@ body {
 
 /* Base Headings */
 h1, h2, h3, h4, h5, h6 {
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
-/* Display headline — Outfit 800 con interletra ajustada */
+/* Display headline — condensada, sólo para hero / titulares grandes */
 .display {
   font-family: var(--font-display);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 0.96;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  line-height: 0.92;
 }
 
 /* Minimalist Inputs Reset */
@@ -185,7 +187,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 :where(button, [role="button"], a, input, select, textarea, summary):focus-visible {
-  outline: 3px solid var(--color-fudd-tomate);
+  outline: 3px solid var(--color-primary);
   outline-offset: 2px;
 }
 
@@ -207,13 +209,13 @@ button,
 
 /* Theme surface for the public table flow. The values are injected per tenant. */
 .mesa-page {
-  background-color: var(--mesa-background, #f5f3ec);
-  color: var(--mesa-text, #12382c);
+  background-color: var(--mesa-background, #f8fafc);
+  color: var(--mesa-text, #0f172a);
   font-family: var(--mesa-font, var(--font-inter));
 }
 
 .mesa-background {
-  background-color: var(--mesa-background, #f5f3ec);
+  background-color: var(--mesa-background, #f8fafc);
 }
 
 .mesa-header {
@@ -225,28 +227,28 @@ button,
 }
 
 .mesa-subtle-surface {
-  background-color: var(--mesa-subtle-surface, #f5f3ec);
+  background-color: var(--mesa-subtle-surface, #f1f5f9);
 }
 
 .mesa-text {
-  color: var(--mesa-text, #12382c);
+  color: var(--mesa-text, #0f172a);
 }
 
 .mesa-muted {
-  color: var(--mesa-muted, #4b5d56);
+  color: var(--mesa-muted, #475569);
 }
 
 .mesa-subtle-text {
-  color: var(--mesa-subtle-text, #76827c);
+  color: var(--mesa-subtle-text, #64748b);
 }
 
 .mesa-primary {
-  color: var(--mesa-primary, #12382c);
+  color: var(--mesa-primary, #f54927);
 }
 
 .mesa-primary-bg {
-  background-color: var(--mesa-primary, #12382c);
-  color: var(--mesa-primary-contrast, #f5f3ec);
+  background-color: var(--mesa-primary, #f54927);
+  color: var(--mesa-primary-contrast, #ffffff);
 }
 
 .mesa-primary-bg:hover {
@@ -254,25 +256,25 @@ button,
 }
 
 .mesa-primary-contrast {
-  color: var(--mesa-primary-contrast, #f5f3ec);
+  color: var(--mesa-primary-contrast, #ffffff);
 }
 
 .mesa-primary-soft {
-  background-color: var(--mesa-primary-soft, #cdebd9);
+  background-color: var(--mesa-primary-soft, rgba(37, 99, 235, 0.14));
 }
 
 .mesa-border {
-  border-color: var(--mesa-border, #e2ded2);
+  border-color: var(--mesa-border, #cbd5e1);
 }
 
 .mesa-live {
-  background: #cdebd9;
-  border-color: rgba(18, 56, 44, 0.25);
-  color: #12382c;
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.38);
+  color: #047857;
 }
 
 [data-estilo-visual="oscuro"] .mesa-live {
-  background: rgba(205, 235, 217, 0.16);
-  border-color: rgba(205, 235, 217, 0.48);
-  color: #cdebd9;
+  background: rgba(52, 211, 153, 0.16);
+  border-color: rgba(110, 231, 183, 0.48);
+  color: #a7f3d0;
 }

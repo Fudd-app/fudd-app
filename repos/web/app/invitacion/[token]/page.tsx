@@ -51,7 +51,7 @@ export default function InvitacionPage() {
   return <main className="min-h-screen bg-ghost-fog/50 p-16 font-inter sm:p-32">
     <section className="mx-auto max-w-[560px] overflow-hidden rounded-2xl border border-concrete bg-canvas-white shadow-xl">
       <header className="border-b border-concrete bg-ash-graphite p-24 text-canvas-white sm:p-32">
-        <div className="flex items-center gap-10"><Logo mark="full" ink="#F5F3EC" lens="#FF6A3D" className="h-32 w-auto"/></div>
+        <div className="flex items-center gap-10"><Logo className="h-32 w-32"/><span className="text-14 font-bold">fudd</span></div>
         <p className="mt-24 text-11 font-mono uppercase tracking-[0.16em] text-concrete">Invitación al equipo</p>
         <h1 className="mt-6 text-28 font-semibold">Sumate a {invitacion?.negocio ?? 'este negocio'}</h1>
       </header>
