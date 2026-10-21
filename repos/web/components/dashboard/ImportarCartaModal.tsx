@@ -13,14 +13,14 @@ type Paso = "plantilla" | "subir" | "resultado";
 
 // ─── Generador de plantilla CSV en el browser ─────────────────────────────────
 
-const CABECERA_CSV = "categoria,nombre,precio,descripcion,disponible";
+const CABECERA_CSV = "categoria,nombre,precio,descripcion";
 const EJEMPLO_CSV = [
   CABECERA_CSV,
-  "Bebidas,Agua mineral,500,,si",
-  "Bebidas,Gaseosa 500ml,900,Coca-Cola o Pepsi,si",
-  "Comidas,Hamburguesa clásica,2500,Con lechuga tomate y papas fritas,si",
-  "Comidas,Veggie burger,2800,100% vegetal con cheddar vegano,si",
-  "Postres,Brownie con helado,1800,Tibio con dos bochas de helado a elección,si",
+  "Bebidas,Agua mineral,500,",
+  "Bebidas,Gaseosa 500ml,900,Coca-Cola o Pepsi",
+  "Comidas,Hamburguesa clásica,2500,Con lechuga tomate y papas fritas",
+  "Comidas,Veggie burger,2800,100% vegetal con cheddar vegano",
+  "Postres,Brownie con helado,1800,Tibio con dos bochas de helado a elección",
 ].join("\n");
 
 function descargarArchivo(nombre: string, contenido: string, tipo: string) {
@@ -171,7 +171,6 @@ export default function ImportarCartaModal({ isOpen, onClose, onImportacionCompl
                     { col: "nombre", req: true, desc: "Nombre del artículo" },
                     { col: "precio", req: true, desc: "Precio sin símbolos (ej: 1500)" },
                     { col: "descripcion", req: false, desc: "Descripción visible al cliente" },
-                    { col: "disponible", req: false, desc: "si / no (default: si)" },
                   ].map(({ col, req, desc }) => (
                     <div key={col} className="flex gap-6 items-start">
                       <span className={`mt-1 h-6 w-6 rounded-full shrink-0 ${req ? "bg-ash-graphite" : "bg-concrete"}`} />

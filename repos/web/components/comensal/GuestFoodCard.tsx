@@ -8,7 +8,6 @@ export interface GuestCardItem {
   descripcion?: string;
   precio: number;
   foto_url?: string;
-  disponible?: boolean;
   variantes?: VariantePublica[];
   tag?: string;
 }
@@ -26,24 +25,19 @@ export default function GuestFoodCard({
   onSelect,
   formatPrice = (p) => `$ ${p.toLocaleString("es-AR")}`,
 }: GuestFoodCardProps) {
-  const agotado = item.disponible === false;
   const tieneVariantes = Boolean(item.variantes && item.variantes.length > 0);
-  const tagTexto = agotado
-    ? "Agotado"
-    : item.tag || (tieneVariantes ? "Opciones" : null);
+  const tagTexto = item.tag || (tieneVariantes ? "Opciones" : null);
 
   return (
-    <article className={`food-card ${agotado ? "unavailable" : ""}`}>
+    <article className="food-card">
       <button
         type="button"
         className="food-info"
         onClick={() => onSelect(item)}
-        aria-label={`${item.nombre}, ${formatPrice(item.precio)}${agotado ? ", agotado" : ""}`}
+        aria-label={`${item.nombre}, ${formatPrice(item.precio)}`}
       >
         {tagTexto && (
-          <span className={`food-tag ${agotado ? "out-tag" : ""}`}>
-            {tagTexto}
-          </span>
+          <span className="food-tag">{tagTexto}</span>
         )}
         <h2>{item.nombre}</h2>
         {item.descripcion && <p>{item.descripcion}</p>}
@@ -63,7 +57,6 @@ export default function GuestFoodCard({
             alt={item.nombre}
             width={96}
             height={96}
-            className={agotado ? "grayscale" : ""}
             loading="lazy"
             decoding="async"
           />
@@ -75,11 +68,9 @@ export default function GuestFoodCard({
 
         <span
           aria-hidden="true"
-          className={`plus-badge ${
-            agotado ? "out-badge" : cantidadEnCarrito > 0 ? "in-cart" : ""
-          }`}
+          className={`plus-badge ${cantidadEnCarrito > 0 ? "in-cart" : ""}`}
         >
-          {agotado ? "✕" : cantidadEnCarrito > 0 ? cantidadEnCarrito : "+"}
+          {cantidadEnCarrito > 0 ? cantidadEnCarrito : "+"}
         </span>
       </button>
     </article>

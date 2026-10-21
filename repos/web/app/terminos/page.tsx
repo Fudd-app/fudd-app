@@ -44,8 +44,8 @@ const sections: LegalSection[] = [
           conserva la dirección y responsabilidad de su actividad gastronómica.
         </p>
         <p>
-          El comercio es quien ofrece y vende sus productos, fija precios, impuestos, stock, ingredientes,
-          disponibilidad y condiciones de atención; confirma, prepara, entrega, factura, cancela y reintegra pedidos;
+          El comercio es quien ofrece y vende sus productos, fija precios, impuestos, ingredientes y
+          condiciones de atención; confirma, prepara, entrega, factura, cancela y reintegra pedidos;
           y debe cumplir las normas sanitarias, bromatológicas, fiscales, laborales y de defensa del consumidor que le
           correspondan. fudd no cocina, manipula ni entrega alimentos y no garantiza su composición o aptitud.
         </p>

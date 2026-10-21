@@ -33,9 +33,9 @@ export default function PedidoAsistidoModal({ abierto, mesas, mesaInicialId, onC
   useEffect(() => {
     if (!abierto) return;
     void api.listarArticulos().then((lista) => {
-      const disponibles = lista.filter((a) => a.activo && a.disponible !== false);
-      setArticulos(disponibles);
-      setArticuloId((actual) => actual || disponibles[0]?.id || '');
+      const visibles = lista.filter((a) => a.activo);
+      setArticulos(visibles);
+      setArticuloId((actual) => actual || visibles[0]?.id || '');
     }).catch((err: unknown) => setError(getErrorMessage(err, 'No pudimos cargar la carta.')));
   }, [abierto, mesas]);
 

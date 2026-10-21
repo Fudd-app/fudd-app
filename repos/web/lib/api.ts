@@ -11,6 +11,11 @@ export function getApiBaseUrl(): string {
     if (/^\d+\.\d+\.\d+\.\d+$/.test(window.location.hostname)) {
       return `http://${window.location.hostname}:8080`;
     }
+
+    // En producción la sesión se transporta por una cookie HttpOnly. Consumir
+    // la API mediante el mismo origen evita que el navegador la trate como una
+    // cookie de terceros (web y API viven en servicios Render separados).
+    return '/api-proxy';
   }
   return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 }

@@ -7,7 +7,6 @@ interface GuestCartSheetProps {
   mesaNumero: number;
   dinerName?: string;
   items: CartItem[];
-  itemsAgotadosIds?: Set<string>;
   totalPrecio: number;
   enviando?: boolean;
   onClose: () => void;
@@ -20,7 +19,6 @@ export default function GuestCartSheet({
   mesaNumero,
   dinerName,
   items,
-  itemsAgotadosIds,
   totalPrecio,
   enviando = false,
   onClose,
@@ -68,7 +66,6 @@ export default function GuestCartSheet({
 
         <div className="mt-14 divide-y divide-[var(--line)] max-h-[48vh] overflow-y-auto">
           {items.map((item) => {
-            const agotado = itemsAgotadosIds?.has(item.articuloId);
             const variantesTexto = (item.variantes || []).map((v) => v.nombre).join(" · ");
 
             return (
@@ -78,11 +75,6 @@ export default function GuestCartSheet({
                   <strong>{item.nombre}</strong>
                   {variantesTexto && <small>{variantesTexto}</small>}
                   {item.nota && <small className="italic text-muted">“{item.nota}”</small>}
-                  {agotado && (
-                    <small className="font-bold text-red-600" role="alert">
-                      ⚠️ Producto agotado en cocina. Por favor quitalo.
-                    </small>
-                  )}
                 </span>
                 <em>{formatPrice(item.precio * item.cantidad)}</em>
                 <button
