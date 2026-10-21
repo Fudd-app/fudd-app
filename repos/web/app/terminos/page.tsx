@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import LegalDocument, { legalLinkClass, type LegalSection } from "@/components/legal/LegalDocument";
 import { LEGAL } from "@/lib/legal";
+import { formatearPrecioPlan, PLAN_MONEDA, PLAN_PRUEBA_MESES } from "@/lib/planes";
 
 export const metadata: Metadata = {
   title: "Términos del Servicio | Mesa CLICK",
@@ -114,10 +115,10 @@ const sections: LegalSection[] = [
     content: (
       <>
         <p>
-          Las funciones, límites, precio, moneda, impuestos, frecuencia de cobro, prueba, renovación y procedimiento de
-          baja aplicables a un plan se informarán antes de contratarlo y formarán parte de la orden o propuesta. Los
-          límites visibles del plan —por ejemplo, cantidad de mesas, productos o sucursales— pueden impedir nuevas altas
-          sin eliminar los datos ya existentes.
+          Cada negocio nuevo recibe acceso al plan Pro sin cargo durante {PLAN_PRUEBA_MESES} meses desde su creación. Al terminar la
+          prueba, puede continuar con el plan Free sujeto a sus límites o contratar el plan Pro por {formatearPrecioPlan()} {PLAN_MONEDA} mensuales.
+          Los límites visibles del plan —por ejemplo, cantidad de mesas, productos o sucursales— pueden impedir nuevas
+          altas sin eliminar los datos ya existentes.
         </p>
         <p>
           No se efectuará un cobro nuevo ni una renovación paga sin una base contractual válida e información previa.

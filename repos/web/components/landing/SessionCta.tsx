@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { PLAN_PRUEBA_MESES } from "@/lib/planes";
 import LandingIcon from "@/components/landing/LandingIcon";
 
 export const PANEL_LABEL = "Ir a mi panel";
@@ -39,7 +40,7 @@ export default function SessionCta({ href, label, className, icon = "chevron", i
   return <Link href={destino} className={className}>{texto} {iconNode}</Link>;
 }
 
-// Acciones del header: con sesión activa se reemplazan "Ingresar" y "Probar gratis" por un único acceso al panel.
+// Acciones del header: con sesión activa se reemplazan "Ingresar" y la prueba por un único acceso al panel.
 export function LandingHeaderActions() {
   const conSesion = useSesionActiva();
 
@@ -53,7 +54,7 @@ export function LandingHeaderActions() {
   return (
     <div className="landing-header-actions">
       <Link href="/login" className="landing-login">Ingresar</Link>
-      <Link href="/registro" className="landing-cta small">Probar gratis <LandingIcon name="chevron" size={16} /></Link>
+      <Link href="/registro" className="landing-cta small">{PLAN_PRUEBA_MESES} meses gratis <LandingIcon name="chevron" size={16} /></Link>
     </div>
   );
 }

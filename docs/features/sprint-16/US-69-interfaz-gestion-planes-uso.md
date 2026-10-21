@@ -21,6 +21,8 @@
 - [x] Barras de progreso visuales con uso actual (`Progress.tsx` con soporte monocromático y métricas de cuota).
 - [x] Badge visible en la barra superior indicando si el comercio está en plan 'Free' o 'Pro' con acceso directo a planes.
 - [x] Comparativo claro de características entre Free y Pro (canónico de `LandingPricing.tsx`).
+- [x] Precio Pro visible y consistente: $30.000 ARS por mes.
+- [x] Registro, onboarding y panel informan la prueba Pro inicial de 3 meses y su vencimiento.
 
 ---
 

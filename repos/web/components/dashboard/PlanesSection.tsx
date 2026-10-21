@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { api, Tenant, EstadoPlan, getErrorMessage } from "@/lib/api";
+import { formatearPrecioPlan, PLAN_MONEDA, PLAN_PRUEBA_MESES, PLAN_PRO_PRECIO_MENSUAL_ARS } from "@/lib/planes";
 import { Progress, Skeleton } from "@/components/ui";
 
 interface Props {
@@ -55,6 +56,11 @@ export default function PlanesSection({ tenant, onTenantUpdate }: Props) {
   }, []);
 
   const esPro = estadoPlan?.plan === "pro";
+  const enPrueba = esPro && Boolean(estadoPlan?.en_prueba);
+  const mesesPrueba = estadoPlan?.meses_prueba ?? PLAN_PRUEBA_MESES;
+  const precioMensual = estadoPlan?.precio_mensual ?? PLAN_PRO_PRECIO_MENSUAL_ARS;
+  const moneda = estadoPlan?.moneda ?? PLAN_MONEDA;
+  const precioPro = formatearPrecioPlan(precioMensual);
 
   const handleSolicitarUpgrade = async () => {
     if (solicitando || solicitudEnviada) return;
@@ -75,6 +81,7 @@ export default function PlanesSection({ tenant, onTenantUpdate }: Props) {
 
       const cuerpo = encodeURIComponent(
         `Hola, solicito el Upgrade a Plan Pro para el negocio "${nombreNegocio}" (slug: ${slugNegocio}).\n` +
+        `Precio informado: ${precioPro} ${moneda} por mes.\n` +
         `Uso actual: ${usoMesas} mesas, ${usoProd} productos, ${usoSuc} sucursales.\n` +
         (nota.trim() ? `Nota: ${nota.trim()}` : "")
       );
@@ -94,7 +101,7 @@ export default function PlanesSection({ tenant, onTenantUpdate }: Props) {
     const nombreNegocio = tenant?.nombre || "Mi Negocio";
     const slugNegocio = tenant?.slug || "";
     const texto = encodeURIComponent(
-      `Hola! Quiero solicitar el Upgrade a Plan Pro en Mesa CLICK para "${nombreNegocio}" (slug: ${slugNegocio}).`
+      `Hola! Quiero solicitar el Upgrade a Plan Pro por ${precioPro} ${moneda} por mes para "${nombreNegocio}" (slug: ${slugNegocio}).`
     );
     if (typeof window !== "undefined") {
       window.open(`https://wa.me/5491100000000?text=${texto}`, "_blank");
@@ -146,12 +153,14 @@ export default function PlanesSection({ tenant, onTenantUpdate }: Props) {
                     : "bg-ghost-fog border border-concrete text-ash-graphite"
                 }`}
               >
-                {esPro ? "Plan Pro" : "Plan Free"}
+                {enPrueba ? "Prueba Pro" : esPro ? "Plan Pro" : "Plan Free"}
               </span>
             </div>
             <p className="mt-4 text-13 text-sage-green">
-              {esPro
-                ? "Disfrutás de mesas, platos y sucursales ilimitadas con acceso a todas las herramientas avanzadas."
+              {enPrueba
+                ? `Tenés todas las funciones Pro sin cargo durante ${mesesPrueba} meses. Después podés seguir con Free o contratar Pro.`
+                : esPro
+                  ? "Disfrutás de mesas, platos y sucursales ilimitadas con acceso a todas las herramientas avanzadas."
                 : "Plan gratuito con límites de cuota operativos para locales iniciales."}
             </p>
           </div>
@@ -159,7 +168,7 @@ export default function PlanesSection({ tenant, onTenantUpdate }: Props) {
           {esPro && estadoPlan?.plan_hasta && (
             <div className="text-right text-12 text-sage-green">
               <p>
-                Válido hasta:{" "}
+                {enPrueba ? "Prueba válida hasta:" : "Válido hasta:"}{" "}
                 <span className="font-semibold text-ash-graphite">
                   {new Date(estadoPlan.plan_hasta).toLocaleDateString("es-AR", {
                     day: "2-digit",
@@ -168,9 +177,9 @@ export default function PlanesSection({ tenant, onTenantUpdate }: Props) {
                   })}
                 </span>
               </p>
-              {estadoPlan.dias_restantes_pro != null && (
+              {(enPrueba ? estadoPlan.dias_restantes_prueba : estadoPlan.dias_restantes_pro) != null && (
                 <p className="text-11 text-stone mt-2">
-                  {estadoPlan.dias_restantes_pro} días restantes
+                  {enPrueba ? estadoPlan.dias_restantes_prueba : estadoPlan.dias_restantes_pro} días restantes
                 </p>
               )}
             </div>
@@ -294,7 +303,7 @@ export default function PlanesSection({ tenant, onTenantUpdate }: Props) {
           <div className="rounded-lg border border-ash-graphite bg-ash-graphite text-canvas-white p-24 flex flex-col justify-between relative shadow-md">
             {esPro ? (
               <span className="absolute top-12 right-12 bg-canvas-white text-ash-graphite text-10 font-bold uppercase tracking-wider px-10 py-4 rounded-full">
-                Plan Activo
+                {enPrueba ? "Prueba activa" : "Plan activo"}
               </span>
             ) : (
               <span className="absolute top-12 right-12 bg-canvas-white text-ash-graphite text-10 font-bold uppercase tracking-wider px-10 py-4 rounded-full">
@@ -304,9 +313,9 @@ export default function PlanesSection({ tenant, onTenantUpdate }: Props) {
             <div>
               <span className="text-12 font-bold uppercase tracking-widest text-canvas-white/70">Plan Pro</span>
               <div className="mt-8 text-28 font-bold text-canvas-white">
-                $2.500 <span className="text-14 font-normal text-canvas-white/70">/ mes</span>
+                {precioPro} <span className="text-14 font-normal text-canvas-white/70">{moneda} / mes</span>
               </div>
-              <p className="mt-4 text-13 text-canvas-white/80">Para restaurantes y bares con alta demanda.</p>
+              <p className="mt-4 text-13 text-canvas-white/80">{mesesPrueba} meses gratis para cada negocio nuevo.</p>
 
               <ul className="mt-20 pt-16 border-t border-canvas-white/20 space-y-10 text-13 text-canvas-white">
                 <li className="flex items-center gap-8">
@@ -343,7 +352,7 @@ export default function PlanesSection({ tenant, onTenantUpdate }: Props) {
                 <div>
                   <p className="text-13 font-semibold text-ash-graphite">Solicitud registrada</p>
                   <p className="text-12 text-sage-green mt-2">
-                    Te contactaremos a la brevedad por {tenant?.email_contacto || "tu correo registrado"} para activar tu plan Pro y coordinar el pago.
+                    Te contactaremos a la brevedad por {tenant?.email_contacto || "tu correo registrado"} para activar Pro por {precioPro} {moneda} mensuales y coordinar el pago.
                   </p>
                 </div>
               </div>

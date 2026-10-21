@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import SessionCta from "@/components/landing/SessionCta";
+import { formatearPrecioPlan, PLAN_MONEDA, PLAN_PRUEBA_MESES } from "@/lib/planes";
 
 const FAQS = [
   {
@@ -24,6 +25,10 @@ const FAQS = [
     question: "¿Funciona para varias sucursales?",
     answer: "Sí, con el plan Pro. Podés administrar sucursales, cartas, horarios, mesas y equipos desde una misma cuenta, manteniendo cada operación separada.",
   },
+  {
+    question: "¿Cómo funciona la prueba gratuita?",
+    answer: `Al crear tu negocio activamos el plan Pro completo durante ${PLAN_PRUEBA_MESES} meses, sin cargo. Al finalizar podés continuar con el plan Free o contratar Pro por ${formatearPrecioPlan()} ${PLAN_MONEDA} por mes.`,
+  },
 ];
 
 export default function LandingFAQ() {
@@ -34,8 +39,8 @@ export default function LandingFAQ() {
       <div className="faq-intro">
         <span className="landing-eyebrow">Preguntas frecuentes</span>
         <h2>Todo lo que necesitás saber antes de empezar</h2>
-        <p>¿Tenés otra pregunta? Creá tu cuenta gratis y probá Mesa CLICK con tu operación real.</p>
-        <SessionCta href="/registro" label="Crear cuenta gratis" className="landing-demo" iconFirst />
+        <p>¿Tenés otra pregunta? Creá tu cuenta y probá Pro gratis durante {PLAN_PRUEBA_MESES} meses con tu operación real.</p>
+        <SessionCta href="/registro" label={`Probar ${PLAN_PRUEBA_MESES} meses gratis`} className="landing-demo" iconFirst />
       </div>
       <div className="faq-list">
         {FAQS.map((faq, index) => (

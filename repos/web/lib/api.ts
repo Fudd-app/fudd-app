@@ -199,6 +199,12 @@ export interface EstadoPlan {
   plan_desde?: string | null;
   plan_hasta?: string | null;
   dias_restantes_pro?: number | null;
+  en_prueba?: boolean;
+  prueba_hasta?: string | null;
+  dias_restantes_prueba?: number | null;
+  precio_mensual?: number;
+  moneda?: string;
+  meses_prueba?: number;
   upgrade_solicitado_at?: string | null;
   upgrade_nota?: string | null;
   limites: Record<string, number>;
@@ -226,6 +232,7 @@ export interface Tenant {
   plan?: PlanTenant;
   plan_desde?: string | null;
   plan_hasta?: string | null;
+  prueba_hasta?: string | null;
   upgrade_solicitado_at?: string | null;
   upgrade_nota?: string | null;
   mostrar_marca_agua?: boolean;

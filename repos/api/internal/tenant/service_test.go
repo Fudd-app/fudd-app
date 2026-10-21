@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/tenant"
@@ -99,6 +100,16 @@ func TestCrear_Exitoso(t *testing.T) {
 	}
 	if inputGuardado.PasswordHash == "" || inputGuardado.PasswordHash == "MesaClick2026" {
 		t.Fatal("se esperaba un hash seguro de la contraseña")
+	}
+	if inputGuardado.Plan != tenant.PlanPro || inputGuardado.PlanDesde == nil || inputGuardado.PlanHasta == nil || inputGuardado.TrialHasta == nil {
+		t.Fatalf("el negocio nuevo debe iniciar una prueba Pro: %+v", inputGuardado)
+	}
+	esperadoHasta := inputGuardado.PlanDesde.AddDate(0, tenant.MesesPruebaInicial, 0)
+	if !inputGuardado.PlanHasta.Equal(esperadoHasta) || !inputGuardado.TrialHasta.Equal(esperadoHasta) {
+		t.Fatalf("la prueba debe durar %d meses: desde=%v plan_hasta=%v prueba_hasta=%v", tenant.MesesPruebaInicial, inputGuardado.PlanDesde, inputGuardado.PlanHasta, inputGuardado.TrialHasta)
+	}
+	if inputGuardado.PlanDesde.After(time.Now()) {
+		t.Fatal("el inicio de la prueba no puede quedar en el futuro")
 	}
 }
 

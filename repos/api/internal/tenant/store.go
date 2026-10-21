@@ -34,10 +34,13 @@ func (s *pgStore) Crear(ctx context.Context, input OnboardingInput) (*Tenant, er
 
 	var t Tenant
 	err = tx.QueryRow(ctx,
-		`INSERT INTO tenants (nombre, nombre_fantasia, rubro, slug)
-		 VALUES ($1, $2, $3, $4) RETURNING id, nombre, nombre_fantasia, rubro, slug, created_at`,
+		`INSERT INTO tenants (nombre, nombre_fantasia, rubro, slug, plan, plan_desde, plan_hasta, trial_hasta)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		 RETURNING id, nombre, nombre_fantasia, rubro, slug, plan, plan_desde, plan_hasta, trial_hasta, created_at`,
 		input.Nombre, input.NombreFantasia, input.Rubro, input.Slug,
-	).Scan(&t.ID, &t.Nombre, &t.NombreFantasia, &t.Rubro, &t.Slug, &t.CreatedAt)
+		input.Plan, input.PlanDesde, input.PlanHasta, input.TrialHasta,
+	).Scan(&t.ID, &t.Nombre, &t.NombreFantasia, &t.Rubro, &t.Slug,
+		&t.Plan, &t.PlanDesde, &t.PlanHasta, &t.TrialHasta, &t.CreatedAt)
 	if err != nil {
 		if isUniqueConstraint(err, "tenants_slug_key") {
 			return nil, ErrSlugConflict
@@ -97,14 +100,14 @@ func (s *pgStore) ObtenerPorID(ctx context.Context, id string) (*Tenant, error) 
 		`SELECT id, nombre, nombre_fantasia, rubro, descripcion, email_contacto, whatsapp,
 		        logo_url, color_primario, estilo_visual, datos_fiscales, google_review_url,
 		        mp_access_token, mp_public_key, COALESCE(mp_activo, false),
-		        COALESCE(plan, 'free'), plan_desde, plan_hasta, upgrade_solicitado_at, upgrade_nota,
+		        COALESCE(plan, 'free'), plan_desde, plan_hasta, trial_hasta, upgrade_solicitado_at, upgrade_nota,
 		        COALESCE(mostrar_marca_agua, true), color_secundario, color_categoria, color_accion, tipo_fuente,
 		        slug, created_at
 		 FROM tenants WHERE id = $1`, id,
 	).Scan(&t.ID, &t.Nombre, &t.NombreFantasia, &t.Rubro, &t.Descripcion, &t.EmailContacto, &t.Whatsapp,
 		&t.LogoURL, &t.ColorPrimario, &t.EstiloVisual, &datosFiscalesBytes, &t.GoogleReviewURL,
 		&t.MPAccessToken, &t.MPPublicKey, &t.MPActivo,
-		&t.Plan, &t.PlanDesde, &t.PlanHasta, &t.UpgradeSolicitadoAt, &t.UpgradeNota,
+		&t.Plan, &t.PlanDesde, &t.PlanHasta, &t.TrialHasta, &t.UpgradeSolicitadoAt, &t.UpgradeNota,
 		&t.MostrarMarcaAgua, &t.ColorSecundario, &t.ColorCategoria, &t.ColorAccion, &t.TipoFuente,
 		&t.Slug, &t.CreatedAt)
 	if err != nil {
@@ -242,7 +245,7 @@ func (s *pgStore) Actualizar(ctx context.Context, id string, input ActualizarTen
 		 RETURNING id, nombre, nombre_fantasia, rubro, descripcion, email_contacto, whatsapp,
 		           logo_url, color_primario, estilo_visual, datos_fiscales, google_review_url,
 		           mp_access_token, mp_public_key, COALESCE(mp_activo, false),
-		           COALESCE(plan, 'free'), plan_desde, plan_hasta, upgrade_solicitado_at, upgrade_nota,
+		           COALESCE(plan, 'free'), plan_desde, plan_hasta, trial_hasta, upgrade_solicitado_at, upgrade_nota,
 		           COALESCE(mostrar_marca_agua, true), color_secundario, color_categoria, color_accion, tipo_fuente,
 		           slug, created_at`,
 		nombre, nombreFantasia, rubro, descripcion,
@@ -253,7 +256,7 @@ func (s *pgStore) Actualizar(ctx context.Context, id string, input ActualizarTen
 	).Scan(&t.ID, &t.Nombre, &t.NombreFantasia, &t.Rubro, &t.Descripcion, &t.EmailContacto, &t.Whatsapp,
 		&t.LogoURL, &t.ColorPrimario, &t.EstiloVisual, &datosFiscalesBytes, &t.GoogleReviewURL,
 		&t.MPAccessToken, &t.MPPublicKey, &t.MPActivo,
-		&t.Plan, &t.PlanDesde, &t.PlanHasta, &t.UpgradeSolicitadoAt, &t.UpgradeNota,
+		&t.Plan, &t.PlanDesde, &t.PlanHasta, &t.TrialHasta, &t.UpgradeSolicitadoAt, &t.UpgradeNota,
 		&t.MostrarMarcaAgua, &t.ColorSecundario, &t.ColorCategoria, &t.ColorAccion, &t.TipoFuente,
 		&t.Slug, &t.CreatedAt)
 	if err != nil {
@@ -297,7 +300,7 @@ func (s *pgStore) ObtenerEstadoCuotas(ctx context.Context, tenantID string) (*Es
 		Uso: make(map[Recurso]int),
 	}
 	var mesasActivas, productos, sucursales int
-	query := `SELECT COALESCE(t.plan, 'free'), t.plan_desde, t.plan_hasta,
+	query := `SELECT COALESCE(t.plan, 'free'), t.plan_desde, t.plan_hasta, t.trial_hasta,
 	                 t.upgrade_solicitado_at, t.upgrade_nota,
 	                 (SELECT COUNT(*) FROM mesas m
 	                    JOIN sucursales su ON su.id = m.sucursal_id
@@ -310,6 +313,7 @@ func (s *pgStore) ObtenerEstadoCuotas(ctx context.Context, tenantID string) (*Es
 		&estado.Plan,
 		&estado.PlanDesde,
 		&estado.PlanHasta,
+		&estado.TrialHasta,
 		&estado.UpgradeSolicitadoAt,
 		&estado.UpgradeNota,
 		&mesasActivas,
@@ -341,14 +345,14 @@ func (s *pgStore) RegistrarSolicitudUpgrade(ctx context.Context, tenantID, nota 
 	       RETURNING id, nombre, nombre_fantasia, rubro, descripcion, email_contacto, whatsapp,
 	                 logo_url, color_primario, estilo_visual, datos_fiscales, google_review_url,
 	                 mp_access_token, mp_public_key, COALESCE(mp_activo, false),
-	                 COALESCE(plan, 'free'), plan_desde, plan_hasta, upgrade_solicitado_at, upgrade_nota,
+	                 COALESCE(plan, 'free'), plan_desde, plan_hasta, trial_hasta, upgrade_solicitado_at, upgrade_nota,
 	                 slug, created_at`
 
 	err := db.Pool.QueryRow(ctx, query, tenantID, notaPtr).Scan(
 		&t.ID, &t.Nombre, &t.NombreFantasia, &t.Rubro, &t.Descripcion, &t.EmailContacto, &t.Whatsapp,
 		&t.LogoURL, &t.ColorPrimario, &t.EstiloVisual, &datosFiscalesBytes, &t.GoogleReviewURL,
 		&t.MPAccessToken, &t.MPPublicKey, &t.MPActivo,
-		&t.Plan, &t.PlanDesde, &t.PlanHasta, &t.UpgradeSolicitadoAt, &t.UpgradeNota,
+		&t.Plan, &t.PlanDesde, &t.PlanHasta, &t.TrialHasta, &t.UpgradeSolicitadoAt, &t.UpgradeNota,
 		&t.Slug, &t.CreatedAt,
 	)
 	if err != nil {
