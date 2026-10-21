@@ -14,8 +14,8 @@ const FAQS = [
     answer: "No. Escanea el QR de la mesa y accede directamente a la carta desde su navegador, sin registros obligatorios ni descargas.",
   },
   {
-    question: "¿Puedo actualizar precios y marcar platos agotados?",
-    answer: "Sí. Los cambios de precio, descripción o disponibilidad se reflejan en tiempo real en todos los celulares que tengan la carta abierta.",
+    question: "¿Puedo actualizar la carta en cualquier momento?",
+    answer: "Sí. Los cambios de precios, descripciones, fotos y horarios se reflejan en la carta digital del local.",
   },
   {
     question: "¿Cómo llegan los pedidos a cocina?",

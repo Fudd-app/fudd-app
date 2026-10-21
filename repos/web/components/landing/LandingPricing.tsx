@@ -8,7 +8,7 @@ const FREE = [
   "Hasta 10 mesas con QR",
   "Hasta 30 productos",
   "Pedidos y dashboard en tiempo real",
-  "Disponibilidad de ítems (86) en vivo",
+  "Pedidos y carta sincronizados en tiempo real",
 ];
 
 const PRO = [

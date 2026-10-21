@@ -88,19 +88,15 @@ func (s *pgStore) Crear(ctx context.Context, input NuevoPedidoInput, sucursalID 
 	for _, item := range input.Items {
 		var nombreArticulo string
 		var precioUnitario float64
-		var disponible bool
 		err = tx.QueryRow(ctx,
-			`SELECT nombre, precio, disponible FROM articulos WHERE id = $1 AND tenant_id = $2 AND activo = true`,
+			`SELECT nombre, precio FROM articulos WHERE id = $1 AND tenant_id = $2 AND activo = true`,
 			item.ArticuloID, tenantID,
-		).Scan(&nombreArticulo, &precioUnitario, &disponible)
+		).Scan(&nombreArticulo, &precioUnitario)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				return nil, fmt.Errorf("artículo %s no disponible: %w", item.ArticuloID, ErrValidation)
+				return nil, fmt.Errorf("artículo %s no encontrado en la carta: %w", item.ArticuloID, ErrValidation)
 			}
 			return nil, fmt.Errorf("error obteniendo artículo: %w", err)
-		}
-		if !disponible {
-			return nil, fmt.Errorf("el artículo %q se encuentra agotado: %w", nombreArticulo, ErrValidation)
 		}
 
 		var itemVariantes []PedidoItemVariante

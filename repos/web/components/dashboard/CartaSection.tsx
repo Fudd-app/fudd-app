@@ -381,51 +381,6 @@ export default function CartaSection() {
     }
   };
 
-  const toggleStock = async (catId: string, item: ArticuloAPI) => {
-    const nuevoStock = !(item.disponible !== false);
-    try {
-      await api.actualizarDisponibilidadArticulo(item.id, nuevoStock);
-      setCategorias(prev =>
-        prev.map(c =>
-          c.id === catId
-            ? {
-                ...c,
-                items: c.items.map(i =>
-                  i.id === item.id ? { ...i, disponible: nuevoStock } : i
-                ),
-              }
-            : c
-        )
-      );
-      toast.success(
-        nuevoStock
-          ? `${item.nombre} marcado como disponible.`
-          : `${item.nombre} marcado como agotado (86).`
-      );
-    } catch (err: unknown) {
-      console.error("No se pudo actualizar stock:", err);
-      setErrorMsg(getErrorMessage(err, 'Error al actualizar stock.'));
-    }
-  };
-
-  const handleReponerTodos = async () => {
-    const ok = await confirmar({
-      titulo: 'Reponer stock de la carta',
-      mensaje: '¿Deseas restablecer el stock de todos los artículos de la carta para el servicio de hoy?',
-      labelAceptar: 'Sí, reponer stock',
-    });
-    if (!ok) return;
-
-    try {
-      const res = await api.reponerTodosLosArticulos();
-      await cargarCarta();
-      toast.success(`Se repuso el stock de ${res.repuestos} productos.`);
-    } catch (err: unknown) {
-      console.error("Error al reponer stock:", err);
-      setErrorMsg(getErrorMessage(err, 'Error al reponer stock.'));
-    }
-  };
-
   const asignarFranjaCategoria = async (categoriaId: string, franjaId: string) => {
     try {
       setGuardandoHorarioId(categoriaId);
@@ -718,16 +673,6 @@ export default function CartaSection() {
           >
             <span className="material-symbols-outlined text-18">percent</span>
             Ajustar precios
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleReponerTodos()}
-            disabled={loading || totalItems === 0}
-            className="flex h-48 items-center justify-center gap-8 rounded-lg border border-concrete bg-canvas-white px-16 text-12 font-semibold text-ash-graphite shadow-sm transition-colors hover:border-stone hover:bg-vanilla-cream disabled:cursor-not-allowed disabled:opacity-40"
-            title="Restablece el stock de todos los artículos de la carta"
-          >
-            <span className="material-symbols-outlined text-18">restart_alt</span>
-            Reponer stock
           </button>
           <button
             type="button"
@@ -1043,11 +988,10 @@ export default function CartaSection() {
       {!loading && (
         <div className="rounded-2xl border border-concrete bg-canvas-white shadow-sm">
           {categorias.length > 0 && (
-            <div className="hidden grid-cols-[minmax(260px,2.2fr)_minmax(120px,0.85fr)_100px_minmax(150px,1fr)_minmax(125px,0.85fr)_44px] items-center gap-16 rounded-t-2xl border-b border-concrete bg-ghost-fog/55 px-20 py-12 text-10 font-semibold uppercase tracking-[0.08em] text-sage-green lg:grid">
+            <div className="hidden grid-cols-[minmax(260px,2.2fr)_minmax(120px,0.85fr)_100px_minmax(125px,0.85fr)_44px] items-center gap-16 rounded-t-2xl border-b border-concrete bg-ghost-fog/55 px-20 py-12 text-10 font-semibold uppercase tracking-[0.08em] text-sage-green lg:grid">
               <span>Artículo</span>
               <span>Categoría</span>
               <span>Precio</span>
-              <span>Disponibilidad</span>
               <span>Variantes</span>
               <span className="sr-only">Acciones</span>
             </div>
@@ -1055,19 +999,18 @@ export default function CartaSection() {
           {categorias.flatMap(cat =>
             cat.items.map(item => {
                   const visible = item.activo !== false;
-                  const disponible = item.disponible !== false;
                   const gruposVariantes = new Set(
                     (item.variantes || []).map(variante => variante.grupo?.trim() || 'General')
                   ).size;
 
                   return (
                   <div key={item.id} className="border-b border-ghost-fog last:border-b-0">
-                    <div className={`relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-14 gap-y-12 px-16 py-14 transition-colors hover:bg-ghost-fog/35 sm:px-20 lg:grid-cols-[minmax(260px,2.2fr)_minmax(120px,0.85fr)_100px_minmax(150px,1fr)_minmax(125px,0.85fr)_44px] lg:gap-16 ${!visible || !disponible ? 'bg-ghost-fog/15' : ''}`}>
+                    <div className={`relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-14 gap-y-12 px-16 py-14 transition-colors hover:bg-ghost-fog/35 sm:px-20 lg:grid-cols-[minmax(260px,2.2fr)_minmax(120px,0.85fr)_100px_minmax(125px,0.85fr)_44px] lg:gap-16 ${!visible ? 'bg-ghost-fog/15' : ''}`}>
                       <div className="col-span-2 flex min-w-0 items-center gap-12 pr-44 lg:col-span-1 lg:pr-0">
                         <label
                           role={item.foto_url ? 'img' : undefined}
                           aria-label={item.foto_url ? `Foto de ${item.nombre}` : undefined}
-                          className={`group/photo relative flex h-52 w-52 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-concrete bg-ghost-fog bg-cover bg-center text-sage-green ${!visible || !disponible ? 'grayscale' : ''}`}
+                          className={`group/photo relative flex h-52 w-52 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-concrete bg-ghost-fog bg-cover bg-center text-sage-green ${!visible ? 'grayscale' : ''}`}
                           style={item.foto_url ? { backgroundImage: `url(${item.foto_url})` } : undefined}
                           title="Subir o reemplazar foto"
                         >
@@ -1118,24 +1061,6 @@ export default function CartaSection() {
                       <span className="whitespace-nowrap text-right text-14 font-semibold text-ash-graphite lg:text-left lg:text-15">
                         ${item.precio.toLocaleString('es-AR')}
                       </span>
-
-                      {/* Control de Stock (86) */}
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={disponible}
-                        onClick={() => void toggleStock(cat.id, item)}
-                        className="group inline-flex min-h-44 items-center gap-8 justify-self-start rounded-lg px-4 text-11 font-medium text-ash-graphite focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plain-green/30 lg:px-0"
-                        title={disponible ? "Marcar plato como agotado (86)" : "Marcar plato como disponible"}
-                        aria-label={disponible ? `Marcar ${item.nombre} como agotado` : `Marcar ${item.nombre} como disponible`}
-                      >
-                        <span className={`relative h-22 w-[38px] shrink-0 rounded-full transition-colors ${disponible ? 'bg-success-muted' : 'bg-stone/40'}`}>
-                          <span className={`absolute left-0 top-[3px] h-16 w-16 rounded-full bg-canvas-white shadow-sm transition-transform ${disponible ? 'translate-x-[19px]' : 'translate-x-[3px]'}`} />
-                        </span>
-                        <span className={disponible ? 'text-[#087645]' : 'text-sage-green'}>
-                          {disponible ? 'Disponible' : 'Agotado'}
-                        </span>
-                      </button>
 
                       <button
                         type="button"
