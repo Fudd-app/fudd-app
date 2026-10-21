@@ -1,20 +1,20 @@
 /* Registro (/registro) y alta del negocio (/onboarding) — portada de docs/diseño/maqueta
-   (RegisterApp y OnboardingApp) con la paleta de Zelko (Violeta) y tamaños de letra legibles.
+   (RegisterApp y OnboardingApp) con la identidad de marca fudd (docs/diseño/fudd).
    Todo queda bajo .registro para no afectar el resto de la app. */
 
 .registro {
-  --r-ink: #2c2c2a;
-  --r-ink-2: #3d3d3a;
-  --r-muted: #595959;
-  --r-soft: #808080;
-  --r-line: #e5e5e5;
-  --r-fog: #f4f4f4;
-  --r-bg: #fafafa;
-  --r-brand: #7f77dd;
-  --r-brand-dark: #534ab7;
-  --r-green: #7f77dd;
-  --r-green-soft: #eeedfe;
-  --r-green-line: #afa9ec;
+  --r-ink: #12382c;
+  --r-ink-2: #2a1d17;
+  --r-muted: #4b5d56;
+  --r-soft: #76827c;
+  --r-line: #e2ded2;
+  --r-fog: #efebe1;
+  --r-bg: #f5f3ec;
+  --r-brand: #12382c;
+  --r-brand-dark: #0d2920;
+  --r-green: #ff6a3d;
+  --r-green-soft: #cdebd9;
+  --r-green-line: #9ad1b1;
   --r-danger: #b42318;
   --r-danger-soft: #fdecea;
 
@@ -24,20 +24,18 @@
 }
 
 /* Encabezado */
-.registro .auth-header { position: sticky; z-index: 20; top: 0; height: 72px; padding: 0 4.5%; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--r-line); background: rgba(255,255,255,.92); backdrop-filter: blur(12px); }
-.registro .auth-brand { padding: 0; display: flex; align-items: center; gap: 9px; color: var(--r-ink); font-size: 21px; font-weight: 500; letter-spacing: -.03em; text-decoration: none; border: 0; background: transparent; cursor: pointer; }
-.registro .auth-brand > span { width: 34px; height: 34px; display: grid; place-items: center; }
-.registro .auth-brand strong { margin-left: -5px; }
+.registro .auth-header { position: sticky; z-index: 20; top: 0; height: 72px; padding: 0 4.5%; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--r-line); background: rgba(245,243,236,.92); backdrop-filter: blur(12px); }
+.registro .auth-brand { padding: 0; display: inline-flex; align-items: center; color: var(--r-ink); text-decoration: none; border: 0; background: transparent; cursor: pointer; }
 .registro .auth-header-link { color: var(--r-muted); font-size: 13px; }
-.registro .auth-header-link a, .registro .onboarding-exit { color: var(--r-brand-dark); font-size: 13px; font-weight: 700; text-decoration: none; }
+.registro .auth-header-link a, .registro .onboarding-exit { color: var(--r-brand); font-size: 13px; font-weight: 700; text-decoration: none; }
 .registro .auth-header-link a:hover, .registro .onboarding-exit:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 /* /registro */
 .registro .auth-layout { min-height: calc(100vh - 72px); display: grid; grid-template-columns: 1fr 1fr; }
 .registro .auth-form-panel { padding: 48px 8%; display: flex; justify-content: center; }
 .registro .auth-form { width: min(100%,440px); }
-.registro .auth-eyebrow { color: var(--r-brand-dark); font-size: 12px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
-.registro .auth-form h1 { margin-top: 8px; font-size: 40px; font-weight: 400; line-height: 1.08; letter-spacing: -.05em; }
+.registro .auth-eyebrow { color: var(--r-brand); font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: .13em; text-transform: uppercase; }
+.registro .auth-form h1 { margin-top: 8px; font-size: 40px; font-weight: 800; line-height: 1.06; letter-spacing: -.03em; }
 .registro .auth-form > p { max-width: 420px; margin-top: 10px; color: var(--r-muted); font-size: 14px; line-height: 1.6; }
 .registro .google-slot { margin-top: 26px; }
 .registro .auth-divider { height: 52px; display: flex; align-items: center; color: var(--r-soft); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
@@ -45,14 +43,14 @@
 .registro .auth-divider span { padding: 0 12px; }
 .registro .auth-field { margin-top: 14px; display: flex; flex-direction: column; gap: 7px; color: var(--r-ink-2); font-size: 13px; font-weight: 700; }
 .registro .auth-field > div { height: 50px; padding: 0 14px; display: flex; align-items: center; gap: 10px; color: var(--r-soft); border: 1px solid var(--r-line); border-radius: 12px; background: white; transition: border-color .18s, box-shadow .18s; }
-.registro .auth-field > div:focus-within { color: var(--r-ink); border-color: var(--r-brand); box-shadow: 0 0 0 4px rgba(127,119,221,.15); }
+.registro .auth-field > div:focus-within { color: var(--r-ink); border-color: var(--r-brand); box-shadow: 0 0 0 4px rgba(18,56,44,.12); }
 .registro .auth-field > div.invalid { border-color: var(--r-danger); box-shadow: 0 0 0 4px var(--r-danger-soft); }
 .registro .auth-field input { min-width: 0; height: 100%; flex: 1; color: var(--r-ink); font: inherit; font-size: 15px; font-weight: 400; outline: none; border: 0; background: transparent; }
 .registro .auth-field > div > button { padding: 0; color: var(--r-muted); font-size: 12px; font-weight: 700; border: 0; background: transparent; cursor: pointer; }
 .registro .auth-field > small { color: var(--r-danger); font-size: 12px; font-weight: 500; }
 .registro .auth-field > em { color: var(--r-soft); font-size: 12px; font-style: normal; font-weight: 400; }
 .registro .field-at { font-size: 17px; font-weight: 500; }
-.registro .auth-submit, .registro .onboarding-primary { min-height: 52px; padding: 0 20px; display: flex; align-items: center; justify-content: center; gap: 8px; color: white; font-size: 14px; font-weight: 700; border: 0; border-radius: 12px; background: var(--r-brand); box-shadow: 0 8px 22px rgba(83,74,183,.24); cursor: pointer; transition: transform .18s, background .18s, opacity .18s; }
+.registro .auth-submit, .registro .onboarding-primary { min-height: 52px; padding: 0 20px; display: flex; align-items: center; justify-content: center; gap: 8px; color: #f5f3ec; font-size: 14px; font-weight: 700; border: 0; border-radius: 12px; background: var(--r-brand); box-shadow: 0 8px 22px rgba(18,56,44,.2); cursor: pointer; transition: transform .18s, background .18s, opacity .18s; }
 .registro .auth-submit { width: 100%; margin-top: 22px; }
 .registro .auth-submit:hover:not(:disabled), .registro .onboarding-primary:hover:not(:disabled) { background: var(--r-brand-dark); transform: translateY(-2px); }
 .registro .auth-submit:disabled, .registro .onboarding-primary:disabled { cursor: not-allowed; opacity: .5; }
@@ -61,19 +59,19 @@
 .registro .auth-terms { margin-top: 14px; display: block; color: var(--r-soft); text-align: center; font-size: 12px; line-height: 1.5; }
 .registro .auth-terms a { color: var(--r-ink-2); text-decoration: underline; text-underline-offset: 3px; }
 .registro .auth-story { position: relative; margin: 16px; border-radius: 24px; background: var(--r-ink); overflow: hidden; }
-.registro .auth-story::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg,rgba(0,0,0,.05) 35%,rgba(0,0,0,.85)); }
+.registro .auth-story::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg,rgba(18,56,44,.08) 35%,rgba(18,56,44,.88)); }
 .registro .auth-story > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.registro .auth-story-overlay { position: absolute; z-index: 2; left: 7%; right: 7%; bottom: 8%; color: white; }
-.registro .story-label { width: fit-content; min-height: 28px; padding: 0 11px; display: flex; align-items: center; gap: 7px; color: rgba(255,255,255,.85); font-size: 11px; font-weight: 700; border: 1px solid rgba(255,255,255,.25); border-radius: 15px; background: rgba(0,0,0,.35); backdrop-filter: blur(8px); }
-.registro .story-label i { width: 6px; height: 6px; border-radius: 50%; background: #afa9ec; }
-.registro .auth-story blockquote { max-width: 570px; margin: 18px 0 23px; font-size: clamp(24px,3vw,38px); line-height: 1.2; letter-spacing: -.045em; }
+.registro .auth-story-overlay { position: absolute; z-index: 2; left: 7%; right: 7%; bottom: 8%; color: #f5f3ec; }
+.registro .story-label { width: fit-content; min-height: 28px; padding: 0 11px; display: flex; align-items: center; gap: 7px; color: rgba(245,243,236,.9); font-size: 11px; font-weight: 700; border: 1px solid rgba(245,243,236,.25); border-radius: 15px; background: rgba(18,56,44,.55); backdrop-filter: blur(8px); }
+.registro .story-label i { width: 6px; height: 6px; border-radius: 50%; background: var(--r-green); }
+.registro .auth-story blockquote { max-width: 570px; margin: 18px 0 23px; font-size: clamp(24px,3vw,38px); font-weight: 700; line-height: 1.2; letter-spacing: -.03em; }
 .registro .auth-story-overlay > div { display: flex; align-items: center; gap: 10px; }
-.registro .story-avatar { width: 38px; height: 38px; display: grid; place-items: center; color: var(--r-brand-dark); font-size: 11px; font-weight: 700; border-radius: 50%; background: #eeedfe; }
+.registro .story-avatar { width: 38px; height: 38px; display: grid; place-items: center; color: var(--r-ink); font-size: 11px; font-weight: 700; border-radius: 50%; background: #cdebd9; }
 .registro .auth-story-overlay p { display: flex; flex-direction: column; }
 .registro .auth-story-overlay strong { font-size: 13px; }
-.registro .auth-story-overlay small { margin-top: 3px; color: rgba(255,255,255,.65); font-size: 12px; }
-.registro .story-card { position: absolute; z-index: 3; top: 26px; right: 26px; min-width: 240px; padding: 12px; display: flex; align-items: center; gap: 10px; color: var(--r-ink-2); border: 1px solid rgba(255,255,255,.65); border-radius: 12px; background: rgba(255,255,255,.94); box-shadow: 0 12px 30px rgba(0,0,0,.17); backdrop-filter: blur(12px); }
-.registro .story-card > span { width: 34px; height: 34px; display: grid; place-items: center; color: white; border-radius: 9px; background: var(--r-green); }
+.registro .auth-story-overlay small { margin-top: 3px; color: rgba(245,243,236,.7); font-size: 12px; }
+.registro .story-card { position: absolute; z-index: 3; top: 26px; right: 26px; min-width: 240px; padding: 12px; display: flex; align-items: center; gap: 10px; color: var(--r-ink-2); border: 1px solid rgba(255,255,255,.65); border-radius: 12px; background: rgba(255,255,255,.95); box-shadow: 0 12px 30px rgba(18,56,44,.18); backdrop-filter: blur(12px); }
+.registro .story-card > span { width: 34px; height: 34px; display: grid; place-items: center; color: #2a1d17; border-radius: 9px; background: var(--r-green); }
 .registro .story-card > div { display: flex; flex-direction: column; }
 .registro .story-card small { color: var(--r-muted); font-size: 10px; font-weight: 700; text-transform: uppercase; }
 .registro .story-card strong { margin-top: 2px; font-size: 13px; }
@@ -82,37 +80,37 @@
 .registro .onboarding-progress-mobile { display: none; }
 .registro .onboarding-layout { min-height: calc(100vh - 72px); display: grid; grid-template-columns: 270px minmax(480px,680px) minmax(320px,1fr); }
 .registro .onboarding-aside { padding: 44px 25px 28px; display: flex; flex-direction: column; border-right: 1px solid var(--r-line); background: white; }
-.registro .onboarding-welcome { color: var(--r-brand-dark); font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
-.registro .onboarding-aside h2 { margin-top: 9px; font-size: 24px; font-weight: 400; line-height: 1.2; letter-spacing: -.035em; }
+.registro .onboarding-welcome { color: var(--r-brand); font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; }
+.registro .onboarding-aside h2 { margin-top: 9px; font-size: 24px; font-weight: 700; line-height: 1.2; letter-spacing: -.025em; }
 .registro .onboarding-aside > div:first-child > p { margin-top: 9px; color: var(--r-muted); font-size: 13px; line-height: 1.55; }
 .registro .onboarding-steps { position: relative; margin-top: 34px; display: flex; flex-direction: column; gap: 4px; }
 .registro .onboarding-steps::before { content: ""; position: absolute; left: 24px; top: 42px; bottom: 42px; width: 1px; background: var(--r-line); }
 .registro .onboarding-steps button { position: relative; z-index: 1; min-height: 64px; padding: 7px; display: grid; grid-template-columns: 38px 1fr; align-items: center; gap: 12px; color: var(--r-soft); text-align: left; border: 0; border-radius: 12px; background: transparent; cursor: default; }
-.registro .onboarding-steps button > span { width: 34px; height: 34px; display: grid; place-items: center; color: var(--r-soft); font-size: 13px; font-weight: 700; border: 1px solid var(--r-line); border-radius: 50%; background: white; }
+.registro .onboarding-steps button > span { width: 34px; height: 34px; display: grid; place-items: center; color: var(--r-soft); font-family: var(--font-mono); font-size: 13px; font-weight: 500; border: 1px solid var(--r-line); border-radius: 50%; background: white; }
 .registro .onboarding-steps button > div { display: flex; flex-direction: column; }
 .registro .onboarding-steps strong { color: var(--r-muted); font-size: 13px; }
 .registro .onboarding-steps small { margin-top: 3px; font-size: 12px; }
 .registro .onboarding-steps button.active { background: var(--r-green-soft); }
-.registro .onboarding-steps button.active > span { color: white; border-color: var(--r-brand-dark); background: var(--r-brand-dark); box-shadow: 0 0 0 4px var(--r-green-soft); }
+.registro .onboarding-steps button.active > span { color: #f5f3ec; border-color: var(--r-brand); background: var(--r-brand); box-shadow: 0 0 0 4px var(--r-green-soft); }
 .registro .onboarding-steps button.active strong { color: var(--r-ink); }
 .registro .onboarding-steps button.done { cursor: pointer; }
-.registro .onboarding-steps button.done > span { color: white; border-color: var(--r-green); background: var(--r-green); }
+.registro .onboarding-steps button.done > span { color: #2a1d17; border-color: var(--r-green); background: var(--r-green); }
 .registro .onboarding-help { margin-top: auto; padding: 14px; display: flex; gap: 10px; color: var(--r-ink); border-radius: 12px; background: var(--r-fog); }
 .registro .onboarding-help span { display: flex; align-items: flex-start; flex-direction: column; }
 .registro .onboarding-help strong { font-size: 13px; }
-.registro .onboarding-help a { margin-top: 3px; color: var(--r-brand-dark); font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.registro .onboarding-help a { margin-top: 3px; color: var(--r-brand); font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 .registro .onboarding-main { padding: 39px 7% 24px; display: flex; flex-direction: column; background: var(--r-bg); }
-.registro .onboarding-step-label { color: var(--r-brand-dark); font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.registro .onboarding-step-label { color: var(--r-brand); font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; }
 .registro .onboarding-form { width: 100%; max-width: 610px; margin-top: 18px; }
 .registro .onboarding-title { display: flex; align-items: center; gap: 14px; }
-.registro .onboarding-icon { width: 46px; height: 46px; display: grid; place-items: center; flex: none; color: var(--r-brand-dark); border-radius: 12px; background: var(--r-green-soft); }
+.registro .onboarding-icon { width: 46px; height: 46px; display: grid; place-items: center; flex: none; color: var(--r-brand); border-radius: 12px; background: var(--r-green-soft); }
 .registro .onboarding-icon.small { width: 38px; height: 38px; border-radius: 10px; }
-.registro .onboarding-title h1, .registro .onboarding-complete h1 { font-size: 30px; font-weight: 400; line-height: 1.12; letter-spacing: -.04em; }
+.registro .onboarding-title h1, .registro .onboarding-complete h1 { font-size: 30px; font-weight: 800; line-height: 1.12; letter-spacing: -.03em; }
 .registro .onboarding-title p { margin-top: 4px; color: var(--r-muted); font-size: 14px; }
 .registro .onboarding-field { margin-top: 24px; display: flex; flex: 1; flex-direction: column; gap: 7px; color: var(--r-ink-2); font-size: 13px; font-weight: 700; }
 .registro .onboarding-field span em { color: var(--r-soft); font-size: 12px; font-style: normal; font-weight: 400; }
 .registro .onboarding-field input { width: 100%; height: 50px; padding: 0 14px; color: var(--r-ink); font: inherit; font-size: 15px; font-weight: 400; outline: none; border: 1px solid var(--r-line); border-radius: 12px; background: white; transition: border-color .18s, box-shadow .18s; }
-.registro .onboarding-field input:focus { border-color: var(--r-brand); box-shadow: 0 0 0 4px rgba(127,119,221,.15); }
+.registro .onboarding-field input:focus { border-color: var(--r-brand); box-shadow: 0 0 0 4px rgba(18,56,44,.12); }
 .registro .onboarding-field input.invalid { border-color: var(--r-danger); box-shadow: 0 0 0 4px var(--r-danger-soft); }
 .registro .onboarding-field > small { color: var(--r-danger); font-size: 12px; font-weight: 500; }
 .registro .onboarding-field-row { display: flex; gap: 12px; }
@@ -123,20 +121,20 @@
 .registro .business-types button:hover { border-color: var(--r-green-line); }
 .registro .business-types button > span { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; background: var(--r-fog); }
 .registro .business-types button strong { margin-top: 9px; font-size: 13px; }
-.registro .business-types button > i { position: absolute; right: 8px; top: 8px; width: 20px; height: 20px; display: grid; place-items: center; color: white; font-style: normal; border-radius: 50%; background: var(--r-green); }
-.registro .business-types button.active { color: var(--r-ink); border-color: var(--r-brand-dark); box-shadow: 0 0 0 2px rgba(127,119,221,.18); }
-.registro .business-types button.active > span { color: white; background: var(--r-brand-dark); }
-.registro .slug-preview, .registro .tables-question, .registro .schedule-choice { margin-top: 18px; padding: 14px; display: flex; align-items: center; gap: 12px; border: 1px solid var(--r-line); border-radius: 12px; background: var(--r-fog); }
+.registro .business-types button > i { position: absolute; right: 8px; top: 8px; width: 20px; height: 20px; display: grid; place-items: center; color: #2a1d17; font-style: normal; border-radius: 50%; background: var(--r-green); }
+.registro .business-types button.active { color: var(--r-ink); border-color: var(--r-brand); box-shadow: 0 0 0 2px rgba(18,56,44,.16); }
+.registro .business-types button.active > span { color: #f5f3ec; background: var(--r-brand); }
+.registro .slug-preview, .registro .tables-question, .registro .schedule-choice { margin-top: 18px; padding: 14px; display: flex; align-items: center; gap: 12px; border: 1px solid var(--r-line); border-radius: 12px; background: white; }
 .registro .slug-preview > div { min-width: 0; display: flex; flex: 1; flex-direction: column; }
 .registro .slug-preview small { color: var(--r-muted); font-size: 12px; }
-.registro .slug-preview strong { margin-top: 3px; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.registro .slug-preview strong b { font-weight: 800; }
-.registro .slug-preview input { width: 100%; height: 38px; margin-top: 6px; padding: 0 10px; font: inherit; font-size: 14px; outline: none; border: 1px solid var(--r-line); border-radius: 9px; background: white; }
+.registro .slug-preview strong { margin-top: 3px; font-family: var(--font-mono); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.registro .slug-preview strong b { font-weight: 700; }
+.registro .slug-preview input { width: 100%; height: 38px; margin-top: 6px; padding: 0 10px; font-family: var(--font-mono); font-size: 14px; outline: none; border: 1px solid var(--r-line); border-radius: 9px; background: white; }
 .registro .slug-preview input:focus { border-color: var(--r-brand); }
 .registro .slug-actions { display: flex; flex: none; align-items: center; flex-direction: column; gap: 6px; }
-.registro .slug-actions button { padding: 0; color: var(--r-brand-dark); font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; border: 0; background: transparent; cursor: pointer; }
+.registro .slug-actions button { padding: 0; color: var(--r-brand); font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; border: 0; background: transparent; cursor: pointer; }
 .registro .available { display: flex; align-items: center; gap: 5px; color: var(--r-ink-2); font-size: 12px; font-weight: 700; white-space: nowrap; }
-.registro .available i { width: 7px; height: 7px; border-radius: 50%; background: #1ad379; }
+.registro .available i { width: 7px; height: 7px; border-radius: 50%; background: var(--r-green); }
 .registro .available.taken { color: var(--r-danger); }
 .registro .available.taken i { background: var(--r-danger); }
 .registro .available.checking i { background: var(--r-soft); }
@@ -148,59 +146,59 @@
 .registro .table-counter { display: flex; align-items: center; justify-content: center; gap: 18px; }
 .registro .table-counter button { width: 42px; height: 42px; display: grid; place-items: center; color: var(--r-ink); font-size: 20px; border: 1px solid var(--r-line); border-radius: 10px; background: var(--r-fog); cursor: pointer; }
 .registro .table-counter button:disabled { cursor: not-allowed; opacity: .35; }
-.registro .table-counter strong { min-width: 48px; text-align: center; font-size: 26px; }
+.registro .table-counter strong { min-width: 48px; text-align: center; font-family: var(--font-mono); font-size: 26px; }
 .registro .table-limit { color: var(--r-soft); text-align: center; font-size: 12px; }
-.registro .schedule-choice > div:last-child { min-height: 46px; padding: 0 12px; display: flex; align-items: center; gap: 8px; color: var(--r-brand-dark); font-size: 13px; font-weight: 700; border: 1px solid var(--r-green-line); border-radius: 10px; background: var(--r-green-soft); }
+.registro .schedule-choice > div:last-child { min-height: 46px; padding: 0 12px; display: flex; align-items: center; gap: 8px; color: var(--r-brand); font-size: 13px; font-weight: 700; border: 1px solid var(--r-green-line); border-radius: 10px; background: var(--r-green-soft); }
 .registro .schedule-choice > div:last-child span { margin-left: auto; color: var(--r-muted); }
 .registro .onboarding-actions { margin-top: auto; padding-top: 30px; display: grid; grid-template-columns: 100px 1fr auto; align-items: center; gap: 12px; }
 .registro .onboarding-actions > span { color: var(--r-soft); text-align: center; font-size: 12px; }
 .registro .onboarding-back { min-height: 48px; color: var(--r-ink-2); font-size: 14px; font-weight: 700; border: 1px solid var(--r-line); border-radius: 12px; background: white; cursor: pointer; }
 .registro .onboarding-back:disabled { visibility: hidden; }
-.registro .onboarding-preview { position: sticky; top: 72px; height: calc(100vh - 72px); padding: 40px; display: flex; align-items: center; justify-content: center; flex-direction: column; color: white; background: var(--r-ink); overflow: hidden; }
-.registro .preview-orbit { position: absolute; width: 470px; height: 470px; border: 1px solid rgba(255,255,255,.08); border-radius: 50%; }
+.registro .onboarding-preview { position: sticky; top: 72px; height: calc(100vh - 72px); padding: 40px; display: flex; align-items: center; justify-content: center; flex-direction: column; color: #f5f3ec; background: var(--r-ink); overflow: hidden; }
+.registro .preview-orbit { position: absolute; width: 470px; height: 470px; border: 1px solid rgba(245,243,236,.1); border-radius: 50%; }
 .registro .preview-orbit.two { width: 610px; height: 610px; }
-.registro .preview-label { position: absolute; z-index: 2; top: 24px; left: 27px; color: rgba(255,255,255,.55); font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-.registro .onboarding-phone { position: relative; z-index: 2; width: min(270px,90%); min-height: 490px; padding: 12px; color: var(--r-ink); border: 5px solid #262626; border-radius: 28px; background: #fafafa; box-shadow: 0 30px 60px rgba(0,0,0,.45); overflow: hidden; }
-.registro .onboarding-phone::before { content: ""; position: absolute; z-index: 4; top: 7px; left: 50%; width: 53px; height: 13px; border-radius: 10px; background: #262626; transform: translateX(-50%); }
+.registro .preview-label { position: absolute; z-index: 2; top: 24px; left: 27px; color: rgba(245,243,236,.6); font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; }
+.registro .onboarding-phone { position: relative; z-index: 2; width: min(270px,90%); min-height: 490px; padding: 12px; color: var(--r-ink); border: 5px solid #0d2920; border-radius: 28px; background: var(--r-bg); box-shadow: 0 30px 60px rgba(0,0,0,.45); overflow: hidden; }
+.registro .onboarding-phone::before { content: ""; position: absolute; z-index: 4; top: 7px; left: 50%; width: 53px; height: 13px; border-radius: 10px; background: #0d2920; transform: translateX(-50%); }
 .registro .phone-top { min-height: 56px; padding-top: 10px; display: grid; grid-template-columns: 32px 1fr 18px; align-items: center; gap: 8px; }
-.registro .phone-logo { width: 32px; height: 32px; display: grid; place-items: center; color: white; font-size: 10px; font-weight: 700; border-radius: 9px; background: var(--r-brand); }
+.registro .phone-logo { width: 32px; height: 32px; display: grid; place-items: center; color: #f5f3ec; font-size: 10px; font-weight: 700; border-radius: 9px; background: var(--r-brand); }
 .registro .phone-top > span:nth-child(2) { min-width: 0; display: flex; flex-direction: column; }
 .registro .phone-top strong { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .registro .phone-top small { margin-top: 2px; color: var(--r-soft); font-size: 10px; }
 .registro .phone-hero { position: relative; height: 150px; margin: 0 -12px; overflow: hidden; }
-.registro .phone-hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg,transparent,rgba(0,0,0,.7)); }
+.registro .phone-hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg,transparent,rgba(18,56,44,.75)); }
 .registro .phone-hero img { width: 100%; height: 100%; object-fit: cover; }
-.registro .phone-hero > span { position: absolute; z-index: 2; left: 14px; right: 14px; bottom: 13px; display: flex; color: white; flex-direction: column; }
+.registro .phone-hero > span { position: absolute; z-index: 2; left: 14px; right: 14px; bottom: 13px; display: flex; color: #f5f3ec; flex-direction: column; }
 .registro .phone-hero small { font-size: 9px; text-transform: uppercase; }
 .registro .phone-hero strong { margin-top: 2px; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .registro .phone-categories { margin-top: 12px; display: flex; gap: 6px; overflow: hidden; }
 .registro .phone-categories span { min-height: 26px; padding: 0 9px; display: flex; align-items: center; flex: none; color: var(--r-muted); font-size: 10px; border: 1px solid var(--r-line); border-radius: 13px; background: white; }
-.registro .phone-categories span.active { color: white; border-color: var(--r-brand-dark); background: var(--r-brand-dark); }
-.registro .phone-dish { min-height: 80px; margin-top: 12px; padding: 12px; display: flex; align-items: center; border: 1px dashed #d4d4d4; border-radius: 12px; background: white; }
+.registro .phone-categories span.active { color: #f5f3ec; border-color: var(--r-brand); background: var(--r-brand); }
+.registro .phone-dish { min-height: 80px; margin-top: 12px; padding: 12px; display: flex; align-items: center; border: 1px dashed var(--r-line); border-radius: 12px; background: white; }
 .registro .phone-dish > span { display: flex; flex: 1; flex-direction: column; }
 .registro .phone-dish small { color: var(--r-soft); font-size: 9px; font-weight: 700; text-transform: uppercase; }
 .registro .phone-dish strong { margin-top: 3px; font-size: 12px; }
 .registro .phone-dish em { margin-top: 3px; color: var(--r-soft); font-size: 10px; font-style: normal; }
-.registro .phone-dish b { width: 28px; height: 28px; display: grid; place-items: center; color: white; border-radius: 50%; background: var(--r-brand); }
+.registro .phone-dish b { width: 28px; height: 28px; display: grid; place-items: center; color: #2a1d17; border-radius: 50%; background: var(--r-green); }
 .registro .preview-note { position: relative; z-index: 2; width: min(300px,100%); margin-top: 20px; display: flex; align-items: center; gap: 10px; }
-.registro .preview-note > span { width: 36px; height: 36px; display: grid; place-items: center; flex: none; color: #afa9ec; border-radius: 10px; background: #262626; }
+.registro .preview-note > span { width: 36px; height: 36px; display: grid; place-items: center; flex: none; color: var(--r-green); border-radius: 10px; background: #0d2920; }
 .registro .preview-note p { display: flex; flex-direction: column; }
 .registro .preview-note strong { font-size: 13px; }
-.registro .preview-note small { margin-top: 3px; color: rgba(255,255,255,.6); font-size: 12px; }
+.registro .preview-note small { margin-top: 3px; color: rgba(245,243,236,.65); font-size: 12px; }
 .registro .onboarding-complete { width: 100%; max-width: 560px; margin: auto; text-align: center; }
-.registro .complete-mark { width: 70px; height: 70px; margin: 0 auto 19px; display: grid; place-items: center; color: white; border-radius: 50%; background: var(--r-green); box-shadow: 0 0 0 10px var(--r-green-soft); }
+.registro .complete-mark { width: 70px; height: 70px; margin: 0 auto 19px; display: grid; place-items: center; color: #2a1d17; border-radius: 50%; background: var(--r-green); box-shadow: 0 0 0 10px var(--r-green-soft); }
 .registro .onboarding-complete h1 { margin-top: 9px; }
 .registro .onboarding-complete > p { max-width: 450px; margin: 10px auto 0; color: var(--r-muted); font-size: 14px; line-height: 1.6; }
 .registro .setup-summary { margin-top: 26px; text-align: left; border: 1px solid var(--r-line); border-radius: 12px; background: white; overflow: hidden; }
 .registro .setup-summary > div { min-height: 72px; padding: 12px 14px; display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 12px; border-bottom: 1px solid var(--r-line); }
 .registro .setup-summary > div:last-child { border-bottom: 0; }
-.registro .setup-summary > div > span { width: 40px; height: 40px; display: grid; place-items: center; color: var(--r-brand-dark); border-radius: 10px; background: var(--r-green-soft); }
+.registro .setup-summary > div > span { width: 40px; height: 40px; display: grid; place-items: center; color: var(--r-brand); border-radius: 10px; background: var(--r-green-soft); }
 .registro .setup-summary p { min-width: 0; display: flex; flex-direction: column; }
 .registro .setup-summary small { color: var(--r-soft); font-size: 11px; text-transform: uppercase; }
 .registro .setup-summary strong { margin-top: 2px; font-size: 14px; overflow: hidden; text-overflow: ellipsis; }
 .registro .setup-summary em { margin-top: 2px; color: var(--r-muted); font-size: 12px; font-style: normal; }
-.registro .setup-summary button { color: var(--r-brand-dark); font-size: 13px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; border: 0; background: transparent; cursor: pointer; }
-.registro .setup-summary > div > i { width: 26px; height: 26px; display: grid; place-items: center; color: white; border-radius: 50%; background: var(--r-green); }
+.registro .setup-summary button { color: var(--r-brand); font-size: 13px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; border: 0; background: transparent; cursor: pointer; }
+.registro .setup-summary > div > i { width: 26px; height: 26px; display: grid; place-items: center; color: #2a1d17; border-radius: 50%; background: var(--r-green); }
 .registro .onboarding-primary.finish { width: 100%; margin-top: 22px; }
 .registro .onboarding-complete > small { margin-top: 12px; display: block; color: var(--r-soft); font-size: 12px; }
 .registro .onboarding-complete .auth-alert { text-align: left; }
@@ -209,16 +207,16 @@
 .registro .auth-method-tabs { margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border: 1px solid var(--r-line); border-radius: 12px; background: var(--r-fog); }
 .registro .auth-tab-btn { height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--r-muted); font-size: 13px; font-weight: 700; border: 0; border-radius: 9px; background: transparent; cursor: pointer; transition: all .15s ease; }
 .registro .auth-tab-btn:hover { color: var(--r-ink); }
-.registro .auth-tab-btn.active { color: var(--r-brand-dark); background: white; box-shadow: 0 2px 6px rgba(0,0,0,.08); }
+.registro .auth-tab-btn.active { color: var(--r-brand); background: white; box-shadow: 0 2px 6px rgba(18,56,44,.08); }
 .registro .auth-magic-info { margin-top: 14px; padding: 12px 14px; display: flex; align-items: flex-start; gap: 10px; color: var(--r-ink-2); font-size: 13px; line-height: 1.5; border: 1px solid var(--r-green-line); border-radius: 12px; background: var(--r-green-soft); }
 .registro .auth-magic-info span { flex: 1; }
 .registro .auth-magic-success { margin-top: 18px; padding: 24px 18px; text-align: center; border: 1px solid var(--r-line); border-radius: 16px; background: white; }
-.registro .auth-magic-icon { width: 50px; height: 50px; margin: 0 auto 14px; display: grid; place-items: center; color: white; border-radius: 50%; background: var(--r-green); box-shadow: 0 0 0 8px var(--r-green-soft); }
+.registro .auth-magic-icon { width: 50px; height: 50px; margin: 0 auto 14px; display: grid; place-items: center; color: #2a1d17; border-radius: 50%; background: var(--r-green); box-shadow: 0 0 0 8px var(--r-green-soft); }
 .registro .auth-magic-success h3 { font-size: 18px; font-weight: 700; color: var(--r-ink); }
 .registro .auth-magic-success p { margin-top: 8px; color: var(--r-muted); font-size: 13px; line-height: 1.55; }
-.registro .auth-link-btn { margin-top: 16px; display: inline-block; color: var(--r-brand-dark); font-size: 13px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; border: 0; background: transparent; cursor: pointer; }
+.registro .auth-link-btn { margin-top: 16px; display: inline-block; color: var(--r-brand); font-size: 13px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; border: 0; background: transparent; cursor: pointer; }
 .registro .auth-switch-method { margin-top: 16px; text-align: center; color: var(--r-muted); font-size: 13px; }
-.registro .auth-switch-method button { padding: 0; margin-left: 4px; color: var(--r-brand-dark); font-size: 13px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; border: 0; background: transparent; cursor: pointer; }
+.registro .auth-switch-method button { padding: 0; margin-left: 4px; color: var(--r-brand); font-size: 13px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; border: 0; background: transparent; cursor: pointer; }
 .registro .auth-mobile-alternate { display: none; }
 
 @media (max-width: 1080px) {
@@ -234,16 +232,16 @@
   .registro .auth-form h1 { font-size: 34px; }
   .registro .auth-story { display: none; }
   .registro .auth-mobile-alternate { margin-top: 20px; display: block; color: var(--r-muted); text-align: center; font-size: 13px; }
-  .registro .auth-mobile-alternate a { color: var(--r-brand-dark); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+  .registro .auth-mobile-alternate a { color: var(--r-brand); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
   .registro .onboarding-progress-mobile { position: sticky; z-index: 19; top: 64px; height: 3px; display: block; background: var(--r-line); }
-  .registro .onboarding-progress-mobile span { height: 100%; display: block; background: var(--r-brand); transition: width .25s; }
+  .registro .onboarding-progress-mobile span { height: 100%; display: block; background: var(--r-green); transition: width .25s; }
   .registro .onboarding-layout { min-height: calc(100vh - 67px); display: block; }
   .registro .onboarding-aside { display: none; }
   .registro .onboarding-main { min-height: calc(100vh - 67px); padding: 27px 20px 18px; }
   .registro .onboarding-form { max-width: none; }
   .registro .onboarding-title h1, .registro .onboarding-complete h1 { font-size: 26px; }
   .registro .business-types > div { grid-template-columns: 1fr 1fr; }
-  .registro .onboarding-actions { position: sticky; bottom: 0; margin: 35px -20px -18px; padding: 12px 20px; grid-template-columns: 90px 1fr; background: rgba(250,250,250,.96); backdrop-filter: blur(10px); border-top: 1px solid var(--r-line); }
+  .registro .onboarding-actions { position: sticky; bottom: 0; margin: 35px -20px -18px; padding: 12px 20px; grid-template-columns: 90px 1fr; background: rgba(245,243,236,.96); backdrop-filter: blur(10px); border-top: 1px solid var(--r-line); }
   .registro .onboarding-actions > span { display: none; }
 }
 

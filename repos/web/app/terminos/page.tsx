@@ -4,8 +4,8 @@ import { LEGAL } from "@/lib/legal";
 import { formatearPrecioPlan, PLAN_MONEDA, PLAN_PRUEBA_MESES } from "@/lib/planes";
 
 export const metadata: Metadata = {
-  title: "Términos del Servicio | Zelko",
-  description: "Condiciones de uso de la plataforma Zelko para comercios y comensales.",
+  title: "Términos del Servicio | fudd",
+  description: "Condiciones de uso de la plataforma fudd para comercios y comensales.",
   alternates: { canonical: "/terminos" },
 };
 
@@ -24,7 +24,7 @@ const sections: LegalSection[] = [
         <p>
           Al crear un negocio, aceptar expresamente estos Términos o usar funciones que requieren una cuenta,
           confirmás que los leíste y que tenés capacidad y facultades suficientes para obligarte o representar al
-          comercio. La simple consulta de una carta pública no implica contratar un plan de Zelko.
+          comercio. La simple consulta de una carta pública no implica contratar un plan de fudd.
         </p>
         <p>
           Si actuás como consumidor, conservás todos los derechos irrenunciables que reconozcan las normas de
@@ -35,11 +35,11 @@ const sections: LegalSection[] = [
   },
   {
     id: "roles",
-    title: "Qué hace Zelko y qué hace el comercio",
+    title: "Qué hace fudd y qué hace el comercio",
     content: (
       <>
         <p>
-          Zelko provee herramientas para publicar una carta digital, administrar sucursales y mesas, recibir
+          fudd provee herramientas para publicar una carta digital, administrar sucursales y mesas, recibir
           pedidos, organizar cocina, mostrar estados, obtener métricas y conectar servicios de terceros. El comercio
           conserva la dirección y responsabilidad de su actividad gastronómica.
         </p>
@@ -47,7 +47,7 @@ const sections: LegalSection[] = [
           El comercio es quien ofrece y vende sus productos, fija precios, impuestos, stock, ingredientes,
           disponibilidad y condiciones de atención; confirma, prepara, entrega, factura, cancela y reintegra pedidos;
           y debe cumplir las normas sanitarias, bromatológicas, fiscales, laborales y de defensa del consumidor que le
-          correspondan. Zelko no cocina, manipula ni entrega alimentos y no garantiza su composición o aptitud.
+          correspondan. fudd no cocina, manipula ni entrega alimentos y no garantiza su composición o aptitud.
         </p>
       </>
     ),
@@ -63,9 +63,9 @@ const sections: LegalSection[] = [
           credenciales, eludir controles ni acceder a otro negocio sin autorización.
         </p>
         <p>
-          El ingreso administrativo puede realizarse mediante correo y contraseña de Zelko o mediante Google. Los
+          El ingreso administrativo puede realizarse mediante correo y contraseña de fudd o mediante Google. Los
           enlaces de un solo uso pueden utilizarse para invitaciones de equipo. Google verifica la identidad según sus
-          propias condiciones; Zelko no solicita la contraseña de Google. Debés avisar de inmediato a{" "}
+          propias condiciones; fudd no solicita la contraseña de Google. Debés avisar de inmediato a{" "}
           <a className={legalLinkClass} href={`mailto:${LEGAL.supportEmail}`}>{LEGAL.supportEmail}</a> ante un acceso
           sospechoso, pérdida de control del correo o cambio no autorizado.
         </p>
@@ -84,7 +84,7 @@ const sections: LegalSection[] = [
         </p>
         <p>
           Reclamos sobre calidad, alergias, demoras, entrega, facturación, cancelación o devolución deben ser atendidos
-          por el comercio, sin perjuicio del soporte técnico que Zelko pueda brindar. Las notas del pedido no
+          por el comercio, sin perjuicio del soporte técnico que fudd pueda brindar. Las notas del pedido no
           reemplazan la conversación directa con el establecimiento ante una alergia o riesgo de salud.
         </p>
       </>
@@ -97,7 +97,7 @@ const sections: LegalSection[] = [
       <>
         <p>
           Cuando el comercio habilita Mercado Pago, el pago se procesa en el entorno de ese proveedor y se rige también
-          por sus términos y políticas. El comercio es el vendedor y titular de su cuenta de cobro. Zelko recibe
+          por sus términos y políticas. El comercio es el vendedor y titular de su cuenta de cobro. fudd recibe
           identificadores, importes y estados necesarios para reflejar la operación, pero no almacena números completos
           de tarjeta ni códigos de seguridad.
         </p>
@@ -156,11 +156,11 @@ const sections: LegalSection[] = [
       <>
         <p>
           El comercio conserva los derechos sobre sus marcas, imágenes, textos, cartas y datos. Declara contar con las
-          autorizaciones necesarias y otorga a Zelko una licencia limitada, no exclusiva y revocable para alojar,
+          autorizaciones necesarias y otorga a fudd una licencia limitada, no exclusiva y revocable para alojar,
           reproducir y mostrar ese contenido únicamente con el fin de prestar el servicio.
         </p>
         <p>
-          El software, diseño, marca y documentación de Zelko pertenecen a sus titulares y no se transfieren por
+          El software, diseño, marca y documentación de fudd pertenecen a sus titulares y no se transfieren por
           el uso del servicio. No se permite copiar, revender, descompilar o crear un servicio derivado salvo autorización
           expresa o excepción legal.
         </p>
@@ -175,7 +175,7 @@ const sections: LegalSection[] = [
         <p>
           El tratamiento de datos se describe en la{" "}
           <a className={legalLinkClass} href="/privacidad">Política de Privacidad</a>. Cada comercio debe informar a sus
-          comensales, tratar sólo los datos necesarios, respetar sus derechos y limitar el acceso de su equipo. Zelko
+          comensales, tratar sólo los datos necesarios, respetar sus derechos y limitar el acceso de su equipo. fudd
           aplicará controles razonables y usará los datos operativos del comercio para prestar, proteger y mantener el
           servicio, no para venderlos.
         </p>
@@ -184,7 +184,7 @@ const sections: LegalSection[] = [
           personales, excepto cuando su comunicación sea necesaria para el servicio, esté autorizada o sea exigida por ley.
         </p>
         <p>
-          Cuando Zelko trate datos de comensales por cuenta del comercio, lo hará sólo para prestar y proteger el
+          Cuando fudd trate datos de comensales por cuenta del comercio, lo hará sólo para prestar y proteger el
           servicio conforme a la configuración e instrucciones documentadas del comercio; limitará el acceso a personal
           y proveedores sujetos a confidencialidad; aplicará medidas razonables de seguridad; colaborará con solicitudes
           de titulares e incidentes; e informará las categorías de subencargados en la Política de Privacidad. Al finalizar,
@@ -200,7 +200,7 @@ const sections: LegalSection[] = [
     content: (
       <p>
         Google, Mercado Pago, proveedores de correo, alojamiento y otros servicios integrados tienen disponibilidad,
-        seguridad y condiciones propias. Zelko procura seleccionar y configurar proveedores adecuados, pero no
+        seguridad y condiciones propias. fudd procura seleccionar y configurar proveedores adecuados, pero no
         controla sus sistemas. Un enlace externo no implica recomendación ni responsabilidad sobre contenidos ajenos.
       </p>
     ),
@@ -229,7 +229,7 @@ const sections: LegalSection[] = [
     content: (
       <>
         <p>
-          Zelko responde por sus obligaciones conforme a la ley. No garantiza ventas, demanda, resultados comerciales,
+          fudd responde por sus obligaciones conforme a la ley. No garantiza ventas, demanda, resultados comerciales,
           ausencia absoluta de interrupciones ni la exactitud del contenido cargado por comercios o terceros. El usuario
           debe mantener procedimientos alternativos razonables para operaciones críticas.
         </p>
@@ -259,7 +259,7 @@ const sections: LegalSection[] = [
         </p>
         <p>
           Tras la baja, los accesos cesan y los datos se eliminan, anonimizan o bloquean de acuerdo con la Política de
-          Privacidad, los plazos informados y las obligaciones legales. La baja de Zelko no cancela automáticamente
+          Privacidad, los plazos informados y las obligaciones legales. La baja de fudd no cancela automáticamente
           contratos o credenciales mantenidos directamente con Google, Mercado Pago u otros proveedores.
         </p>
       </>
@@ -277,7 +277,7 @@ const sections: LegalSection[] = [
         </p>
         <p>
           Las comunicaciones operativas y legales se enviarán al correo registrado. Es responsabilidad del comercio
-          mantenerlo vigente. Las notificaciones a Zelko deben dirigirse a {" "}
+          mantenerlo vigente. Las notificaciones a fudd deben dirigirse a {" "}
           <a className={legalLinkClass} href={`mailto:${LEGAL.supportEmail}`}>{LEGAL.supportEmail}</a>.
         </p>
       </>
@@ -313,7 +313,7 @@ export default function TerminosPage() {
     <LegalDocument
       eyebrow="Condiciones de uso"
       title="Términos del servicio"
-      description="Reglas claras para comercios, equipos y comensales que utilizan Zelko."
+      description="Reglas claras para comercios, equipos y comensales que utilizan fudd."
       sections={sections}
       alternateHref="/privacidad"
       alternateLabel="Ver privacidad"

@@ -63,13 +63,13 @@ func NuevoBrevoEmailSender(apiKey, senderName, senderEmail string) *BrevoEmailSe
 }
 
 func (s *BrevoEmailSender) EnviarMagicLink(ctx context.Context, toEmail, link string) error {
-	return s.enviar(ctx, toEmail, "Tu enlace de acceso a Zelko",
-		fmt.Sprintf("<p>Hola,</p><p>Hacé clic en el siguiente enlace para ingresar a tu cuenta de Zelko. Expira en 15 minutos:</p><p><a href=\"%s\">Ingresar a Zelko</a></p><p>Si no solicitaste este enlace, podés ignorar este correo.</p>", link))
+	return s.enviar(ctx, toEmail, "Tu enlace de acceso a fudd",
+		fmt.Sprintf("<p>Hola,</p><p>Hacé clic en el siguiente enlace para ingresar a tu cuenta de fudd. Expira en 15 minutos:</p><p><a href=\"%s\">Ingresar a fudd</a></p><p>Si no solicitaste este enlace, podés ignorar este correo.</p>", link))
 }
 
 func (s *BrevoEmailSender) EnviarInvitacion(ctx context.Context, toEmail, link string) error {
-	return s.enviar(ctx, toEmail, "Te invitaron al equipo de Zelko",
-		fmt.Sprintf("<p>Hola,</p><p>Te invitaron a formar parte de un equipo en Zelko.</p><p><a href=\"%s\">Aceptar invitación con Google</a></p><p>El enlace vence en 48 horas y puede usarse una sola vez. Debés continuar con la misma dirección de email que recibió esta invitación.</p>", link))
+	return s.enviar(ctx, toEmail, "Te invitaron al equipo de fudd",
+		fmt.Sprintf("<p>Hola,</p><p>Te invitaron a formar parte de un equipo en fudd.</p><p><a href=\"%s\">Aceptar invitación con Google</a></p><p>El enlace vence en 48 horas y puede usarse una sola vez. Debés continuar con la misma dirección de email que recibió esta invitación.</p>", link))
 }
 
 func (s *BrevoEmailSender) enviar(ctx context.Context, toEmail, subject, htmlContent string) error {
@@ -137,7 +137,7 @@ func NuevoSMTPEmailSender(host, port, user, password, from string) *SMTPEmailSen
 
 func (s *SMTPEmailSender) EnviarMagicLink(ctx context.Context, toEmail, link string) error {
 	addr := net.JoinHostPort(s.host, s.port)
-	subject := "Tu enlace de acceso a Zelko"
+	subject := "Tu enlace de acceso a fudd"
 
 	// SMTP_FROM puede venir como "Nombre <a@b.com>" o como "a@b.com".
 	// La cabecera From: acepta las dos formas; el comando MAIL FROM solo la pelada.
@@ -152,23 +152,23 @@ func (s *SMTPEmailSender) EnviarMagicLink(ctx context.Context, toEmail, link str
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f9f6f1; margin: 0; padding: 24px; color: #2c2c2a; }
+    body { font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f5f3ec; margin: 0; padding: 24px; color: #12382c; }
     .card { max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb; padding: 32px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
-    .logo { font-size: 22px; font-weight: 500; letter-spacing: -0.03em; color: #534ab7; margin-bottom: 20px; }
-    .btn { display: inline-block; background-color: #7f77dd; color: #ffffff; font-weight: 600; text-decoration: none; padding: 12px 24px; border-radius: 8px; margin: 20px 0; font-size: 15px; }
+    .logo { font-size: 24px; font-weight: 800; letter-spacing: -0.03em; color: #12382c; margin-bottom: 20px; }
+    .btn { display: inline-block; background-color: #12382c; color: #f5f3ec; font-weight: 700; text-decoration: none; padding: 12px 24px; border-radius: 8px; margin: 20px 0; font-size: 15px; }
     .footer { font-size: 12px; color: #607166; margin-top: 24px; line-height: 1.5; }
-    .link-alt { word-break: break-all; color: #534ab7; font-size: 12px; }
+    .link-alt { word-break: break-all; color: #ff6a3d; font-size: 12px; }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="logo">zelko</div>
-    <h2 style="font-size: 18px; margin: 0 0 12px 0;">Acceder a Zelko</h2>
+    <div class="logo">fudd</div>
+    <h2 style="font-size: 18px; margin: 0 0 12px 0;">Acceder a fudd</h2>
     <p style="font-size: 14px; line-height: 1.5; color: #283a2e;">
       Hacé clic en el siguiente botón para continuar. Este enlace es personal y de un solo uso:
     </p>
     <div style="text-align: center;">
-      <a href="%s" class="btn">Continuar en Zelko</a>
+      <a href="%s" class="btn">Continuar en fudd</a>
     </div>
     <p class="footer">
       O copiá y pegá este enlace en tu navegador:<br>
@@ -294,13 +294,13 @@ func NuevoResendEmailSender(apiKey, fromEmail string) *ResendEmailSender {
 }
 
 func (s *ResendEmailSender) EnviarMagicLink(ctx context.Context, toEmail, link string) error {
-	return s.enviar(ctx, toEmail, "Tu acceso a Zelko",
-		fmt.Sprintf("<p>Hola,</p><p>Haz clic en el siguiente enlace para ingresar a tu cuenta de Zelko (expira en 15 minutos):</p><p><a href='%s'>Ingresar a Zelko</a></p><p>Si no solicitaste este enlace, puedes ignorar este correo.</p>", link))
+	return s.enviar(ctx, toEmail, "Tu acceso a fudd",
+		fmt.Sprintf("<p>Hola,</p><p>Haz clic en el siguiente enlace para ingresar a tu cuenta de fudd (expira en 15 minutos):</p><p><a href='%s'>Ingresar a fudd</a></p><p>Si no solicitaste este enlace, puedes ignorar este correo.</p>", link))
 }
 
 func (s *ResendEmailSender) EnviarInvitacion(ctx context.Context, toEmail, link string) error {
-	return s.enviar(ctx, toEmail, "Te invitaron al equipo de Zelko",
-		fmt.Sprintf("<p>Hola,</p><p>Te invitaron a formar parte de un equipo en Zelko.</p><p><a href='%s'>Aceptar invitación con Google</a></p><p>El enlace vence en 48 horas y puede usarse una sola vez. Debes continuar con la misma dirección de email que recibió esta invitación.</p>", link))
+	return s.enviar(ctx, toEmail, "Te invitaron al equipo de fudd",
+		fmt.Sprintf("<p>Hola,</p><p>Te invitaron a formar parte de un equipo en fudd.</p><p><a href='%s'>Aceptar invitación con Google</a></p><p>El enlace vence en 48 horas y puede usarse una sola vez. Debes continuar con la misma dirección de email que recibió esta invitación.</p>", link))
 }
 
 func (s *ResendEmailSender) enviar(ctx context.Context, toEmail, subject, htmlContent string) error {

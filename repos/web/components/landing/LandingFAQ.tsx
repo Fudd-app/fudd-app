@@ -7,7 +7,7 @@ import { formatearPrecioPlan, PLAN_MONEDA, PLAN_PRUEBA_MESES } from "@/lib/plane
 const FAQS = [
   {
     question: "¿Necesito instalar equipos especiales?",
-    answer: "No. Zelko funciona desde cualquier navegador en celulares, tablets y computadoras. Podés empezar con los dispositivos que ya tenés en el local.",
+    answer: "No. fudd funciona desde cualquier navegador en celulares, tablets y computadoras. Podés empezar con los dispositivos que ya tenés en el local.",
   },
   {
     question: "¿El comensal tiene que descargar una app?",

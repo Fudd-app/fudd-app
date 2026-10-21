@@ -1,30 +1,33 @@
 @import "tailwindcss";
 
 @theme {
-  /* ── Identidad Zelko · Paleta Violeta (docs/diseño/zelko) ──────────────
-     Se conservan los NOMBRES de token; cambian los valores.
-     `plain-green` representa el color primario de marca y botones (#7F77DD),
-     con `plain-green-muted` para hover y bordes de acento (#534AB7). */
+  /* ── Identidad fudd · Manual de marca (docs/diseño/fudd) ────────────────
+     Se conservan los NOMBRES de token; cambian los valores a la paleta fudd:
+     - Albahaca (#12382C): Base, logo y texto
+     - Tomate   (#FF6A3D): Lente, acción y avisos
+     - Harina   (#F5F3EC): Fondo
+     - Cacao    (#2A1D17): Texto secundario, impresión
+     - Menta    (#CDEBD9): Estados positivos */
   --color-canvas-white: #ffffff;
-  --color-ghost-fog: #f4f4f4;        /* relleno sutil */
-  --color-vanilla-cream: #eeeeee;    /* superficie */
-  --color-ash-graphite: #2c2c2a;     /* neutro principal de Zelko */
-  --color-deep-forest: #333333;      /* texto secundario fuerte */
-  --color-sage-green: #595959;       /* texto atenuado */
-  --color-stone: #808080;            /* texto terciario / helper */
-  --color-concrete: #d9d9d9;         /* bordes, divisores, inputs */
-  --color-system-black: #000000;
-  --color-plain-green: #7f77dd;          /* = acción primaria de marca Zelko (Violeta) */
-  --color-plain-green-muted: #534ab7;    /* hover de acción primaria y bordes de marca */
+  --color-ghost-fog: #f5f3ec;        /* Harina — fondo sutil */
+  --color-vanilla-cream: #efebe1;    /* Harina cálida — superficie */
+  --color-ash-graphite: #12382c;     /* Albahaca — base, logo y texto */
+  --color-deep-forest: #2a1d17;      /* Cacao — texto secundario, impresión */
+  --color-sage-green: #4b5d56;       /* texto atenuado armónico con Albahaca */
+  --color-stone: #76827c;            /* texto terciario / helper */
+  --color-concrete: #e2ded2;         /* bordes y divisores de marca fudd */
+  --color-system-black: #12382c;
+  --color-plain-green: #12382c;          /* Albahaca — acción primaria y base */
+  --color-plain-green-muted: #0d2920;    /* hover de Albahaca */
   --color-alert-red: #360003;
-  --color-warm-pink: #ffbac3;
+  --color-warm-pink: #ffd9cc;
 
-  /* Paleta completa Zelko Violeta */
-  --color-zelko-dark: #534ab7;
-  --color-zelko: #7f77dd;
-  --color-zelko-light: #afa9ec;
-  --color-zelko-tint: #eeedfe;
-  --color-zelko-neutral: #2c2c2a;
+  /* Paleta oficial fudd */
+  --color-fudd-albahaca: #12382c;
+  --color-fudd-tomate: #ff6a3d;
+  --color-fudd-harina: #f5f3ec;
+  --color-fudd-cacao: #2a1d17;
+  --color-fudd-menta: #cdebd9;
 
   /* Éxito / confirmación semántica */
   --color-success: #1ad379;
@@ -95,10 +98,10 @@
   --spacing-200: 200px;
   --spacing-240: 240px;
 
-  /* Fonts */
-  --font-inter: "Inter", sans-serif;
-  --font-mono: "Geist Mono", monospace;
-  --font-display: var(--font-anton), "Arial Narrow", system-ui, sans-serif; /* sustituto de Foggy */
+  /* Fonts (Outfit para títulos e interfaz + DM Mono para números, comandas y POS) */
+  --font-inter: var(--font-inter), "Outfit", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-mono), "DM Mono", ui-monospace, monospace;
+  --font-display: var(--font-inter), "Outfit", system-ui, sans-serif;
 
   /* Border Radius */
   --radius-sm: 4px;
@@ -108,8 +111,8 @@
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #2c2c2a;
+  --background: #f5f3ec;
+  --foreground: #12382c;
 }
 
 body {
@@ -122,17 +125,16 @@ body {
 
 /* Base Headings */
 h1, h2, h3, h4, h5, h6 {
-  font-weight: 600;
-  letter-spacing: 0;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
-/* Display headline — condensada, sólo para hero / titulares grandes */
+/* Display headline — Outfit 800 con interletra ajustada */
 .display {
   font-family: var(--font-display);
-  font-weight: 400;
-  text-transform: uppercase;
-  letter-spacing: 0.01em;
-  line-height: 0.92;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 0.96;
 }
 
 /* Minimalist Inputs Reset */
@@ -183,7 +185,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 :where(button, [role="button"], a, input, select, textarea, summary):focus-visible {
-  outline: 3px solid var(--color-primary);
+  outline: 3px solid var(--color-fudd-tomate);
   outline-offset: 2px;
 }
 
@@ -205,13 +207,13 @@ button,
 
 /* Theme surface for the public table flow. The values are injected per tenant. */
 .mesa-page {
-  background-color: var(--mesa-background, #f8fafc);
-  color: var(--mesa-text, #0f172a);
+  background-color: var(--mesa-background, #f5f3ec);
+  color: var(--mesa-text, #12382c);
   font-family: var(--mesa-font, var(--font-inter));
 }
 
 .mesa-background {
-  background-color: var(--mesa-background, #f8fafc);
+  background-color: var(--mesa-background, #f5f3ec);
 }
 
 .mesa-header {
@@ -223,28 +225,28 @@ button,
 }
 
 .mesa-subtle-surface {
-  background-color: var(--mesa-subtle-surface, #f1f5f9);
+  background-color: var(--mesa-subtle-surface, #f5f3ec);
 }
 
 .mesa-text {
-  color: var(--mesa-text, #0f172a);
+  color: var(--mesa-text, #12382c);
 }
 
 .mesa-muted {
-  color: var(--mesa-muted, #475569);
+  color: var(--mesa-muted, #4b5d56);
 }
 
 .mesa-subtle-text {
-  color: var(--mesa-subtle-text, #64748b);
+  color: var(--mesa-subtle-text, #76827c);
 }
 
 .mesa-primary {
-  color: var(--mesa-primary, #f54927);
+  color: var(--mesa-primary, #12382c);
 }
 
 .mesa-primary-bg {
-  background-color: var(--mesa-primary, #f54927);
-  color: var(--mesa-primary-contrast, #ffffff);
+  background-color: var(--mesa-primary, #12382c);
+  color: var(--mesa-primary-contrast, #f5f3ec);
 }
 
 .mesa-primary-bg:hover {
@@ -252,25 +254,25 @@ button,
 }
 
 .mesa-primary-contrast {
-  color: var(--mesa-primary-contrast, #ffffff);
+  color: var(--mesa-primary-contrast, #f5f3ec);
 }
 
 .mesa-primary-soft {
-  background-color: var(--mesa-primary-soft, rgba(37, 99, 235, 0.14));
+  background-color: var(--mesa-primary-soft, #cdebd9);
 }
 
 .mesa-border {
-  border-color: var(--mesa-border, #cbd5e1);
+  border-color: var(--mesa-border, #e2ded2);
 }
 
 .mesa-live {
-  background: rgba(16, 185, 129, 0.12);
-  border-color: rgba(16, 185, 129, 0.38);
-  color: #047857;
+  background: #cdebd9;
+  border-color: rgba(18, 56, 44, 0.25);
+  color: #12382c;
 }
 
 [data-estilo-visual="oscuro"] .mesa-live {
-  background: rgba(52, 211, 153, 0.16);
-  border-color: rgba(110, 231, 183, 0.48);
-  color: #a7f3d0;
+  background: rgba(205, 235, 217, 0.16);
+  border-color: rgba(205, 235, 217, 0.48);
+  color: #cdebd9;
 }

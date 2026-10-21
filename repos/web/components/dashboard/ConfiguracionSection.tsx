@@ -800,7 +800,7 @@ function AparienciaTab({
               <div className="space-y-2">
                 <div className="flex items-center gap-6">
                   <p className="text-13 font-semibold text-ash-graphite">
-                    Marca de agua &quot;Potenciado por Zelko&quot;
+                    Marca de agua &quot;Potenciado por fudd&quot;
                   </p>
                   {!esPro && (
                     <span className="material-symbols-outlined text-16 text-stone">lock</span>
@@ -808,8 +808,8 @@ function AparienciaTab({
                 </div>
                 <p className="text-12 text-sage-green max-w-lg">
                   {esPro
-                    ? "Activá o desactivá el crédito de Zelko al pie de la carta digital de tus comensales."
-                    : "En el plan Free, la carta incluye un pie discreto 'Potenciado por Zelko'. Actualizá a Pro para una experiencia 100% marca blanca."}
+                    ? "Activá o desactivá el crédito de fudd al pie de la carta digital de tus comensales."
+                    : "En el plan Free, la carta incluye un pie discreto 'Potenciado por fudd'. Actualizá a Pro para una experiencia 100% marca blanca."}
                 </p>
               </div>
 
@@ -2028,7 +2028,7 @@ function MercadoPagoTab({
                   <span className="rounded-full bg-ghost-fog px-8 py-2 text-10 font-mono text-sage-green">Automático</span>
                 </div>
                 <p className="mt-6 text-11 leading-relaxed text-sage-green">
-                  No necesitás configurar back_urls. Zelko genera las rutas hacia la mesa y actualiza el pedido en tiempo real.
+                  No necesitás configurar back_urls. fudd genera las rutas hacia la mesa y actualiza el pedido en tiempo real.
                 </p>
               </section>
             </div>

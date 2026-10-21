@@ -197,7 +197,7 @@ export default function StepAccount({
             <span>Acceso seguro</span>
           </div>
           <p className="text-13 leading-normal">
-            Creá una contraseña exclusiva para Zelko. También vas a poder ingresar con Google usando este mismo correo.
+            Creá una contraseña exclusiva para fudd. También vas a poder ingresar con Google usando este mismo correo.
           </p>
         </div>
           </>

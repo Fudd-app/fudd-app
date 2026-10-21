@@ -1,6 +1,6 @@
 export const LEGAL = {
-  brand: "Zelko",
-  operator: "Zelko",
+  brand: "fudd",
+  operator: "fudd",
   country: "República Argentina",
   supportEmail: "supportmesaclick@gmail.com",
   effectiveDate: "6 de octubre de 2026",

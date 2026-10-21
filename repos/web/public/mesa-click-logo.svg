@@ -1,5 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 88 88" role="img" aria-labelledby="title">
-  <title id="title">Zelko</title>
-  <rect width="88" height="88" rx="20" fill="#7F77DD"/>
-  <path d="M 24 26 H 64 L 24 62 H 64" fill="none" stroke="#EEEDFE" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="fudd">
+  <title>fudd</title>
+  <rect width="160" height="160" rx="36" fill="#12382C"/>
+  <g transform="translate(21 21) scale(0.59) translate(-182 -1)">
+    <g fill="none" stroke="#F5F3EC" stroke-width="26">
+      <circle cx="237" cy="120" r="37"/>
+      <path d="M274 20 V120"/>
+      <circle cx="311" cy="120" r="37"/>
+      <path d="M348 20 V170"/>
+    </g>
+    <path d="M274 86.4 A50 50 0 0 0 274 153.6 A50 50 0 0 0 274 86.4 Z" fill="#FF6A3D"/>
+  </g>
 </svg>

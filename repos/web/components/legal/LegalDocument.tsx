@@ -33,9 +33,9 @@ export default function LegalDocument({
     <div className="min-h-screen bg-[#F4F6F7] font-inter text-ash-graphite">
       <header className="border-b border-concrete bg-canvas-white">
         <div className="mx-auto flex min-h-64 w-full max-w-[1240px] items-center justify-between gap-16 px-16 sm:px-24">
-          <Link href="/" className="inline-flex items-center gap-8 whitespace-nowrap" aria-label="Volver a Zelko">
-            <Logo className="h-28 w-28" />
-            <span className="text-17 font-medium lowercase tracking-[-0.03em]">zelko</span>
+          <Link href="/" className="inline-flex items-center gap-8 whitespace-nowrap" aria-label="Volver a fudd">
+            <Logo mark="full" className="h-28 w-auto" />
+            <span className="sr-only">fudd</span>
           </Link>
           <nav className="flex items-center gap-10 whitespace-nowrap text-11 font-semibold sm:gap-16" aria-label="Navegación legal">
             <Link href={alternateHref} className="text-sage-green transition-colors hover:text-ash-graphite">
@@ -140,7 +140,7 @@ export default function LegalDocument({
 
       <footer className="border-t border-concrete bg-canvas-white">
         <div className="mx-auto flex w-full max-w-[1240px] flex-col gap-12 px-16 py-28 text-11 text-sage-green sm:flex-row sm:items-center sm:justify-between sm:px-24">
-          <p>© 2026 Zelko · Hecho en Argentina</p>
+          <p>© 2026 fudd · Hecho en Argentina</p>
           <div className="flex flex-wrap gap-16">
             <a href={`mailto:${LEGAL.supportEmail}`} className="hover:text-ash-graphite">{LEGAL.supportEmail}</a>
             <Link href="/privacidad" className="hover:text-ash-graphite">Privacidad</Link>

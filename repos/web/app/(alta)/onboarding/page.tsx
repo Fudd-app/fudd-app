@@ -196,7 +196,7 @@ export default function OnboardingPage() {
   };
 
   const rubroActual = RUBROS.find((r) => r.valor === rubro) ?? RUBROS[0];
-  const iniciales = nombreNegocio.trim() ? nombreNegocio.trim().slice(0, 2).toUpperCase() : "ZK";
+  const iniciales = nombreNegocio.trim() ? nombreNegocio.trim().slice(0, 2).toUpperCase() : "FD";
 
   return (
     <div className="registro">
@@ -269,7 +269,7 @@ export default function OnboardingPage() {
               <div className="slug-preview">
                 <span className="onboarding-icon small"><LandingIcon name="book" size={18} /></span>
                 <div>
-                  <small>Tu nombre en URL de Zelko</small>
+                  <small>Tu nombre en URL de fudd</small>
                   {editandoSlug ? (
                     <input
                       value={slug}

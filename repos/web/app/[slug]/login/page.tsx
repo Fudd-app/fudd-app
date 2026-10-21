@@ -111,7 +111,7 @@ export default function LoginEquipoPage() {
       .filter(Boolean)
       .slice(0, 2)
       .map((p) => p[0]?.toUpperCase())
-      .join("") || "ZK";
+      .join("") || "FD";
 
   if (cargandoNegocio) {
     return (
@@ -147,7 +147,7 @@ export default function LoginEquipoPage() {
               href="/"
               className="inline-flex h-44 items-center justify-center rounded-xl bg-plain-green px-16 text-13 font-semibold text-canvas-white transition-colors hover:bg-plain-green-muted"
             >
-              Ir al inicio de Zelko
+              Ir al inicio de fudd
             </Link>
             <Link
               href="/login"
@@ -168,8 +168,8 @@ export default function LoginEquipoPage() {
           href="/"
           className="flex items-center gap-8 text-ash-graphite transition-opacity hover:opacity-80"
         >
-          <Logo className="h-22 w-22" />
-          <span className="text-16 font-medium lowercase tracking-[-0.03em]">zelko</span>
+          <Logo mark="full" className="h-24 w-auto" />
+          <span className="sr-only">fudd</span>
         </Link>
         <span className="rounded-full border border-concrete bg-ghost-fog px-10 py-4 font-mono text-11 text-sage-green">
           /{negocio.slug}/login
@@ -307,7 +307,7 @@ export default function LoginEquipoPage() {
       </main>
 
       <footer className="py-12 text-center text-11 text-sage-green">
-        Operación gastronómica en tiempo real · Zelko
+        Operación gastronómica en tiempo real · fudd
       </footer>
     </div>
   );

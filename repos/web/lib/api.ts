@@ -1,6 +1,6 @@
 // repos/web/lib/api.ts
 //
-// Cliente HTTP centralizado para interactuar con la API REST de Zelko (Go).
+// Cliente HTTP centralizado para interactuar con la API REST de fudd (Go).
 // Provee métodos tipados para autenticación, tenant/onboarding, carta, mesas, sucursales y equipo.
 
 export function getApiBaseUrl(): string {

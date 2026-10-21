@@ -1,4 +1,4 @@
-# Zelko — API (Backend)
+# fudd — API (Backend)
 
 Servicio backend desarrollado en **Go** para la gestión de pedidos, carta digital y administración de negocios gastronómicos.
 
@@ -73,4 +73,4 @@ El servidor correrá automáticamente las migraciones pendientes al iniciar.
    - Una vez aprobado en `qa`, merge a `main` (despliegue automático en **Render** como `mesa-click-api` con Docker en Ohio, servicio Free Web Service).
 
 ---
-Zelko — Práctica Profesionalizante I.
+fudd — Práctica Profesionalizante I.

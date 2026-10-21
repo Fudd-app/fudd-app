@@ -8,7 +8,7 @@ export function MarcaAgua({ className = "" }: { className?: string }) {
       <span className="text-12">⚡</span>
       <span>
         Carta digitalizada con{" "}
-        <strong className="font-bold text-ash-graphite">Zelko</strong>
+        <strong className="font-bold text-ash-graphite">fudd</strong>
       </span>
     </div>
   );

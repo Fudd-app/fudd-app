@@ -1,16 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Geist_Mono, Anton } from "next/font/google";
+import { Outfit, DM_Mono, Anton } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 
-const inter = Inter({
+const outfit = Outfit({
   variable: "--font-inter",
+  weight: ["400", "500", "700", "800"],
   subsets: ["latin"],
   display: "swap",
 });
 
-const geistMono = Geist_Mono({
+const dmMono = DM_Mono({
   variable: "--font-mono",
+  weight: ["400", "500"],
   subsets: ["latin"],
   display: "swap",
 });
@@ -35,16 +37,16 @@ const materialSymbols = localFont({
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#ffffff",
+  themeColor: "#12382C",
 };
 
 export const metadata: Metadata = {
-  title: "Zelko | Carta Digital QR, KDS de Cocina y Gestión Gastronómica",
+  title: "fudd | Del QR a la mesa — Carta Digital, KDS de Cocina y Gestión Gastronómica",
   description:
-    "Plataforma web PWA para digitalizar pedidos por QR en bares, cafeterías y restaurantes con salón en vivo, KDS de cocina y analítica.",
+    "Del QR a la mesa. Plataforma web PWA para digitalizar pedidos por QR en bares, cafeterías y restaurantes con salón en vivo, KDS de cocina y analítica.",
   metadataBase: new URL("https://mesa-click-web.onrender.com"),
   icons: {
-    icon: [{ url: "/icon.svg?v=20261021", type: "image/svg+xml", sizes: "any" }],
+    icon: [{ url: "/icon.svg?v=fudd20261021", type: "image/svg+xml", sizes: "any" }],
     apple: "/mesa-click-logo-120.png",
   },
 };
@@ -57,7 +59,7 @@ export default function RootLayout({
   return (
     <html
       lang="es"
-      className={`${inter.variable} ${geistMono.variable} ${anton.variable} ${materialSymbols.variable} h-full antialiased`}
+      className={`${outfit.variable} ${dmMono.variable} ${anton.variable} ${materialSymbols.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-canvas-white text-ash-graphite">
         {children}

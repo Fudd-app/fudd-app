@@ -1,6 +1,6 @@
 // cmd/server/main.go
 //
-// Punto de entrada del servidor Zelko.
+// Punto de entrada del servidor fudd.
 // Cuando corrés "go run ./cmd/server" esto es lo primero que ejecuta Go.
 //
 // Responsabilidades:

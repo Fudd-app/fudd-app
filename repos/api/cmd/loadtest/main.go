@@ -116,7 +116,7 @@ func main() {
 	_ = godotenv.Load()
 	_ = godotenv.Load("repos/api/.env")
 
-	slog.Info("Iniciando prueba de carga Zelko (US-76)",
+	slog.Info("Iniciando prueba de carga fudd (US-76)",
 		"base_url", *baseURL,
 		"tables", *numTables,
 		"duration", duration.String(),
@@ -706,7 +706,7 @@ func round2(v float64) float64 {
 
 func printSummary(r LoadTestReport) {
 	fmt.Println("\n====================================================================================================")
-	fmt.Printf("  ZELKO — REPORTE DE PRUEBA DE CARGA (US-76)\n")
+	fmt.Printf("  FUDD — REPORTE DE PRUEBA DE CARGA (US-76)\n")
 	fmt.Println("====================================================================================================")
 	fmt.Printf("  Duración:           %.2fs\n", r.DurationSec)
 	fmt.Printf("  Mesas simultáneas:  %d mesas (+ 4 streams staff = %d conexiones SSE activas)\n", r.SimulatedTables, r.TotalSSEStreams)
