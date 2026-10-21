@@ -117,7 +117,7 @@ export default function UpgradeModal({
       const cuerpo = encodeURIComponent(
         `Hola equipo de Mesa CLICK,\n\nAlcancé el límite de ${recurso} en mi plan Free y quiero pasar a Pro para seguir expandiendo mi negocio.\n\n¡Gracias!`
       );
-      const mailtoUrl = `mailto:soporte@mesaclick.com?subject=${asunto}&body=${cuerpo}`;
+      const mailtoUrl = `mailto:supportmesaclick@gmail.com?subject=${asunto}&body=${cuerpo}`;
 
       if (typeof window !== "undefined") {
         window.open(mailtoUrl, "_blank");

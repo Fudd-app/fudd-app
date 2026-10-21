@@ -10,7 +10,7 @@ export default function LandingFooter() {
         <p>Tecnología simple para restaurantes que quieren brindar un mejor servicio.</p>
       </div>
       <div><strong>Producto</strong><a href="#como-funciona">Cómo funciona</a><a href="#beneficios">Beneficios</a><a href="#planes">Planes</a><a href="#faq">Preguntas frecuentes</a></div>
-      <div><strong>Compañía</strong><a href="mailto:soporte@mesaclick.com">Contacto</a><Link href="/terminos">Términos</Link><Link href="/privacidad">Privacidad</Link></div>
+      <div><strong>Compañía</strong><a href="mailto:supportmesaclick@gmail.com">Contacto</a><Link href="/terminos">Términos</Link><Link href="/privacidad">Privacidad</Link></div>
       <div className="footer-status"><span><i /> Todos los sistemas operativos</span><small>© 2026 Mesa CLICK · IRESM</small></div>
     </footer>
   );
