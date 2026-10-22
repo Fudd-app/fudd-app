@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Geist_Mono, Anton } from "next/font/google";
 import localFont from "next/font/local";
+import QaBanner from "@/components/ui/QaBanner";
 import "./globals.css";
 
 const inter = Inter({
@@ -60,6 +61,7 @@ export default function RootLayout({
       className={`${inter.variable} ${geistMono.variable} ${anton.variable} ${materialSymbols.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-canvas-white text-ash-graphite">
+        <QaBanner />
         {children}
       </body>
     </html>

@@ -128,7 +128,7 @@ export default function DashboardPage() {
   return (
     <ConfirmProvider>
     <ToastProvider>
-    <div className="flex h-screen flex-col overflow-hidden bg-ghost-fog/45 font-inter">
+    <div className="flex h-[calc(100dvh-var(--qa-banner-offset,0px))] flex-col overflow-hidden bg-ghost-fog/45 font-inter">
       <a
         href="#dashboard-main"
         className="sr-only focus:not-sr-only focus:fixed focus:top-8 focus:left-8 focus:z-50 focus:rounded-lg focus:bg-ash-graphite focus:px-16 focus:py-8 focus:text-13 focus:font-semibold focus:text-canvas-white"
