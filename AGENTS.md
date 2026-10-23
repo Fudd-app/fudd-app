@@ -168,7 +168,7 @@ Ambos ambientes se despliegan automáticamente al pushear a su rama. Detalle de 
 ### Flujo de Desarrollo
 1. **Creación de ramas**: Todo nuevo desarrollo (feature o corrección de bug) **debe crearse a partir de `qa`**:
    - `git checkout qa && git pull`
-   - `git checkout -b feat/US-XX-descripcion` (features)
+   - `git checkout -b feat/<nro-issue>-descripcion` (features)
    - `git checkout -b fix/<nro-issue>-descripcion` (correcciones de bugs)
 2. **Integración en QA**: Al finalizar, abrir PR hacia **`qa`**; se mergea solo después del code review (ver [flujo de trabajo](docs/proceso/flujo-de-trabajo.md)).
 3. **Pase a Producción**: Una vez testeado y validado en `qa`, se mergea hacia **`main`**, lo que despliega automáticamente producción (Vercel + Render).
@@ -176,8 +176,8 @@ Ambos ambientes se despliegan automáticamente al pushear a su rama. Detalle de 
 ---
 
 ## Convenciones generales
-- **Issues y PRs**: el título lleva el repo que toca: `[web]` o `[api]` (ej. `[api] US-88: ...`, `[web] BUG: ...`). Un ítem toca un solo repo; si necesita ambos, se divide.
-- **Branches**: `feat/US-XX-descripcion` o `fix/<nro-issue>-descripcion` (creadas **siempre y sin excepción** a partir de `qa`). **Nunca commitear directo en `main`**.
+- **Issues y PRs**: el título lleva el repo que toca: `[web]` o `[api]` (ej. `[api] Título`, `[web] BUG: ...`); el número es el que asigna GitHub (`#88`), no se agrega `US-N` en el título. Un ítem toca un solo repo; si necesita ambos, se divide.
+- **Branches**: `feat/<nro-issue>-descripcion` o `fix/<nro-issue>-descripcion` (creadas **siempre y sin excepción** a partir de `qa`). **Nunca commitear directo en `main`**.
 - **Commits**: Conventional Commits con scope del repo (`feat(web): ...`, `fix(api): ...`). Explicar el "por qué" en lugar del "qué".
 - **Variables de entorno (`.env`)**: Solicitar credenciales y `.env` para la API directamente a **Pablo Aguirre**.
 - **No duplicar lógica**: Si algo ya está en el backend, el frontend solo lo consume.

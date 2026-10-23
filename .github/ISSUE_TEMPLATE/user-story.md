@@ -1,7 +1,7 @@
 ---
 name: "📋 User Story (Historia de Usuario)"
 about: "Crear una Historia de Usuario refinada para un solo repo ([web] o [api])"
-title: "[web|api] US-XX: Título descriptivo de la funcionalidad"
+title: "[web|api] Título descriptivo de la funcionalidad"
 labels: ["enhancement"]
 assignees: []
 ---
@@ -9,13 +9,13 @@ assignees: []
 <!--
 Flujo completo: docs/proceso/flujo-de-trabajo.md
 - Título: [web] o [api] según el repo que toca. Si toca ambos, crear dos issues.
-- Siguiente número de US: ver "Fase 1 → 3" del flujo de trabajo.
+- Sin número en el título: el issue se identifica por el número que asigna GitHub (#N).
 - Al crearlo: agregarlo al proyecto Fudd APP y completar Status, Estimación, Sprint, Tipo y Rama.
 -->
 
 > **Repo**: `[web] repos/web` | `[api] repos/api`  
 > **Sprint**: Sprint XX (DD/MM – DD/MM/2026)  
-> **Rama de trabajo**: `feat/US-XX-descripcion-corta`  
+> **Rama de trabajo**: `feat/<nro-issue>-descripcion-corta`  
 > **Depende de**: #N | Ninguna  
 
 ---
