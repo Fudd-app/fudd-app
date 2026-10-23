@@ -1159,6 +1159,19 @@ export const api = {
     const query = params.toString();
     return apiFetch<ResenaResumen>(`/resenias/resumen${query ? `?${query}` : ''}`);
   },
+
+  // 13. Telemetría y Superadministración de Plataforma (#62, #63)
+  obtenerStatusPlataforma: async (): Promise<StatusPlataforma> => {
+    return apiFetch<StatusPlataforma>('/api/platform/status');
+  },
+
+  listarTenantsPlataforma: async (): Promise<TenantResumenPlatform[]> => {
+    return apiFetch<TenantResumenPlatform[]>('/api/platform/tenants');
+  },
+
+  obtenerDetalleActividadTenant: async (tenantId: string): Promise<TenantDetalleActividadPlatform> => {
+    return apiFetch<TenantDetalleActividadPlatform>(`/api/platform/tenants/${encodeURIComponent(tenantId)}/actividad`);
+  },
 };
 
 export interface PreferenciaPagoMP {
@@ -1191,4 +1204,77 @@ export interface ErrorFila {
   fila: number;
   motivo: string;
 }
+export interface StatusPlataforma {
+  servicio: string;
+  estado: string;
+  database: string;
+  timestamp: string;
+  uptime_segundos: number;
+  total_tenants: number;
+  total_sucursales: number;
+  total_mesas: number;
+  total_usuarios: number;
+  pedidos_hoy: number;
+  total_ventas_hoy: number;
+  usuarios_online: number;
+  goroutines: number;
+  heap_alloc_mb: number;
+  sse_canales: number;
+  sse_suscriptores: number;
+  pool_stats?: {
+    max_conns: number;
+    total_conns: number;
+    acquired_conns: number;
+    idle_conns: number;
+  };
+}
 
+export interface TenantResumenPlatform {
+  id: string;
+  nombre: string;
+  nombre_fantasia?: string;
+  slug: string;
+  rubro?: string;
+  plan: string;
+  trial_hasta?: string;
+  created_at: string;
+  total_sucursales: number;
+  total_mesas: number;
+  mesas_activas: number;
+  total_usuarios: number;
+  usuarios_por_rol: Record<string, number>;
+  total_pedidos: number;
+  total_ventas: number;
+  ultimo_pedido_at?: string;
+}
+
+export interface UsuarioPresenciaPlatform {
+  id: string;
+  tenant_id: string;
+  sucursal_id?: string;
+  sucursal_nombre?: string;
+  nombre: string;
+  email: string;
+  username?: string;
+  rol: string;
+  estado: string;
+  ultimo_login_at?: string;
+  ultima_actividad_at?: string;
+  estado_presencia: "online" | "inactivo" | "desconectado";
+  created_at: string;
+}
+
+export interface MovimientoPlatform {
+  id: string;
+  tipo: "pedido" | "usuario" | "invitacion" | "resena" | string;
+  descripcion: string;
+  actor: string;
+  fecha: string;
+  detalle?: Record<string, any>;
+}
+
+export interface TenantDetalleActividadPlatform {
+  tenant: TenantResumenPlatform;
+  usuarios: UsuarioPresenciaPlatform[];
+  ultimos_movimientos: MovimientoPlatform[];
+}
