@@ -64,3 +64,65 @@ func TestCORSCredencialesSoloParaOrigenPermitido(t *testing.T) {
 		t.Fatalf("un origen ajeno no debe recibir CORS con credenciales: status=%d", respuestaDenegada.Code)
 	}
 }
+
+func nuevoCORSDePrueba(t *testing.T) http.Handler {
+	t.Helper()
+	t.Setenv("APP_URL", "https://app.example.com")
+	t.Setenv("APP_ENV", "production")
+	return corsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+}
+
+func TestCORS_RutasOAuthPublicas(t *testing.T) {
+	manejador := nuevoCORSDePrueba(t)
+
+	for _, ruta := range []string{"/oauth/token", "/oauth/register", "/oauth/revoke", "/.well-known/oauth-authorization-server"} {
+		req := httptest.NewRequest(http.MethodOptions, ruta, nil)
+		req.Header.Set("Origin", "https://claude.ai")
+		rec := httptest.NewRecorder()
+		manejador.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNoContent {
+			t.Errorf("%s OPTIONS: got %d, want 204", ruta, rec.Code)
+		}
+		if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+			t.Errorf("%s Allow-Origin: got %q, want *", ruta, got)
+		}
+		if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != "" {
+			t.Errorf("%s no debe enviar Allow-Credentials, got %q", ruta, got)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/oauth/token", nil)
+	req.Header.Set("Origin", "https://claude.ai")
+	rec := httptest.NewRecorder()
+	manejador.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || rec.Header().Get("Access-Control-Allow-Origin") != "*" {
+		t.Errorf("POST /oauth/token: got %d / %q", rec.Code, rec.Header().Get("Access-Control-Allow-Origin"))
+	}
+}
+
+func TestCORS_RutasNoPublicasMantienenPolitica(t *testing.T) {
+	manejador := nuevoCORSDePrueba(t)
+
+	for _, ruta := range []string{"/mesas", "/oauth/authorize"} {
+		req := httptest.NewRequest(http.MethodOptions, ruta, nil)
+		req.Header.Set("Origin", "https://claude.ai")
+		rec := httptest.NewRecorder()
+		manejador.ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("origen ajeno en %s: got %d, want 403", ruta, rec.Code)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodOptions, "/mesas", nil)
+	req.Header.Set("Origin", "https://app.example.com")
+	rec := httptest.NewRecorder()
+	manejador.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent ||
+		rec.Header().Get("Access-Control-Allow-Origin") != "https://app.example.com" ||
+		rec.Header().Get("Access-Control-Allow-Credentials") != "true" {
+		t.Errorf("origen propio en /mesas: got %d, headers %v", rec.Code, rec.Header())
+	}
+}
