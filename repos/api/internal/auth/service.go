@@ -357,6 +357,10 @@ func ValidarJWT(tokenStr, secreto string) (*Claims, error) {
 	if !ok {
 		return nil, errors.New("claims inválidos")
 	}
+	// Un token con audiencia es de otro recurso (ej. MCP), nunca de sesión web.
+	if _, tieneAud := mc["aud"]; tieneAud {
+		return nil, errors.New("token inválido")
+	}
 	usuarioID, ok1 := mc["usuario_id"].(string)
 	tenantID, ok2 := mc["tenant_id"].(string)
 	rol, ok3 := mc["rol"].(string)

@@ -678,3 +678,22 @@ func TestAutenticarStaffPorSlug_RechazaUsuarioBloqueadoYAislamientoPorTenant(t *
 		t.Fatalf("esperaba ErrCredencialesInvalidas por clave incorrecta, got: %v", err)
 	}
 }
+
+func TestValidarJWT_RechazaTokenConAudiencia(t *testing.T) {
+	secreto := "secreto-de-prueba"
+	token := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, jwtlib.MapClaims{
+		"usuario_id": "user-123",
+		"tenant_id":  "tenant-456",
+		"rol":        "admin",
+		"aud":        "https://mcp.example.com/mcp",
+		"exp":        time.Now().Add(time.Hour).Unix(),
+	})
+	firmado, err := token.SignedString([]byte(secreto))
+	if err != nil {
+		t.Fatalf("firmando token: %v", err)
+	}
+
+	if _, err := auth.ValidarJWT(firmado, secreto); err == nil {
+		t.Fatal("se esperaba error para un token con aud")
+	}
+}

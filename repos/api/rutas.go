@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net"
@@ -18,6 +19,7 @@ import (
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/mesa"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/metrica"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/notificacion"
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/oauth"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/pedido"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/platform"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/resenia"
@@ -242,6 +244,26 @@ func registrarRutas(mux *http.ServeMux) {
 	mux.HandleFunc("POST /publica/mesas/{qr_token}/resena", reseniaH.Crear)
 	mux.HandleFunc("PATCH /publica/mesas/{qr_token}/resena/google-click", reseniaH.RegistrarClickGoogle)
 
+	// OAuth 2.1 para clientes MCP (#55)
+	if oauthCfg, err := oauth.ConfigDesdeEntorno(); err != nil {
+		slog.Error("OAuth MCP deshabilitado", "error", err)
+	} else {
+		oauthSvc := oauth.NuevoService(oauth.NuevoStore(), authStore, negociosOAuth{tenantStore}, oauthCfg)
+		oauthH := oauth.NuevosHandlers(oauthSvc)
+		mux.HandleFunc("GET /.well-known/oauth-protected-resource", oauthH.MetadataRecurso)
+		mux.HandleFunc("GET /.well-known/oauth-protected-resource/mcp", oauthH.MetadataRecurso)
+		mux.HandleFunc("GET /.well-known/oauth-authorization-server", oauthH.MetadataServidor)
+		mux.HandleFunc("POST /oauth/register", oauthH.Registrar)
+		mux.HandleFunc("GET /oauth/authorize", oauthH.Autorizar)
+		mux.Handle("GET /oauth/solicitudes/{id}", requerirSesion(http.HandlerFunc(oauthH.VerSolicitud)))
+		mux.Handle("POST /oauth/solicitudes/{id}/aprobar", requerirSesion(http.HandlerFunc(oauthH.Aprobar)))
+		mux.Handle("POST /oauth/solicitudes/{id}/rechazar", requerirSesion(http.HandlerFunc(oauthH.Rechazar)))
+		mux.HandleFunc("POST /oauth/token", oauthH.Token)
+		mux.HandleFunc("POST /oauth/revoke", oauthH.Revocar)
+		mux.Handle("GET /oauth/conexiones", requerirSesion(http.HandlerFunc(oauthH.ListarConexiones)))
+		mux.Handle("DELETE /oauth/conexiones/{id}", requerirSesion(http.HandlerFunc(oauthH.RevocarConexion)))
+	}
+
 	// Mercado Pago (Sandbox / Producción)
 	mpAccessToken := os.Getenv("MERCADOPAGO_ACCESS_TOKEN")
 	appURL := os.Getenv("APP_URL")
@@ -264,6 +286,20 @@ func registrarRutas(mux *http.ServeMux) {
 	mux.Handle("GET /api/platform/status", requerirSuper(http.HandlerFunc(platformH.Status)))
 	mux.Handle("GET /api/platform/tenants", requerirSuper(http.HandlerFunc(platformH.ListarTenants)))
 	mux.Handle("GET /api/platform/tenants/{id}/actividad", requerirSuper(http.HandlerFunc(platformH.DetalleActividad)))
+}
+
+// negociosOAuth adapta el store de tenants a oauth.Negocios.
+type negociosOAuth struct{ store tenant.Store }
+
+func (n negociosOAuth) NombreNegocio(ctx context.Context, tenantID string) (string, error) {
+	t, err := n.store.ObtenerPorID(ctx, tenantID)
+	if err != nil {
+		return "", err
+	}
+	if t.NombreFantasia != "" {
+		return t.NombreFantasia, nil
+	}
+	return t.Nombre, nil
 }
 
 func handlerHealth(w http.ResponseWriter, r *http.Request) {
