@@ -9,7 +9,6 @@ export interface ComandaCardProps {
   nombreSector?: string;
   onCambiarEstadoItem: (itemId: string, nuevoEstado: "pendiente" | "preparando" | "listo") => Promise<void>;
   onComandasCompletasLista: (pedidoIds: string[]) => Promise<void>;
-  onDespacharComandas: (pedidoIds: string[]) => Promise<void>;
   onImprimirTicket?: (pedidos: PedidoAPI[], numeroMesa: number, nombreSector?: string) => void;
   ticketImpreso?: boolean;
   errorImpresion?: boolean;
@@ -21,7 +20,6 @@ export function ComandaCard({
   nombreSector,
   onCambiarEstadoItem,
   onComandasCompletasLista,
-  onDespacharComandas,
   onImprimirTicket,
   ticketImpreso = false,
   errorImpresion = false,
@@ -100,16 +98,6 @@ export function ComandaCard({
     try {
       setCargandoAccion(true);
       await onComandasCompletasLista(pedidoIds);
-    } finally {
-      setCargandoAccion(false);
-    }
-  }
-
-  async function handleDespachar() {
-    if (cargandoAccion) return;
-    try {
-      setCargandoAccion(true);
-      await onDespacharComandas(pedidoIds);
     } finally {
       setCargandoAccion(false);
     }
@@ -300,21 +288,14 @@ export function ComandaCard({
             )}
           </button>
         ) : (
-          <button
-            type="button"
-            onClick={handleDespachar}
-            disabled={cargandoAccion}
-            className="animate-pulse-slow flex min-h-48 flex-1 cursor-pointer items-center justify-center gap-7 rounded-lg bg-[#14A77B] px-10 text-13 font-black text-white shadow-md transition-all hover:bg-[#0E8E68] active:scale-[0.98] disabled:opacity-50"
+          // Cocina no entrega: el mozo marca "entregado" y recién ahí sale del KDS.
+          <div
+            className="animate-pulse-slow flex min-h-48 flex-1 items-center justify-center gap-7 rounded-lg bg-[#14A77B] px-10 text-13 font-black text-white shadow-md"
+            role="status"
           >
-            {cargandoAccion ? (
-              <span>Despachando...</span>
-            ) : (
-              <>
-                <span className="material-symbols-outlined text-18">notifications</span>
-                <span>Despachar {pedidos.length > 1 ? "grupo" : "pedido"}</span>
-              </>
-            )}
-          </button>
+            <span className="material-symbols-outlined text-18">notifications</span>
+            <span>Listo para retirar</span>
+          </div>
         )}
       </div>
     </article>

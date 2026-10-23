@@ -1,6 +1,6 @@
 // repos/web/components/kds/HistorialDespachoDrawer.tsx
 "use client";
-import React, { useState } from "react";
+import React from "react";
 import { PedidoAPI } from "@/lib/api";
 
 export interface HistorialDespachoDrawerProps {
@@ -8,7 +8,6 @@ export interface HistorialDespachoDrawerProps {
   onClose: () => void;
   pedidosDespachados: PedidoAPI[];
   mesasMap: Record<string, { numero: number; sector?: string }>;
-  onReabrir: (pedidoId: string) => Promise<void>;
 }
 
 export function HistorialDespachoDrawer({
@@ -16,21 +15,8 @@ export function HistorialDespachoDrawer({
   onClose,
   pedidosDespachados,
   mesasMap,
-  onReabrir,
 }: HistorialDespachoDrawerProps) {
-  const [reabriendoId, setReabriendoId] = useState<string | null>(null);
-
   if (!isOpen) return null;
-
-  async function handleReabrir(pedidoId: string) {
-    if (reabriendoId) return;
-    try {
-      setReabriendoId(pedidoId);
-      await onReabrir(pedidoId);
-    } finally {
-      setReabriendoId(null);
-    }
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -72,7 +58,7 @@ export function HistorialDespachoDrawer({
               <span className="material-symbols-outlined mb-8 text-36 text-[#4D8EDB]">skillet</span>
               <p className="text-15 font-semibold text-ash-graphite">Sin comandas despachadas aún</p>
               <p className="mt-3 max-w-xs text-12 text-sage-green">
-                A medida que despaches pedidos completados, aparecerán aquí para poder reabrirlos si hubo algún error.
+                A medida que se entreguen los pedidos, aparecerán aquí.
               </p>
             </div>
           ) : (
@@ -84,7 +70,6 @@ export function HistorialDespachoDrawer({
                 hour: "2-digit",
                 minute: "2-digit",
               });
-              const esReabriendo = reabriendoId === pedido.id;
 
               return (
                 <div
@@ -131,25 +116,6 @@ export function HistorialDespachoDrawer({
                     ) : (
                       <span className="text-12 italic text-sage-green">Comanda sin ítems</span>
                     )}
-                  </div>
-
-                  {/* Botón Reabrir / Deshacer (US-66) */}
-                  <div className="pt-6">
-                    <button
-                      type="button"
-                      onClick={() => handleReabrir(pedido.id)}
-                      disabled={esReabriendo}
-                      className="flex min-h-48 w-full cursor-pointer items-center justify-center gap-6 rounded-lg border border-[#C9DCF7] bg-[#EAF3FF] text-12 font-bold text-[#285F9F] transition-all hover:bg-[#DDEBFD] active:scale-[0.98] disabled:opacity-50"
-                    >
-                      {esReabriendo ? (
-                        <span>Reabriendo comanda...</span>
-                      ) : (
-                        <>
-                          <span className="material-symbols-outlined text-18">undo</span>
-                          <span>Reabrir y devolver a cocina</span>
-                        </>
-                      )}
-                    </button>
                   </div>
                 </div>
               );
