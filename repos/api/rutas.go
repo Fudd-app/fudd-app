@@ -15,6 +15,7 @@ import (
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/carta"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/db"
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/mcp"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/mercadopago"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/mesa"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/metrica"
@@ -262,6 +263,13 @@ func registrarRutas(mux *http.ServeMux) {
 		mux.HandleFunc("POST /oauth/revoke", oauthH.Revocar)
 		mux.Handle("GET /oauth/conexiones", requerirSesion(http.HandlerFunc(oauthH.ListarConexiones)))
 		mux.Handle("DELETE /oauth/conexiones/{id}", requerirSesion(http.HandlerFunc(oauthH.RevocarConexion)))
+
+		// Servidor MCP de solo lectura (#56); se habilita con MCP_HABILITADO=true
+		mux.Handle("/mcp", mcp.NuevoHandler(oauthSvc, mcp.Dependencias{
+			Store:    mcp.NuevoStore(),
+			Metricas: metricaSvc,
+			Ahora:    time.Now,
+		}))
 	}
 
 	// Mercado Pago (Sandbox / Producción)
