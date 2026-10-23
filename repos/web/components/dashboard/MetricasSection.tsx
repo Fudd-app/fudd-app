@@ -9,6 +9,7 @@ import {
   MetricasResumenAPI,
   Sucursal,
 } from "@/lib/api";
+import { exportarExcelReporte, imprimirInformePDF } from "@/lib/export";
 import { Skeleton } from "@/components/ui";
 
 const FORMATO_MONEDA = new Intl.NumberFormat("es-AR", {
@@ -46,7 +47,7 @@ const COLORES_CATEGORIA = [
   { bg: "#EC4899", text: "#FFFFFF", border: "#BE185D" },
 ];
 
-export type PresetRango = "hoy" | "ayer" | "esta_semana" | "este_mes";
+export type PresetRango = "hoy" | "ayer" | "esta_semana" | "este_mes" | "personalizado";
 
 interface RangoFechas {
   desde: string;
@@ -65,7 +66,11 @@ function formatearFechaISO(date: Date): string {
   return `${valor.year}-${valor.month}-${valor.day}`;
 }
 
-function calcularRango(preset: PresetRango): RangoFechas {
+function calcularRango(
+  preset: PresetRango,
+  personalizadoDesde?: string,
+  personalizadoHasta?: string
+): RangoFechas {
   const ahora = new Date();
   const hoyStr = formatearFechaISO(ahora);
 
@@ -80,8 +85,7 @@ function calcularRango(preset: PresetRango): RangoFechas {
   }
 
   if (preset === "esta_semana") {
-    // Lunes de la semana actual
-    const diaSemana = ahora.getDay(); // 0 es Domingo
+    const diaSemana = ahora.getDay();
     const diasDesdeLunes = diaSemana === 0 ? 6 : diaSemana - 1;
     const lunes = new Date(ahora.getTime() - diasDesdeLunes * 24 * 60 * 60 * 1000);
     return {
@@ -97,6 +101,14 @@ function calcularRango(preset: PresetRango): RangoFechas {
       desde: formatearFechaISO(primerDia),
       hasta: hoyStr,
       etiqueta: "Este mes",
+    };
+  }
+
+  if (preset === "personalizado" && personalizadoDesde && personalizadoHasta) {
+    return {
+      desde: personalizadoDesde,
+      hasta: personalizadoHasta,
+      etiqueta: "Personalizado",
     };
   }
 
@@ -326,7 +338,6 @@ const DIAS_SEMANA_HEATMAP = [
   { dow: 0, label: "Dom", nombre: "Domingo" },
 ];
 
-// Horarios de 08:00 a 02:00 (19 columnas)
 const HORARIOS_HEATMAP = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2];
 
 function MapaCalorCard({ mapaCalor }: { mapaCalor: CeldaCalorAPI[] }) {
@@ -338,7 +349,6 @@ function MapaCalorCard({ mapaCalor }: { mapaCalor: CeldaCalorAPI[] }) {
     monto: number;
   } | null>(null);
 
-  // Indexar matriz para búsqueda O(1)
   const celdaMap = useMemo(() => {
     const mapa = new Map<string, CeldaCalorAPI>();
     for (const celda of mapaCalor) {
@@ -347,7 +357,6 @@ function MapaCalorCard({ mapaCalor }: { mapaCalor: CeldaCalorAPI[] }) {
     return mapa;
   }, [mapaCalor]);
 
-  // Encontrar valores máximos y estadísticas
   const { maximoValor, picoDia, picoHora, totalPedidos, totalMonto } = useMemo(() => {
     let max = 0;
     let pedidosTotales = 0;
@@ -367,8 +376,7 @@ function MapaCalorCard({ mapaCalor }: { mapaCalor: CeldaCalorAPI[] }) {
       pedidosPorHora.set(celda.hora, (pedidosPorHora.get(celda.hora) || 0) + celda.pedidos);
     }
 
-    // Calcular día y hora pico
-    let mejorDiaDow = 5; // Default Vie
+    let mejorDiaDow = 5;
     let maxDia = 0;
     pedidosPorDia.forEach((cant, dow) => {
       if (cant > maxDia) {
@@ -412,7 +420,6 @@ function MapaCalorCard({ mapaCalor }: { mapaCalor: CeldaCalorAPI[] }) {
 
   return (
     <section className="overflow-hidden rounded-xl border border-concrete bg-canvas-white shadow-xs">
-      {/* Header con Switch de Métrica */}
       <div className="flex flex-col gap-12 border-b border-concrete px-16 py-14 sm:flex-row sm:items-center sm:justify-between sm:px-20">
         <div>
           <div className="flex items-center gap-8">
@@ -424,7 +431,6 @@ function MapaCalorCard({ mapaCalor }: { mapaCalor: CeldaCalorAPI[] }) {
           </p>
         </div>
 
-        {/* Selector de métrica */}
         <div className="flex items-center gap-6 rounded-lg border border-concrete bg-ghost-fog p-3">
           <button
             type="button"
@@ -452,10 +458,8 @@ function MapaCalorCard({ mapaCalor }: { mapaCalor: CeldaCalorAPI[] }) {
       </div>
 
       <div className="p-16 sm:p-20 space-y-16">
-        {/* Grilla con scroll horizontal responsivo para tablets/móviles */}
         <div className="overflow-x-auto pb-8">
           <div className="min-w-[680px]">
-            {/* Cabecera de horas */}
             <div className="grid grid-cols-[54px_repeat(19,minmax(28px,1fr))] gap-4 pb-6 text-center text-10 font-mono text-sage-green">
               <span className="text-left font-semibold">Día</span>
               {HORARIOS_HEATMAP.map((hora) => (
@@ -465,7 +469,6 @@ function MapaCalorCard({ mapaCalor }: { mapaCalor: CeldaCalorAPI[] }) {
               ))}
             </div>
 
-            {/* Filas de días */}
             <div className="space-y-4">
               {DIAS_SEMANA_HEATMAP.map((dia) => (
                 <div
@@ -511,7 +514,6 @@ function MapaCalorCard({ mapaCalor }: { mapaCalor: CeldaCalorAPI[] }) {
           </div>
         </div>
 
-        {/* Tooltip interactivo flotante / barra de detalle fija */}
         <div className="min-h-44 rounded-lg border border-concrete bg-ghost-fog/80 px-14 py-8 flex flex-wrap items-center justify-between gap-10 text-11">
           {celdaHover ? (
             <>
@@ -547,9 +549,7 @@ function MapaCalorCard({ mapaCalor }: { mapaCalor: CeldaCalorAPI[] }) {
           )}
         </div>
 
-        {/* Leyenda y Estadísticas de Afluencia */}
         <div className="flex flex-col gap-12 sm:flex-row sm:items-center sm:justify-between border-t border-concrete pt-14 text-11 text-sage-green">
-          {/* Leyenda de intensidad */}
           <div className="flex items-center gap-8">
             <span className="text-10 font-mono">Baja demanda</span>
             <div className="flex items-center gap-3">
@@ -563,7 +563,6 @@ function MapaCalorCard({ mapaCalor }: { mapaCalor: CeldaCalorAPI[] }) {
             <span className="text-10 font-mono">Pico</span>
           </div>
 
-          {/* Resumen rápido */}
           <div className="flex flex-wrap items-center gap-14 text-11 font-medium text-ash-graphite">
             <span>
               Día más fuerte: <strong className="text-[#087657]">{picoDia}</strong>
@@ -612,6 +611,8 @@ export default function MetricasSection() {
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [sucursalId, setSucursalId] = useState("");
   const [presetRango, setPresetRango] = useState<PresetRango>("esta_semana");
+  const [fechaDesdePersonalizada, setFechaDesdePersonalizada] = useState(() => formatearFechaISO(new Date()));
+  const [fechaHastaPersonalizada, setFechaHastaPersonalizada] = useState(() => formatearFechaISO(new Date()));
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [actualizadoA, setActualizadoA] = useState<Date | null>(null);
@@ -631,11 +632,16 @@ export default function MetricasSection() {
   }, []);
 
   const cargarMetricas = useCallback(
-    async (sucursalSeleccionada = sucursalId, presetSeleccionado = presetRango) => {
+    async (
+      sucursalSeleccionada = sucursalId,
+      presetSeleccionado = presetRango,
+      desdePersonalizado = fechaDesdePersonalizada,
+      hastaPersonalizado = fechaHastaPersonalizada
+    ) => {
       setCargando(true);
       setError("");
       try {
-        const rango = calcularRango(presetSeleccionado);
+        const rango = calcularRango(presetSeleccionado, desdePersonalizado, hastaPersonalizado);
         const data = await api.obtenerMetricasResumen({
           desde: rango.desde,
           hasta: rango.hasta,
@@ -649,7 +655,7 @@ export default function MetricasSection() {
         setCargando(false);
       }
     },
-    [sucursalId, presetRango]
+    [sucursalId, presetRango, fechaDesdePersonalizada, fechaHastaPersonalizada]
   );
 
   useEffect(() => {
@@ -679,7 +685,25 @@ export default function MetricasSection() {
     };
   }, [resumen]);
 
-  const rangoActual = useMemo(() => calcularRango(presetRango), [presetRango]);
+  const rangoActual = useMemo(
+    () => calcularRango(presetRango, fechaDesdePersonalizada, fechaHastaPersonalizada),
+    [presetRango, fechaDesdePersonalizada, fechaHastaPersonalizada]
+  );
+
+  const sucursalNombre = useMemo(
+    () => sucursales.find((s) => s.id === sucursalId)?.nombre ?? "Todo el negocio",
+    [sucursales, sucursalId]
+  );
+
+  function handleExportarExcel() {
+    if (!resumen) return;
+    exportarExcelReporte(resumen, "Mesa CLICK", sucursalNombre);
+  }
+
+  function handleImprimirPDF() {
+    if (!resumen) return;
+    imprimirInformePDF(resumen, "Mesa CLICK", sucursalNombre);
+  }
 
   return (
     <div className="h-full overflow-y-auto bg-[#F4F6F7] p-16 font-inter sm:p-24 md:p-32">
@@ -698,8 +722,8 @@ export default function MetricasSection() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-10 sm:flex-row sm:items-center">
-            {/* Selector de Presets Temporales */}
+          <div className="flex flex-wrap items-center gap-10">
+            {/* Selector de Presets Temporales (US-75) */}
             <div className="flex items-center rounded-lg border border-concrete bg-canvas-white p-3 shadow-xs">
               {(
                 [
@@ -707,6 +731,7 @@ export default function MetricasSection() {
                   { id: "ayer", label: "Ayer" },
                   { id: "esta_semana", label: "Esta semana" },
                   { id: "este_mes", label: "Este mes" },
+                  { id: "personalizado", label: "Personalizado" },
                 ] as const
               ).map((preset) => (
                 <button
@@ -714,7 +739,9 @@ export default function MetricasSection() {
                   type="button"
                   onClick={() => {
                     setPresetRango(preset.id);
-                    void cargarMetricas(sucursalId, preset.id);
+                    if (preset.id !== "personalizado") {
+                      void cargarMetricas(sucursalId, preset.id);
+                    }
                   }}
                   className={`rounded-md px-10 py-5 text-11 font-semibold transition-all ${
                     presetRango === preset.id
@@ -739,7 +766,7 @@ export default function MetricasSection() {
                 setSucursalId(siguienteSucursal);
                 void cargarMetricas(siguienteSucursal, presetRango);
               }}
-              className="h-40 min-w-[200px] rounded-lg border border-concrete bg-canvas-white px-12 text-12 text-ash-graphite shadow-xs"
+              className="h-40 min-w-[180px] rounded-lg border border-concrete bg-canvas-white px-12 text-12 text-ash-graphite shadow-xs"
             >
               <option value="">Todo el negocio</option>
               {sucursales.map((sucursal) => (
@@ -749,12 +776,36 @@ export default function MetricasSection() {
               ))}
             </select>
 
+            {/* Botones de Exportación (US-75) */}
+            <div className="flex items-center gap-6">
+              <button
+                type="button"
+                onClick={handleExportarExcel}
+                disabled={!resumen || cargando}
+                className="inline-flex h-40 items-center justify-center gap-6 rounded-lg border border-concrete bg-canvas-white px-12 text-12 font-semibold text-ash-graphite shadow-xs transition-colors hover:bg-ghost-fog disabled:cursor-not-allowed disabled:opacity-50"
+                title="Exportar a Excel / CSV (.csv UTF-8 compatible)"
+              >
+                <span className="material-symbols-outlined text-18 text-[#087657]">table_view</span>
+                Excel
+              </button>
+              <button
+                type="button"
+                onClick={handleImprimirPDF}
+                disabled={!resumen || cargando}
+                className="inline-flex h-40 items-center justify-center gap-6 rounded-lg border border-concrete bg-canvas-white px-12 text-12 font-semibold text-ash-graphite shadow-xs transition-colors hover:bg-ghost-fog disabled:cursor-not-allowed disabled:opacity-50"
+                title="Descargar o imprimir informe ejecutivo en PDF (A4)"
+              >
+                <span className="material-symbols-outlined text-18 text-[#287CC1]">picture_as_pdf</span>
+                PDF
+              </button>
+            </div>
+
             {/* Botón Refrescar */}
             <button
               type="button"
               onClick={() => void cargarMetricas()}
               disabled={cargando}
-              className="inline-flex h-40 items-center justify-center gap-6 rounded-lg border border-concrete bg-canvas-white px-14 text-12 font-semibold text-ash-graphite shadow-xs transition-colors hover:bg-ghost-fog disabled:cursor-wait disabled:opacity-60"
+              className="inline-flex h-40 items-center justify-center gap-6 rounded-lg border border-concrete bg-canvas-white px-12 text-12 font-semibold text-ash-graphite shadow-xs transition-colors hover:bg-ghost-fog disabled:cursor-wait disabled:opacity-60"
             >
               <span className={`material-symbols-outlined text-16 ${cargando ? "animate-spin" : ""}`}>
                 refresh
@@ -764,12 +815,58 @@ export default function MetricasSection() {
           </div>
         </header>
 
+        {/* Barra de Rango Personalizado si está activo (US-75) */}
+        {presetRango === "personalizado" && (
+          <section className="flex flex-wrap items-center justify-between gap-12 rounded-xl border border-concrete bg-canvas-white p-14 shadow-xs">
+            <div className="flex items-center gap-8 text-12 font-semibold text-ash-graphite">
+              <span className="material-symbols-outlined text-18 text-sage-green">date_range</span>
+              <span>Filtro de fechas personalizado:</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-10">
+              <div className="flex items-center gap-6 text-11 text-sage-green">
+                <span>Desde:</span>
+                <input
+                  type="date"
+                  value={fechaDesdePersonalizada}
+                  max={fechaHastaPersonalizada}
+                  onChange={(e) => setFechaDesdePersonalizada(e.target.value)}
+                  className="h-36 rounded-lg border border-concrete bg-ghost-fog px-10 text-12 text-ash-graphite"
+                />
+              </div>
+              <div className="flex items-center gap-6 text-11 text-sage-green">
+                <span>Hasta:</span>
+                <input
+                  type="date"
+                  value={fechaHastaPersonalizada}
+                  min={fechaDesdePersonalizada}
+                  onChange={(e) => setFechaHastaPersonalizada(e.target.value)}
+                  className="h-36 rounded-lg border border-concrete bg-ghost-fog px-10 text-12 text-ash-graphite"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  void cargarMetricas(
+                    sucursalId,
+                    "personalizado",
+                    fechaDesdePersonalizada,
+                    fechaHastaPersonalizada
+                  )
+                }
+                className="h-36 rounded-lg bg-ash-graphite px-14 text-12 font-semibold text-canvas-white transition-opacity hover:opacity-90"
+              >
+                Aplicar filtro
+              </button>
+            </div>
+          </section>
+        )}
+
         {/* Barra de estado del período activo */}
         <div className="flex flex-wrap items-center justify-between gap-8 border-y border-concrete py-10 text-11 text-sage-green">
           <span className="inline-flex items-center gap-6 font-medium">
             <span className="material-symbols-outlined text-16 text-ash-graphite">calendar_month</span>
             Período: <strong className="text-ash-graphite">{rangoActual.etiqueta}</strong> ({rangoActual.desde} al{" "}
-            {rangoActual.hasta}) · Horario Argentina (ART)
+            {rangoActual.hasta}) · {sucursalNombre} · ART
           </span>
           {actualizadoA && (
             <span>
