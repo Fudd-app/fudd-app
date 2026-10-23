@@ -614,6 +614,21 @@ export interface MetricaEstadoAPI {
   cantidad: number;
 }
 
+export interface MetricaCategoriaAPI {
+  categoria_id: string;
+  nombre: string;
+  unidades: number;
+  monto: number;
+  porcentaje: number;
+}
+
+export interface CeldaCalorAPI {
+  dia_semana: number;
+  hora: number;
+  pedidos: number;
+  monto: number;
+}
+
 export interface MetricasResumenAPI {
   periodo: {
     desde: string;
@@ -640,6 +655,8 @@ export interface MetricasResumenAPI {
   por_dia: MetricaDiariaAPI[];
   por_turno: MetricaTurnoAPI[];
   por_estado: MetricaEstadoAPI[];
+  por_categoria?: MetricaCategoriaAPI[];
+  mapa_calor?: CeldaCalorAPI[];
 }
 
 export interface NuevoPedidoInput {
@@ -1336,7 +1353,7 @@ export interface MovimientoPlatform {
   descripcion: string;
   actor: string;
   fecha: string;
-  detalle?: Record<string, any>;
+  detalle?: Record<string, unknown>;
 }
 
 export interface TenantDetalleActividadPlatform {
