@@ -17,8 +17,9 @@ type Store interface {
 	SucursalesDelTenant(ctx context.Context, tenantID string) ([]SucursalResumen, error)
 	EstadoSalon(ctx context.Context, tenantID, sucursalID string, ahora time.Time) ([]MesaEstado, error)
 	PedidosCocina(ctx context.Context, tenantID, sucursalID string, ahora time.Time) ([]PedidoCocina, error)
-	DespachoPromedio(ctx context.Context, tenantID, sucursalID string, desde time.Time) (*float64, error)
+	UltimaHoraCocina(ctx context.Context, tenantID, sucursalID string, ahora time.Time) (UltimaHora, error)
 	ComensalesAtendidos(ctx context.Context, tenantID, sucursalID string, desde, hasta time.Time) (int, error)
+	ResumenPorHora(ctx context.Context, tenantID, sucursalID string, desde, hasta time.Time, zona string) ([]HoraTurno, error)
 }
 
 type pgStore struct{}
@@ -50,7 +51,9 @@ func (s *pgStore) SucursalesDelTenant(ctx context.Context, tenantID string) ([]S
 	}
 	rows, err := db.Pool.Query(ctx, `
 		SELECT su.id, su.nombre,
-		       (SELECT COUNT(*) FROM mesas m WHERE m.sucursal_id = su.id AND m.estado = 'activa')::int
+		       (SELECT COUNT(*) FROM mesas m WHERE m.sucursal_id = su.id)::int,
+		       (SELECT COUNT(*) FROM mesas m WHERE m.sucursal_id = su.id AND m.estado = 'activa')::int,
+		       su.horarios
 		FROM sucursales su
 		WHERE su.tenant_id = $1
 		ORDER BY su.nombre, su.id`, tenantID)
@@ -61,7 +64,7 @@ func (s *pgStore) SucursalesDelTenant(ctx context.Context, tenantID string) ([]S
 	resultado := []SucursalResumen{}
 	for rows.Next() {
 		var r SucursalResumen
-		if err := rows.Scan(&r.ID, &r.Nombre, &r.MesasActivas); err != nil {
+		if err := rows.Scan(&r.ID, &r.Nombre, &r.MesasTotales, &r.MesasActivas, &r.Horarios); err != nil {
 			return nil, err
 		}
 		resultado = append(resultado, r)
@@ -86,7 +89,15 @@ func (s *pgStore) EstadoSalon(ctx context.Context, tenantID, sucursalID string, 
 			SELECT m.id AS mesa_id,
 			       COUNT(*) AS totales,
 			       COUNT(*) FILTER (WHERE p.estado <> 'cerrado') AS activos,
-			       MIN(p.created_at) AS primero
+			       MIN(p.created_at) AS primero,
+			       MAX(p.created_at) AS ultimo,
+			       COUNT(*) FILTER (WHERE p.estado IN ('recibido', 'preparando')) AS en_cocina,
+			       COUNT(*) FILTER (WHERE p.estado = 'listo') AS listos,
+			       MIN(p.created_at) FILTER (WHERE p.estado IN ('recibido', 'preparando')) AS cocina_desde,
+			       MIN(p.listo_at) FILTER (WHERE p.estado = 'listo') AS listo_desde,
+			       ARRAY_AGG(DISTINCT CASE WHEN p.origen = 'mozo'
+			                               THEN COALESCE(NULLIF(p.creado_por_nombre, ''), 'Mozo')
+			                               ELSE 'QR' END) AS tomadores
 			FROM mesas_activas m
 			JOIN pedidos p ON p.mesa_id = m.id AND p.cuenta_version = m.cuenta_version
 			GROUP BY m.id
@@ -105,12 +116,13 @@ func (s *pgStore) EstadoSalon(ctx context.Context, tenantID, sucursalID string, 
 		       COALESCE(pp.totales, 0)::int, COALESCE(pp.activos, 0)::int,
 		       COALESCE(pi.comensales, 0)::int, COALESCE(pi.sin_identificar, FALSE),
 		       COALESCE(pi.total, 0)::float8,
-		       CASE WHEN pp.primero IS NULL THEN NULL
-		            ELSE GREATEST(FLOOR(EXTRACT(EPOCH FROM ($3::timestamptz - pp.primero)) / 60), 0)::int END
+		       pp.primero, pp.ultimo,
+		       COALESCE(pp.en_cocina, 0)::int, COALESCE(pp.listos, 0)::int, pp.cocina_desde, pp.listo_desde,
+		       COALESCE(pp.tomadores, '{}'::text[])
 		FROM mesas_activas m
 		LEFT JOIN por_pedido pp ON pp.mesa_id = m.id
 		LEFT JOIN por_item pi ON pi.mesa_id = m.id
-		ORDER BY m.numero`, tenantID, sucursalID, ahora)
+		ORDER BY m.numero`, tenantID, sucursalID)
 	if err != nil {
 		return nil, err
 	}
@@ -119,14 +131,22 @@ func (s *pgStore) EstadoSalon(ctx context.Context, tenantID, sucursalID string, 
 	for rows.Next() {
 		var m MesaEstado
 		var d datosMesa
+		var primero, ultimo, cocinaDesde, listoDesde *time.Time
+		var enCocina, listos int
 		if err := rows.Scan(&m.Numero, &m.Sector, &m.Capacidad, &d.CuentaSolicitada, &d.PagoHabilitado,
 			&d.PedidosTotales, &d.PedidosActivos, &d.Comensales, &d.SinIdentificar,
-			&m.TotalParcial, &d.MinutosPrimero); err != nil {
+			&m.TotalParcial, &primero, &ultimo, &enCocina, &listos, &cocinaDesde, &listoDesde, &m.TomadoPor); err != nil {
 			return nil, err
 		}
 		m.Estado, m.Comensales, m.ComensalesSinIdentificar = derivarMesa(d)
 		m.PedidosActivos = d.PedidosActivos
-		m.MinutosDesdePrimerPedido = d.MinutosPrimero
+		m.MinutosDesdePrimerPedido = minutosDesde(ahora, primero)
+		m.MinutosDesdeUltimoPedido = minutosDesde(ahora, ultimo)
+		m.Espera, m.MinutosEnEspera = derivarEspera(m.Estado, enCocina, listos,
+			minutosDesde(ahora, cocinaDesde), minutosDesde(ahora, listoDesde))
+		if m.TomadoPor == nil {
+			m.TomadoPor = []string{}
+		}
 		mesas = append(mesas, m)
 	}
 	return mesas, rows.Err()
@@ -137,7 +157,7 @@ func (s *pgStore) PedidosCocina(ctx context.Context, tenantID, sucursalID string
 		return []PedidoCocina{}, nil
 	}
 	rows, err := db.Pool.Query(ctx, `
-		SELECT m.numero, p.estado,
+		SELECT p.id, m.numero, p.estado,
 		       GREATEST(FLOOR(EXTRACT(EPOCH FROM ($3::timestamptz - p.created_at)) / 60), 0)::int,
 		       COUNT(pi.id) FILTER (WHERE pi.estado = 'pendiente')::int,
 		       COUNT(pi.id) FILTER (WHERE pi.estado = 'preparando')::int,
@@ -157,7 +177,7 @@ func (s *pgStore) PedidosCocina(ctx context.Context, tenantID, sucursalID string
 	pedidos := []PedidoCocina{}
 	for rows.Next() {
 		var p PedidoCocina
-		if err := rows.Scan(&p.Mesa, &p.Estado, &p.Minutos, &p.ItemsPendientes, &p.ItemsPreparando, &p.ItemsListos); err != nil {
+		if err := rows.Scan(&p.PedidoID, &p.Mesa, &p.Estado, &p.MinutosDesdeIngreso, &p.Items.Pendientes, &p.Items.Preparando, &p.Items.Listos); err != nil {
 			return nil, err
 		}
 		pedidos = append(pedidos, p)
@@ -165,23 +185,29 @@ func (s *pgStore) PedidosCocina(ctx context.Context, tenantID, sucursalID string
 	return pedidos, rows.Err()
 }
 
-func (s *pgStore) DespachoPromedio(ctx context.Context, tenantID, sucursalID string, desde time.Time) (*float64, error) {
+// UltimaHoraCocina mide los 60 minutos previos a `ahora`: pedidos ingresados, pedidos que pasaron a
+// listo y su tiempo de despacho (promedio y p90) sobre estos últimos.
+func (s *pgStore) UltimaHoraCocina(ctx context.Context, tenantID, sucursalID string, ahora time.Time) (UltimaHora, error) {
+	var u UltimaHora
 	if !reUUID.MatchString(sucursalID) || !reUUID.MatchString(tenantID) {
-		return nil, nil
+		return u, nil
 	}
-	var promedio *float64
+	desde := ahora.Add(-time.Hour)
 	err := db.Pool.QueryRow(ctx, `
-		SELECT ROUND(AVG(EXTRACT(EPOCH FROM (p.listo_at - p.created_at)) / 60)::numeric, 1)::float8
+		SELECT COUNT(*) FILTER (WHERE p.created_at >= $3)::int,
+		       COUNT(*) FILTER (WHERE p.listo_at >= $3)::int,
+		       ROUND((AVG(EXTRACT(EPOCH FROM (p.listo_at - p.created_at)) / 60)
+		              FILTER (WHERE p.listo_at >= $3))::numeric, 1)::float8,
+		       ROUND((percentile_cont(0.9) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (p.listo_at - p.created_at)) / 60)
+		              FILTER (WHERE p.listo_at >= $3))::numeric, 1)::float8
 		FROM pedidos p
 		JOIN sucursales su ON su.id = p.sucursal_id
 		WHERE su.tenant_id = $1 AND p.sucursal_id = $2
-		  AND p.listo_at IS NOT NULL AND p.listo_at >= $3
-		  AND p.created_at >= $3 - interval '1 day'`,
-		tenantID, sucursalID, desde).Scan(&promedio)
-	if err != nil {
-		return nil, err
-	}
-	return promedio, nil
+		  AND p.created_at >= $3 - interval '1 day'
+		  AND (p.created_at >= $3 OR p.listo_at >= $3)`,
+		tenantID, sucursalID, desde).Scan(&u.Ingresados60Min, &u.Listos60Min, &u.DespachoPromedioMin, &u.DespachoP90Min)
+	u.Balance60Min = u.Ingresados60Min - u.Listos60Min
+	return u, err
 }
 
 func (s *pgStore) ComensalesAtendidos(ctx context.Context, tenantID, sucursalID string, desde, hasta time.Time) (int, error) {
@@ -203,4 +229,66 @@ func (s *pgStore) ComensalesAtendidos(ctx context.Context, tenantID, sucursalID 
 		SELECT COALESCE(SUM(comensales), 0)::int FROM por_cuenta`,
 		tenantID, sucursalID, desde, hasta).Scan(&total)
 	return total, err
+}
+
+// ResumenPorHora agrupa los pedidos creados en [desde, hasta) por hora calendario de la zona del negocio.
+// Facturación y despacho consideran solo pedidos cerrados, igual que internal/metrica.
+func (s *pgStore) ResumenPorHora(ctx context.Context, tenantID, sucursalID string, desde, hasta time.Time, zona string) ([]HoraTurno, error) {
+	if !reUUID.MatchString(sucursalID) || !reUUID.MatchString(tenantID) {
+		return []HoraTurno{}, nil
+	}
+	rows, err := db.Pool.Query(ctx, `
+		WITH base AS (
+			SELECT p.id, p.mesa_id, p.cuenta_version, p.estado, p.created_at, p.updated_at, p.listo_at,
+			       date_trunc('hour', p.created_at AT TIME ZONE $5::text) AS hora
+			FROM pedidos p
+			JOIN sucursales su ON su.id = p.sucursal_id
+			WHERE su.tenant_id = $1 AND p.sucursal_id = $2
+			  AND p.created_at >= $3 AND p.created_at < $4
+		),
+		totales AS (
+			SELECT b.id, SUM(pi.cantidad * pi.precio_unitario) AS total
+			FROM base b
+			JOIN pedido_items pi ON pi.pedido_id = b.id
+			WHERE b.estado = 'cerrado'
+			GROUP BY b.id
+		),
+		por_cuenta AS (
+			SELECT b.hora,
+			       GREATEST(COUNT(DISTINCT pi.comensal_id),
+			                CASE WHEN BOOL_OR(pi.comensal_id IS NULL) THEN 1 ELSE 0 END) AS comensales
+			FROM base b
+			JOIN pedido_items pi ON pi.pedido_id = b.id
+			GROUP BY b.hora, b.mesa_id, b.cuenta_version
+		),
+		comensales AS (
+			SELECT hora, SUM(comensales) AS comensales FROM por_cuenta GROUP BY hora
+		),
+		pedidos_hora AS (
+			SELECT b.hora,
+			       COUNT(*) AS pedidos,
+			       COALESCE(SUM(t.total), 0)::float8 AS facturacion,
+			       ROUND((AVG(EXTRACT(EPOCH FROM (COALESCE(b.listo_at, b.updated_at) - b.created_at)) / 60)
+			              FILTER (WHERE b.estado = 'cerrado' AND COALESCE(b.listo_at, b.updated_at) >= b.created_at))::numeric, 1)::float8 AS despacho
+			FROM base b
+			LEFT JOIN totales t ON t.id = b.id
+			GROUP BY b.hora
+		)
+		SELECT to_char(ph.hora, 'HH24:MI'), ph.pedidos::int, COALESCE(c.comensales, 0)::int, ph.facturacion, ph.despacho
+		FROM pedidos_hora ph
+		LEFT JOIN comensales c ON c.hora = ph.hora
+		ORDER BY ph.hora`, tenantID, sucursalID, desde, hasta, zona)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	horas := []HoraTurno{}
+	for rows.Next() {
+		var h HoraTurno
+		if err := rows.Scan(&h.Hora, &h.Pedidos, &h.Comensales, &h.Facturacion, &h.DespachoPromedioMin); err != nil {
+			return nil, err
+		}
+		horas = append(horas, h)
+	}
+	return horas, rows.Err()
 }

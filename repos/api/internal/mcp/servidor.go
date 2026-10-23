@@ -271,15 +271,18 @@ func construirServidor(claims *auth.Claims, deps Dependencias, limitador *rateli
 	servidor := sdk.NewServer(&sdk.Implementation{Name: "fudd", Version: "1.0.0"}, &sdk.ServerOptions{Instructions: instrucciones})
 	h := &herramientas{deps: deps, claims: claims, limitador: limitador}
 	h.registrar(servidor)
-	servidor.AddReceivingMiddleware(estructurarPlanSinMCP(deps.AppURL))
+	servidor.AddReceivingMiddleware(estructurarResultados())
 	return servidor
 }
 
-// estructurarPlanSinMCP agrega structured content al error de plan sin MCP. El wrapper
-// tipado del SDK pisa StructuredContent con la salida del handler, así que solo se
-// puede completar después, sobre el resultado de tools/call.
-func estructurarPlanSinMCP(appURL string) sdk.Middleware {
-	mensaje := mensajePlanSinMCP(appURL)
+// estructurarResultados normaliza structuredContent en las respuestas de tools:
+//   - éxito: el SDK vuelve a serializar la salida tipada (claves ordenadas alfabéticamente), mientras
+//     que el texto conserva el orden de los campos; se copia el texto para que ambos sean idénticos.
+//   - error: se elimina structuredContent. La spec MCP exige que cumpla el outputSchema y los clientes
+//     lo validan incluso con isError, así que el JSON {"error","mensaje","detalle"} queda solo en el texto.
+//
+// Solo se puede hacer después, sobre el resultado de tools/call.
+func estructurarResultados() sdk.Middleware {
 	return func(next sdk.MethodHandler) sdk.MethodHandler {
 		return func(ctx context.Context, method string, req sdk.Request) (sdk.Result, error) {
 			res, err := next(ctx, method, req)
@@ -287,15 +290,19 @@ func estructurarPlanSinMCP(appURL string) sdk.Middleware {
 				return res, err
 			}
 			llamada, ok := res.(*sdk.CallToolResult)
-			if !ok || !llamada.IsError || len(llamada.Content) == 0 {
+			if !ok || len(llamada.Content) == 0 {
 				return res, err
 			}
-			if texto, ok := llamada.Content[0].(*sdk.TextContent); ok && texto.Text == mensaje {
-				llamada.StructuredContent = map[string]string{
-					"codigo":      "PLAN_LIMIT_REACHED",
-					"recurso":     "mcp",
-					"upgrade_url": appURL + "/dashboard",
-				}
+			if llamada.IsError {
+				llamada.StructuredContent = nil
+				return res, err
+			}
+			texto, ok := llamada.Content[0].(*sdk.TextContent)
+			if !ok {
+				return res, err
+			}
+			if llamada.StructuredContent != nil {
+				llamada.StructuredContent = json.RawMessage(texto.Text)
 			}
 			return res, err
 		}
