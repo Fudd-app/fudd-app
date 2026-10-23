@@ -18,7 +18,7 @@ const EquipoSection = dynamic(() => import("@/components/dashboard/EquipoSection
 const OnboardingTour = dynamic(() => import("@/components/dashboard/OnboardingTour"), { ssr: false });
 
 type Section = 'carta' | 'mesas' | 'recepcionista' | 'equipo' | 'metricas' | 'resenas' | 'configuracion';
-type ConfiguracionTab = "negocio" | "apariencia" | "equipo" | "sucursales" | "planes" | "mercadopago";
+type ConfiguracionTab = "negocio" | "apariencia" | "equipo" | "sucursales" | "planes" | "mercadopago" | "asistentes";
 
 const DASHBOARD_TOUR_VERSION = "2026-10";
 
