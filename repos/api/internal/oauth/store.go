@@ -140,7 +140,7 @@ func (s *pgStore) CanjearCodigo(ctx context.Context, codigoHash string) (*Solici
 		  WHERE codigo_hash = $1 AND estado = 'aprobada' AND codigo_expira_at > now()
 		  RETURNING `+columnasSolicitud, codigoHash))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrGrantInvalido
+		return nil, grantInvalido("código inexistente, vencido o ya usado")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("canjeando código oauth: %w", err)
@@ -210,7 +210,7 @@ func (s *pgStore) RotarRefresh(ctx context.Context, viejoHash string, nuevo Refr
 		`SELECT conexion_id, usado_at, expira_at FROM oauth_refresh_tokens WHERE token_hash = $1 FOR UPDATE`,
 		viejoHash).Scan(&conexionID, &usadoAt, &expiraAt)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrGrantInvalido
+		return nil, grantInvalido("refresh token inexistente")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("leyendo refresh token: %w", err)
@@ -226,10 +226,10 @@ func (s *pgStore) RotarRefresh(ctx context.Context, viejoHash string, nuevo Refr
 		if err := tx.Commit(ctx); err != nil {
 			return nil, fmt.Errorf("confirmando revocación: %w", err)
 		}
-		return nil, ErrGrantInvalido
+		return nil, grantInvalido("refresh token ya usado: reuso detectado, conexión revocada")
 	}
 	if !expiraAt.After(time.Now()) {
-		return nil, ErrGrantInvalido
+		return nil, grantInvalido("refresh token vencido")
 	}
 
 	conexion, err := escanearConexion(tx.QueryRow(ctx, seleccionConexion+` WHERE c.id = $1`, conexionID))
@@ -237,7 +237,7 @@ func (s *pgStore) RotarRefresh(ctx context.Context, viejoHash string, nuevo Refr
 		return nil, fmt.Errorf("leyendo conexión: %w", err)
 	}
 	if conexion.RevocadaAt != nil {
-		return nil, ErrGrantInvalido
+		return nil, grantInvalido("la conexión del refresh token está revocada")
 	}
 
 	if _, err := tx.Exec(ctx, `UPDATE oauth_refresh_tokens SET usado_at = now() WHERE token_hash = $1`, viejoHash); err != nil {

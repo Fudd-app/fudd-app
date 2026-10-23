@@ -96,21 +96,34 @@ func (s *Service) RegistrarCliente(ctx context.Context, nombre string, redirectU
 func (s *Service) IniciarAutorizacion(ctx context.Context, p ParamsAutorizacion) (string, string, error) {
 	cliente, err := s.store.ObtenerCliente(ctx, p.ClientID)
 	if err != nil {
+		if errors.Is(err, ErrClienteInvalido) {
+			return "", "", fmt.Errorf("%w: client_id no registrado", ErrClienteInvalido)
+		}
 		return "", "", err
 	}
 	if !slices.Contains(cliente.RedirectURIs, p.RedirectURI) {
-		return "", "", ErrRedirectInvalido
+		return "", "", fmt.Errorf("%w: el redirect_uri recibido (host %q) no está registrado para el cliente", ErrRedirectInvalido, hostDe(p.RedirectURI))
 	}
 	if p.Resource == "" {
 		p.Resource = s.cfg.Resource
 	}
-	if p.ResponseType != "code" || p.CodeChallengeMethod != "S256" ||
-		len(p.CodeChallenge) < 43 || len(p.CodeChallenge) > 128 || len(p.State) > maxLargoState ||
-		strings.TrimRight(p.Resource, "/") != strings.TrimRight(s.cfg.Resource, "/") {
-		return "", "", ErrSolicitudInvalida
+	// Los motivos nunca incluyen el code_challenge: solo qué falló.
+	switch {
+	case p.ResponseType != "code":
+		return "", "", fmt.Errorf("%w: response_type %q distinto de code", ErrSolicitudInvalida, p.ResponseType)
+	case p.CodeChallenge == "":
+		return "", "", fmt.Errorf("%w: falta PKCE (code_challenge ausente)", ErrSolicitudInvalida)
+	case p.CodeChallengeMethod != "S256":
+		return "", "", fmt.Errorf("%w: code_challenge_method %q distinto de S256", ErrSolicitudInvalida, p.CodeChallengeMethod)
+	case len(p.CodeChallenge) < 43 || len(p.CodeChallenge) > 128:
+		return "", "", fmt.Errorf("%w: code_challenge con largo %d fuera del rango 43-128", ErrSolicitudInvalida, len(p.CodeChallenge))
+	case len(p.State) > maxLargoState:
+		return "", "", fmt.Errorf("%w: state de %d caracteres supera el máximo de %d", ErrSolicitudInvalida, len(p.State), maxLargoState)
+	case strings.TrimRight(p.Resource, "/") != strings.TrimRight(s.cfg.Resource, "/"):
+		return "", "", fmt.Errorf("%w: resource recibido %q distinto del esperado %q", ErrSolicitudInvalida, p.Resource, s.cfg.Resource)
 	}
 	if strings.TrimSpace(p.Scope) != "" && !slices.Contains(strings.Fields(p.Scope), ScopeLectura) {
-		return "", "", ErrScopeInvalido
+		return "", "", fmt.Errorf("%w: scope recibido %q no incluye %s", ErrScopeInvalido, p.Scope, ScopeLectura)
 	}
 	nonce := generarAleatorio(32)
 
@@ -258,27 +271,33 @@ func (s *Service) CanjearCodigo(ctx context.Context, code, codeVerifier, clientI
 	if err != nil {
 		return nil, err
 	}
-	if sol.ClientID != clientID || sol.RedirectURI != redirectURI || sol.UsuarioID == nil {
-		return nil, ErrGrantInvalido
+	if sol.ClientID != clientID {
+		return nil, grantInvalido("client_id distinto del que inició la solicitud")
+	}
+	if sol.RedirectURI != redirectURI {
+		return nil, grantInvalido("redirect_uri distinto del de la solicitud")
+	}
+	if sol.UsuarioID == nil {
+		return nil, grantInvalido("la solicitud no tiene usuario aprobador")
 	}
 	if len(codeVerifier) < 43 || len(codeVerifier) > 128 {
-		return nil, ErrGrantInvalido
+		return nil, grantInvalido("PKCE: code_verifier con largo fuera del rango 43-128")
 	}
 	desafio := sha256.Sum256([]byte(codeVerifier))
 	calculado := base64.RawURLEncoding.EncodeToString(desafio[:])
 	if subtle.ConstantTimeCompare([]byte(calculado), []byte(sol.CodeChallenge)) != 1 {
-		return nil, ErrGrantInvalido
+		return nil, grantInvalido("PKCE: el code_verifier no coincide con el code_challenge")
 	}
 
 	usuario, err := s.usuarios.ObtenerUsuarioPorID(ctx, *sol.UsuarioID)
 	if err != nil {
 		if usuarioNoExiste(err) {
-			return nil, ErrGrantInvalido
+			return nil, grantInvalido("el usuario de la solicitud no existe")
 		}
 		return nil, fmt.Errorf("obtener usuario: %w", err)
 	}
 	if usuario.Estado != "activo" || usuario.Rol != auth.RolDuenio {
-		return nil, ErrGrantInvalido
+		return nil, grantInvalido("usuario inactivo o no dueño")
 	}
 
 	conexion := &Conexion{
@@ -309,28 +328,54 @@ func (s *Service) Refrescar(ctx context.Context, refreshToken, clientID string) 
 		return nil, err
 	}
 	if conexion.ClientID != clientID {
-		return nil, s.revocarYRechazar(ctx, nuevoHash)
+		return nil, s.revocarYRechazar(ctx, nuevoHash, "client_id distinto del de la conexión; conexión revocada")
 	}
 	usuario, err := s.usuarios.ObtenerUsuarioPorID(ctx, conexion.UsuarioID)
 	if err != nil {
 		if usuarioNoExiste(err) {
-			return nil, s.revocarYRechazar(ctx, nuevoHash)
+			return nil, s.revocarYRechazar(ctx, nuevoHash, "el usuario de la conexión no existe; conexión revocada")
 		}
 		// Falla transitoria: no se revoca, el refresh nuevo sigue sirviendo.
 		return nil, fmt.Errorf("obtener usuario: %w", err)
 	}
-	if usuario.Estado != "activo" || usuario.Rol != auth.RolDuenio ||
-		usuario.TenantID != conexion.TenantID || usuario.SessionVersion != conexion.SessionVersion {
-		return nil, s.revocarYRechazar(ctx, nuevoHash)
+	if usuario.Estado != "activo" || usuario.Rol != auth.RolDuenio {
+		return nil, s.revocarYRechazar(ctx, nuevoHash, "usuario inactivo o no dueño; conexión revocada")
+	}
+	if usuario.TenantID != conexion.TenantID {
+		return nil, s.revocarYRechazar(ctx, nuevoHash, "el negocio del usuario cambió; conexión revocada")
+	}
+	if usuario.SessionVersion != conexion.SessionVersion {
+		return nil, s.revocarYRechazar(ctx, nuevoHash, "session_version cambió; conexión revocada")
 	}
 	return s.respuestaToken(conexion, nuevo)
 }
 
-func (s *Service) revocarYRechazar(ctx context.Context, refreshHash string) error {
+func (s *Service) revocarYRechazar(ctx context.Context, refreshHash, motivo string) error {
 	if err := s.store.RevocarPorRefresh(ctx, refreshHash); err != nil {
 		return err
 	}
-	return ErrGrantInvalido
+	return grantInvalido(motivo)
+}
+
+// NombreCliente es solo para logs: ante cualquier fallo devuelve "".
+func (s *Service) NombreCliente(ctx context.Context, clientID string) string {
+	if clientID == "" {
+		return ""
+	}
+	c, err := s.store.ObtenerCliente(ctx, clientID)
+	if err != nil {
+		return ""
+	}
+	return c.ClientName
+}
+
+// hostDe devuelve solo el host de una URL para loguearla sin query ni fragmento.
+func hostDe(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return u.Host
 }
 
 func (s *Service) Revocar(ctx context.Context, token string) error {
@@ -390,40 +435,51 @@ func (s *Service) ValidarAccessToken(ctx context.Context, token string) (*Acceso
 		jwt.WithExpirationRequired(),
 		jwt.WithTimeFunc(s.ahora),
 	)
-	if err != nil || !t.Valid {
-		return nil, ErrTokenInvalido
+	if err != nil {
+		return nil, tokenInvalido("JWT inválido o expirado: " + err.Error())
+	}
+	if !t.Valid {
+		return nil, tokenInvalido("JWT inválido")
 	}
 	mc, ok := t.Claims.(jwt.MapClaims)
 	if !ok {
-		return nil, ErrTokenInvalido
+		return nil, tokenInvalido("claims del JWT ilegibles")
 	}
 	sub, _ := mc["sub"].(string)
 	cid, _ := mc["cid"].(string)
 	svRaw, okSV := mc["sv"].(float64)
 	if sub == "" || cid == "" || !okSV {
-		return nil, ErrTokenInvalido
+		return nil, tokenInvalido("faltan claims sub, cid o sv (no es un token MCP)")
 	}
 
 	conexion, err := s.store.ObtenerConexion(ctx, cid)
 	if err != nil {
 		if errors.Is(err, ErrConexionNoEncontrada) {
-			return nil, ErrTokenInvalido
+			return nil, tokenInvalido("la conexión del token no existe")
 		}
 		return nil, err
 	}
-	if conexion.RevocadaAt != nil || conexion.UsuarioID != sub {
-		return nil, ErrTokenInvalido
+	if conexion.RevocadaAt != nil {
+		return nil, tokenInvalido("conexión revocada")
+	}
+	if conexion.UsuarioID != sub {
+		return nil, tokenInvalido("el usuario del token no es el de la conexión")
 	}
 	usuario, err := s.usuarios.ObtenerUsuarioPorID(ctx, sub)
 	if err != nil {
 		if usuarioNoExiste(err) {
-			return nil, ErrTokenInvalido
+			return nil, tokenInvalido("el usuario del token no existe")
 		}
 		return nil, fmt.Errorf("obtener usuario: %w", err)
 	}
-	if usuario.Estado != "activo" || usuario.Rol != auth.RolDuenio ||
-		usuario.TenantID != conexion.TenantID || usuario.SessionVersion != int64(svRaw) {
-		return nil, ErrTokenInvalido
+	if usuario.Estado != "activo" || usuario.Rol != auth.RolDuenio {
+		return nil, tokenInvalido("usuario inactivo o no dueño")
+	}
+	if usuario.TenantID != conexion.TenantID {
+		return nil, tokenInvalido("el negocio del usuario cambió")
+	}
+	if usuario.SessionVersion != int64(svRaw) {
+		return nil, tokenInvalido("session_version cambió")
 	}
 
 	if err := s.store.MarcarUso(ctx, cid); err != nil {

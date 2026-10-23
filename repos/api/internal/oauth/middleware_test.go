@@ -56,6 +56,28 @@ func TestRequerirTokenMCP(t *testing.T) {
 		t.Errorf("esquema bearer en minúsculas: %d", rec.Code)
 	}
 
+	logs := capturarLogs(t)
+	llamar(nil)
+	llamar(func(r *http.Request) { r.Header.Set("Authorization", "Basic abc") })
+	llamar(func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+sesion) })
+	e.usuarios.modificar("u-duenio", func(u *auth.UsuarioAuth) { u.SessionVersion++ })
+	llamar(func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+resp.AccessToken) })
+	e.usuarios.modificar("u-duenio", func(u *auth.UsuarioAuth) { u.SessionVersion-- })
+	out := logs.String()
+	for _, motivo := range []string{"falta el header Authorization", "esquema de Authorization distinto de Bearer", "JWT inválido o expirado", "session_version cambió"} {
+		if !strings.Contains(out, motivo) {
+			t.Errorf("falta el motivo %q en el log: %s", motivo, out)
+		}
+	}
+	if !strings.Contains(out, "oauth rechazo") || !strings.Contains(out, "endpoint=mcp") {
+		t.Errorf("log sin formato esperado: %s", out)
+	}
+	for _, secreto := range []string{resp.AccessToken, sesion} {
+		if strings.Contains(out, secreto) {
+			t.Errorf("el log contiene un token: %s", out)
+		}
+	}
+
 	e.usuarios.fallar(errors.New("db caída"))
 	rec = llamar(func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+resp.AccessToken) })
 	if rec.Code != 500 || rec.Header().Get("WWW-Authenticate") != "" || !strings.Contains(rec.Body.String(), `"server_error"`) {
