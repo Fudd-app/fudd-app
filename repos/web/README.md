@@ -1,21 +1,16 @@
 # fudd — Frontend (Next.js)
 
-Frontend web de fudd. Permite a los admins configurar su negocio y a los clientes hacer pedidos desde la mesa escaneando un QR.
+Frontend web de fudd: landing, alta y configuración del negocio, dashboard del equipo (salón, carta, mesas, equipo, métricas, planes), pantalla de cocina (KDS) y la vista del comensal que se abre al escanear el QR de la mesa.
 
-Para el contexto completo del proyecto, ver el [README raíz](../../README.md) y [AGENTS.md](../../AGENTS.md).
+Para el contexto completo del proyecto, ver el [README raíz](../../README.md) y [AGENTS.md](AGENTS.md).
 
 ## Estado actual
 
-**Fase 2 completada** — Backend Go + PostgreSQL + SSE + Tests completo (US-19 a US-37).
-
-**Fase 3 en curso — Sprint 7 (10/07 – 16/07/2026)**
-La Fase 3 se enfoca en integrar el frontend Next.js con el backend real Go en `repos/api/` (reemplazando mocks por llamadas de API).
-
-Ver las user stories del sprint en `../../docs/presentations/mesa-click-presentacion.html`.
+Fase 4 — Evolución, Monetización & Analítica. El sprint en curso está en [`AGENTS.md` raíz](../../AGENTS.md) y los issues de este repo (prefijo `[web]`) en el tablero [Fudd APP](https://github.com/orgs/Fudd-app/projects/1).
 
 ## Levantar localmente
 
-Requisitos: Node.js 20+.
+Lo recomendado es levantar todo el sistema con Docker desde la raíz (`npm run dev`, ver [`LOCAL_DEV.md`](../../LOCAL_DEV.md)). Para correr solo el frontend contra una API ya levantada:
 
 ```powershell
 npm install
@@ -26,8 +21,8 @@ Disponible en [http://localhost:3000](http://localhost:3000).
 
 ## Stack
 
-- **Framework**: Next.js App Router (v16+)
-- **UI**: React 19+, Tailwind CSS v4+
+- **Framework**: Next.js 16 (App Router)
+- **UI**: React 19, Tailwind CSS v4
 - **Lenguaje**: TypeScript estricto
 
 ## Estructura de carpetas
@@ -35,13 +30,18 @@ Disponible en [http://localhost:3000](http://localhost:3000).
 ```
 app/
 ├── page.tsx              ← landing
-├── login/page.tsx        ← login / registro
-├── onboarding/page.tsx   ← onboarding admin (4 pasos)
-└── dashboard/page.tsx    ← panel de administración
+├── (alta)/               ← registro y onboarding del negocio
+├── login/                ← login admin
+├── [slug]/login/         ← login del staff por negocio
+├── auth/verify/          ← verificación de magic link
+├── invitacion/[token]/   ← aceptación de invitación al equipo
+├── dashboard/            ← panel de administración y operación
+├── kds/                  ← pantalla de cocina
+├── mesa/[token]/         ← vista del comensal (QR)
+└── privacidad/ · terminos/
 
-components/
-├── landing/
-└── onboarding/
+components/               ← auth, brand, comensal, dashboard, kds, landing, legal, menu, onboarding, registro, ui
+lib/api.ts                ← cliente HTTP tipado, SSE e interceptor PLAN_LIMIT_REACHED
 ```
 
 ## Scripts disponibles
@@ -49,13 +49,14 @@ components/
 | Comando | Descripción |
 |---|---|
 | `npm run dev` | Servidor de desarrollo con hot reload |
-| `npm run build` | Build de producción |
+| `npm run build` | Build de producción (validación obligatoria antes de cada PR) |
 | `npm run lint` | Verificar errores de ESLint |
 
-## Convenciones y Despliegue
+## Convenciones y despliegue
 
-- **TypeScript**: No usar `any`
-- **Componentes**: Funcionales con hooks — sin class components
-- **Estilos**: Exclusivamente con Tailwind CSS
-- **Mobile-first**: La vista del cliente es optimizada para celulares
-- **Git Workflow y Despliegue**: Ramas (`feat/*`, `fix/*`) creadas siempre desde `qa`. Al validar en QA, mergear a `main` (desplegado en **Render** como `mesa-click-web` con Docker en región Ohio, servicio Free Web Service).
+- **TypeScript**: no usar `any`
+- **Componentes**: funcionales con hooks, sin class components
+- **Estilos**: exclusivamente con Tailwind CSS
+- **Mobile-first**: la vista del comensal está optimizada para celulares
+- **Flujo de trabajo**: issues y PRs con prefijo `[web]`, ramas desde `qa` y code review antes del merge ([`docs/proceso/flujo-de-trabajo.md`](../../docs/proceso/flujo-de-trabajo.md))
+- **Despliegue**: Vercel — `qa` → `qa.fudd.com.ar`, `main` → `fudd.com.ar` ([`docs/deploy/README.md`](../../docs/deploy/README.md))
