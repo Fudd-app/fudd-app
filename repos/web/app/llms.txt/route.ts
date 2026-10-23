@@ -1,5 +1,10 @@
-export function GET(request: Request) {
-  const origen = new URL(request.url).origin;
+// Origen fijo de configuración: armar el link con el Host del request permitía
+// envenenar la caché pública con un dominio ajeno.
+export const dynamic = "force-static";
+
+const origen = (process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://fudd.com.ar").replace(/\/$/, "");
+
+export function GET() {
   const cuerpo = [
     "# Fudd",
     "",
