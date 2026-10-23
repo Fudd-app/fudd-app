@@ -1,10 +1,15 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
+	"log/slog"
+	"mime"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -37,7 +42,7 @@ type Dependencias struct {
 	Ahora    func() time.Time
 }
 
-// NuevoHandler arma la cadena habilitado → token MCP → rate limit → SDK.
+// NuevoHandler arma la cadena log → habilitado → token MCP → rate limit → SDK.
 func NuevoHandler(oauthSvc *oauth.Service, deps Dependencias) http.Handler {
 	return nuevoHandler(oauth.RequerirTokenMCP(oauthSvc), deps)
 }
@@ -57,16 +62,138 @@ func nuevoHandler(autenticar func(http.Handler) http.Handler, deps Dependencias)
 		return construirServidor(claims, deps, limiteTools)
 	}, &sdk.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
 
-	cadena := autenticar(limitarPorUsuario(ratelimit.Nuevo(300, time.Minute), sdkHandler))
+	cadena := autenticar(registrarUsuario(limitarPorUsuario(ratelimit.Nuevo(300, time.Minute), sdkHandler)))
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return registrarRequests(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if os.Getenv("MCP_HABILITADO") != "true" {
 			escribirJSON(w, http.StatusNotFound, map[string]string{"error": "no encontrado"})
 			return
 		}
 		cadena.ServeHTTP(w, r)
+	}))
+}
+
+const maxBodyLog = 1 << 20
+
+type claveUsuarioLog struct{}
+
+// registrarRequests es la primera capa: loguea cada request a /mcp con lo que
+// importa para diagnosticar clientes (método RPC, status, cabeceras), nunca el
+// valor de Authorization ni los params.
+func registrarRequests(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		inicio := time.Now()
+		rpcMethod := ""
+		if r.Method == http.MethodPost && esJSON(r.Header.Get("Content-Type")) && r.Body != nil {
+			cuerpo, _ := io.ReadAll(io.LimitReader(r.Body, maxBodyLog))
+			// Se restaura lo leído más lo que quede sin leer, para que el SDK vea el body intacto.
+			r.Body = struct {
+				io.Reader
+				io.Closer
+			}{io.MultiReader(io.NopCloser(bytes.NewReader(cuerpo)), r.Body), r.Body}
+			rpcMethod = metodosRPC(cuerpo)
+		}
+
+		// El ID lo completa registrarUsuario, después de la autenticación.
+		usuario := new(string)
+		r = r.WithContext(context.WithValue(r.Context(), claveUsuarioLog{}, usuario))
+		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		var rw http.ResponseWriter = sw
+		if _, ok := w.(http.Flusher); ok {
+			rw = flushStatusWriter{sw}
+		}
+		next.ServeHTTP(rw, r)
+
+		attrs := []any{
+			"http_method", r.Method,
+			"rpc_method", rpcMethod,
+			"status", sw.status,
+			"duracion_ms", time.Since(inicio).Milliseconds(),
+			"tiene_authorization", r.Header.Get("Authorization") != "",
+			"user_agent", r.UserAgent(),
+			"mcp_protocol_version", r.Header.Get("MCP-Protocol-Version"),
+			"accept", r.Header.Get("Accept"),
+			"content_type", r.Header.Get("Content-Type"),
+		}
+		if *usuario != "" {
+			attrs = append(attrs, "usuario_id", *usuario)
+		}
+		if sw.status >= http.StatusInternalServerError {
+			slog.ErrorContext(r.Context(), "mcp request", attrs...)
+			return
+		}
+		slog.InfoContext(r.Context(), "mcp request", attrs...)
 	})
 }
+
+// registrarUsuario corre después de la auth y deja el ID del usuario para el log.
+func registrarUsuario(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if usuario, ok := r.Context().Value(claveUsuarioLog{}).(*string); ok {
+			if claims := auth.ClaimsFromContext(r.Context()); claims != nil {
+				*usuario = claims.UsuarioID
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func esJSON(contentType string) bool {
+	tipo, _, err := mime.ParseMediaType(contentType)
+	return err == nil && (tipo == "application/json" || strings.HasSuffix(tipo, "+json"))
+}
+
+// metodosRPC extrae solo el campo method del JSON-RPC (o los de un batch, separados por coma).
+func metodosRPC(cuerpo []byte) string {
+	cuerpo = bytes.TrimSpace(cuerpo)
+	if len(cuerpo) > 0 && cuerpo[0] == '[' {
+		var batch []struct {
+			Method string `json:"method"`
+		}
+		if json.Unmarshal(cuerpo, &batch) != nil {
+			return "?"
+		}
+		metodos := make([]string, 0, len(batch))
+		for _, m := range batch {
+			metodos = append(metodos, m.Method)
+		}
+		return strings.Join(metodos, ",")
+	}
+	var msg struct {
+		Method string `json:"method"`
+	}
+	if json.Unmarshal(cuerpo, &msg) != nil {
+		return "?"
+	}
+	return msg.Method
+}
+
+type statusWriter struct {
+	http.ResponseWriter
+	status  int
+	escrito bool
+}
+
+func (s *statusWriter) WriteHeader(status int) {
+	if !s.escrito {
+		s.status = status
+		s.escrito = true
+	}
+	s.ResponseWriter.WriteHeader(status)
+}
+
+func (s *statusWriter) Write(b []byte) (int, error) {
+	s.escrito = true
+	return s.ResponseWriter.Write(b)
+}
+
+// Unwrap permite a http.ResponseController llegar al writer original.
+func (s *statusWriter) Unwrap() http.ResponseWriter { return s.ResponseWriter }
+
+// flushStatusWriter solo se usa si el writer original implementa http.Flusher.
+type flushStatusWriter struct{ *statusWriter }
+
+func (f flushStatusWriter) Flush() { f.ResponseWriter.(http.Flusher).Flush() }
 
 func limitarPorUsuario(limitador *ratelimit.Limitador, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

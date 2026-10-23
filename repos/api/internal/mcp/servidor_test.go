@@ -1,10 +1,12 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -471,5 +473,75 @@ func TestDerivarMesa(t *testing.T) {
 				t.Errorf("obtuve %s/%d/%v, esperaba %s/%d/%v", estado, comensales, sin, c.estado, c.comensales, c.sinIdentificar)
 			}
 		})
+	}
+}
+
+func capturarLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	original := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(original) })
+	return &buf
+}
+
+func TestLogDeRequestsMCP(t *testing.T) {
+	logs := capturarLogs(t)
+	h := nuevoHandlerDePrueba(t, nuevoStoreFalso())
+
+	rec, resp := rpc(t, h, "t-a", "u-1", "tools/list", nil)
+	if rec.Code != http.StatusOK || len(resp.Result.Tools) == 0 {
+		t.Fatalf("tools/list falló: %d %s", rec.Code, rec.Body)
+	}
+	salida := logs.String()
+	for _, esperado := range []string{"rpc_method=tools/list", "status=200", "http_method=POST", "usuario_id=u-1", "tiene_authorization=false"} {
+		if !strings.Contains(salida, esperado) {
+			t.Errorf("el log no contiene %q: %s", esperado, salida)
+		}
+	}
+}
+
+func TestLogSinTokenNoFiltraSecretos(t *testing.T) {
+	logs := capturarLogs(t)
+	t.Setenv("MCP_HABILITADO", "true")
+	svc := oauth.NuevoService(nil, nil, nil, nil, oauth.Config{Issuer: "https://mcp.test", Resource: "https://mcp.test/mcp"})
+	h := NuevoHandler(svc, Dependencias{Store: nuevoStoreFalso()})
+	const cuerpo = `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"secreto":"PARAMS-SECRETOS"}}`
+
+	sinToken := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(cuerpo))
+	sinToken.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, sinToken)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("esperaba 401, obtuve %d", rec.Code)
+	}
+	salida := logs.String()
+	if !strings.Contains(salida, "status=401") || !strings.Contains(salida, "tiene_authorization=false") {
+		t.Errorf("log sin token incorrecto: %s", salida)
+	}
+
+	logs.Reset()
+	conToken := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(cuerpo))
+	conToken.Header.Set("Content-Type", "application/json")
+	conToken.Header.Set("Authorization", "Bearer TOKEN-SECRETO")
+	h.ServeHTTP(httptest.NewRecorder(), conToken)
+	salida = logs.String()
+	if !strings.Contains(salida, "tiene_authorization=true") {
+		t.Errorf("esperaba tiene_authorization=true: %s", salida)
+	}
+	if strings.Contains(salida, "TOKEN-SECRETO") || strings.Contains(salida, "PARAMS-SECRETOS") {
+		t.Errorf("el log filtra token o params: %s", salida)
+	}
+}
+
+func TestLogNoConsumeElBodyDelSDK(t *testing.T) {
+	logs := capturarLogs(t)
+	h := nuevoHandlerDePrueba(t, nuevoStoreFalso())
+	resp := llamarTool(t, h, "t-a", "listar_sucursales", nil)
+	if resp.Result.IsError || len(resp.Result.Content) == 0 {
+		t.Fatalf("tools/call no llegó completo al SDK: %+v", resp.Result)
+	}
+	if !strings.Contains(logs.String(), "rpc_method=tools/call") {
+		t.Errorf("el log no contiene rpc_method=tools/call: %s", logs)
 	}
 }
