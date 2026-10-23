@@ -141,3 +141,24 @@ func TestIPCliente_CFConnectingIP(t *testing.T) {
 		t.Fatalf("CF-Connecting-IP no IP se ignora: %q", ip)
 	}
 }
+
+func TestClaveCliente(t *testing.T) {
+	clave := func(addr string) string {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = addr
+		return ClaveCliente(req)
+	}
+
+	if a, b := clave("[2001:db8:1:2::1]:1234"), clave("[2001:db8:1:2:ffff::9]:1234"); a != b {
+		t.Fatalf("mismo /64 debería dar la misma clave: %q vs %q", a, b)
+	}
+	if a, b := clave("[2001:db8:1:2::1]:1234"), clave("[2001:db8:1:3::1]:1234"); a == b {
+		t.Fatalf("/64 distintos deberían dar claves distintas: %q", a)
+	}
+	if got := clave("203.0.113.7:1234"); got != "203.0.113.7" {
+		t.Fatalf("IPv4 debería quedar igual, got %q", got)
+	}
+	if got := clave("[::ffff:203.0.113.7]:1234"); got != "::ffff:203.0.113.7" {
+		t.Fatalf("IPv4-mapped debería quedar sin máscara /64, got %q", got)
+	}
+}

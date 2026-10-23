@@ -118,3 +118,15 @@ func IPCliente(r *http.Request) string {
 	}
 	return host
 }
+
+// ClaveCliente devuelve la clave de limitación del cliente. Para IPv6 usa el
+// prefijo /64: un solo host controla un /64 completo y podría generar claves
+// sin límite, llenando el mapa para desalojar a otros clientes.
+func ClaveCliente(r *http.Request) string {
+	raw := IPCliente(r)
+	ip := net.ParseIP(raw)
+	if ip == nil || ip.To4() != nil {
+		return raw
+	}
+	return ip.Mask(net.CIDRMask(64, 128)).String() + "/64"
+}

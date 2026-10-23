@@ -60,7 +60,7 @@ func (h *Handlers) MetadataServidor(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) Registrar(w http.ResponseWriter, r *http.Request) {
-	if !h.limiteRegistro.Permitir(ratelimit.IPCliente(r)) {
+	if !h.limiteRegistro.Permitir(ratelimit.ClaveCliente(r)) {
 		rateLimited(w)
 		return
 	}
@@ -100,7 +100,7 @@ func (h *Handlers) Registrar(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) Autorizar(w http.ResponseWriter, r *http.Request) {
-	if !h.limiteAutorizar.Permitir(ratelimit.IPCliente(r)) {
+	if !h.limiteAutorizar.Permitir(ratelimit.ClaveCliente(r)) {
 		w.Header().Set("Retry-After", "60")
 		paginaError(w, http.StatusTooManyRequests, "Demasiados intentos, reintentá en un minuto.")
 		return
@@ -208,7 +208,7 @@ func (h *Handlers) errorSolicitud(w http.ResponseWriter, r *http.Request, err er
 
 func (h *Handlers) Token(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	if !h.limiteToken.Permitir(ratelimit.IPCliente(r)) {
+	if !h.limiteToken.Permitir(ratelimit.ClaveCliente(r)) {
 		rateLimited(w)
 		return
 	}
