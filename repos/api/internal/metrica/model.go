@@ -46,6 +46,21 @@ type MetricaEstado struct {
 	Cantidad int64  `json:"cantidad"`
 }
 
+type MetricaCategoria struct {
+	CategoriaID string  `json:"categoria_id"`
+	Nombre      string  `json:"nombre"`
+	Unidades    int64   `json:"unidades"`
+	Monto       float64 `json:"monto"`
+	Porcentaje  float64 `json:"porcentaje"`
+}
+
+type CeldaCalor struct {
+	DiaSemana int     `json:"dia_semana"`
+	Hora      int     `json:"hora"`
+	Pedidos   int64   `json:"pedidos"`
+	Monto     float64 `json:"monto"`
+}
+
 type Variaciones struct {
 	FacturacionTotal              *float64 `json:"facturacion_total"`
 	TicketPromedio                *float64 `json:"ticket_promedio"`
@@ -54,12 +69,14 @@ type Variaciones struct {
 }
 
 type Resumen struct {
-	Periodo Periodo `json:"periodo"`
+	Periodo         Periodo            `json:"periodo"`
 	ResumenBase
-	PlatoMasVendido *PlatoEstrella  `json:"plato_mas_vendido"`
-	PlatosEstrella  []PlatoEstrella `json:"platos_estrella"`
-	Variaciones     Variaciones     `json:"variaciones"`
-	PorDia          []MetricaDiaria `json:"por_dia"`
-	PorTurno        []MetricaTurno  `json:"por_turno"`
-	PorEstado       []MetricaEstado `json:"por_estado"`
+	PlatoMasVendido *PlatoEstrella     `json:"plato_mas_vendido"`
+	PlatosEstrella  []PlatoEstrella    `json:"platos_estrella"`
+	Variaciones     Variaciones        `json:"variaciones"`
+	PorDia          []MetricaDiaria    `json:"por_dia"`
+	PorTurno        []MetricaTurno     `json:"por_turno"`
+	PorEstado       []MetricaEstado    `json:"por_estado"`
+	PorCategoria    []MetricaCategoria `json:"por_categoria"`
+	MapaCalor       []CeldaCalor       `json:"mapa_calor"`
 }
