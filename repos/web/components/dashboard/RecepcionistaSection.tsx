@@ -746,6 +746,7 @@ export default function RecepcionistaSection() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- preferencias en localStorage: leerlas en el estado inicial rompe la hidratación de la página prerenderizada
     setAnchoTicket(getAnchoTicketTermico());
     setAutoPrint(isAutoPrintEnabled());
   }, []);

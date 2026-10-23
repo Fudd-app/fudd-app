@@ -659,7 +659,7 @@ export default function MetricasSection() {
   );
 
   useEffect(() => {
-    void cargarMetricas();
+    void Promise.resolve().then(() => cargarMetricas());
   }, [cargarMetricas]);
 
   const maximoUnidades = useMemo(

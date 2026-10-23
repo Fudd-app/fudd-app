@@ -22,13 +22,18 @@ export default function PedidoAsistidoModal({ abierto, mesas, mesaInicialId, onC
   const [seleccionadas, setSeleccionadas] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
+  const [aperturaPrevia, setAperturaPrevia] = useState({ abierto: false, mesaInicialId, mesas });
 
-  useEffect(() => {
-    if (!abierto) return;
-    const mesaInicialValida = mesas.some((mesa) => mesa.id === mesaInicialId);
-    setMesaId(mesaInicialValida ? mesaInicialId ?? '' : mesas[0]?.id ?? '');
-    setError('');
-  }, [abierto, mesaInicialId, mesas]);
+  // Al abrir (o si cambian las mesas con el modal abierto) se preselecciona la mesa.
+  // Se ajusta durante el render en lugar de en un efecto para evitar un render extra.
+  if (aperturaPrevia.abierto !== abierto || aperturaPrevia.mesaInicialId !== mesaInicialId || aperturaPrevia.mesas !== mesas) {
+    setAperturaPrevia({ abierto, mesaInicialId, mesas });
+    if (abierto) {
+      const mesaInicialValida = mesas.some((mesa) => mesa.id === mesaInicialId);
+      setMesaId(mesaInicialValida ? mesaInicialId ?? '' : mesas[0]?.id ?? '');
+      setError('');
+    }
+  }
 
   useEffect(() => {
     if (!abierto) return;

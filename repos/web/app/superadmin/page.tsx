@@ -129,8 +129,15 @@ export default function SuperadminPage() {
 
   // Detalle / Auditoría
   const [tenantSeleccionadoId, setTenantSeleccionadoId] = useState<string | null>(null);
-  const [detalleActividad, setDetalleActividad] = useState<TenantDetalleActividadPlatform | null>(null);
-  const [cargandoDetalle, setCargandoDetalle] = useState(false);
+  // Se guarda junto al id del tenant para derivar "cargando" y no mostrar el detalle de otro.
+  // data null = la carga falló.
+  const [resultadoDetalle, setResultadoDetalle] = useState<{
+    tenantId: string;
+    data: TenantDetalleActividadPlatform | null;
+  } | null>(null);
+  const detalleActividad =
+    resultadoDetalle && resultadoDetalle.tenantId === tenantSeleccionadoId ? resultadoDetalle.data : null;
+  const cargandoDetalle = tenantSeleccionadoId !== null && resultadoDetalle?.tenantId !== tenantSeleccionadoId;
 
   const mostrarToast = useCallback((msg: string) => {
     setToastMensaje(msg);
@@ -195,22 +202,17 @@ export default function SuperadminPage() {
 
   // 3. Cargar detalle al seleccionar un tenant
   useEffect(() => {
-    if (!tenantSeleccionadoId) {
-      setDetalleActividad(null);
-      return;
-    }
+    if (!tenantSeleccionadoId) return;
+    const tenantId = tenantSeleccionadoId;
     let cancelado = false;
-    setCargandoDetalle(true);
     api
-      .obtenerDetalleActividadTenant(tenantSeleccionadoId)
+      .obtenerDetalleActividadTenant(tenantId)
       .then((data) => {
-        if (!cancelado) setDetalleActividad(data);
+        if (!cancelado) setResultadoDetalle({ tenantId, data });
       })
       .catch((err) => {
         console.error("Error al obtener detalle del tenant", err);
-      })
-      .finally(() => {
-        if (!cancelado) setCargandoDetalle(false);
+        if (!cancelado) setResultadoDetalle({ tenantId, data: null });
       });
     return () => {
       cancelado = true;

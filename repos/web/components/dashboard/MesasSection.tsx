@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import QRCode from "qrcode";
 import { api, MesaAPI, Sucursal, EstadoPlan, esPlanLimitReached, detallePlanLimit, getErrorMessage } from "@/lib/api";
 import { EmptyState, Skeleton, useToast, useConfirm } from "@/components/ui";
@@ -14,23 +14,25 @@ interface QRCanvasProps {
   onTomarPedido?: () => void;
 }
 
+// El origen de la app no cambia durante la sesión: no hace falta suscribirse a nada.
+const sinSuscripcion = () => () => {};
+const origenCliente = () => process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, '') || window.location.origin;
+const origenServidor = () => '';
+
 function QRCanvas({ token, mesaNumero, compacto = false, estado, onTomarPedido }: QRCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [publicUrl, setPublicUrl] = useState('');
-  const [usaOrigenLocal, setUsaOrigenLocal] = useState(false);
   const toast = useToast();
 
+  const origin = useSyncExternalStore(sinSuscripcion, origenCliente, origenServidor);
+  const publicUrl = origin ? new URL(`/mesa/${encodeURIComponent(token)}`, `${origin}/`).toString() : '';
+  const hostname = publicUrl ? new URL(publicUrl).hostname : '';
+  const usaOrigenLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+
   useEffect(() => {
-    const configuredOrigin = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, '');
-    const origin = configuredOrigin || window.location.origin;
-    const url = new URL(`/mesa/${encodeURIComponent(token)}`, `${origin}/`).toString();
-    setPublicUrl(url);
-    const hostname = new URL(url).hostname;
-    setUsaOrigenLocal(hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1');
-    if (canvasRef.current) {
-      void QRCode.toCanvas(canvasRef.current, url, { width: 180, margin: 1 });
+    if (publicUrl && canvasRef.current) {
+      void QRCode.toCanvas(canvasRef.current, publicUrl, { width: 180, margin: 1 });
     }
-  }, [token]);
+  }, [publicUrl]);
 
   const handleDownload = () => {
     const canvas = canvasRef.current;

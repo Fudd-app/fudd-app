@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useSyncExternalStore } from "react";
 
 const QA_HOST_PATTERN = /(^|[-./])(qa|staging)([-./:]|$)/i;
 
@@ -15,19 +15,20 @@ function isQaFromEnv(): boolean {
   return QA_HOST_PATTERN.test(appUrl) || QA_HOST_PATTERN.test(apiUrl);
 }
 
+function isQaEnCliente(): boolean {
+  return isQaFromEnv() || QA_HOST_PATTERN.test(window.location.hostname);
+}
+
+// El hostname no cambia durante la sesión: no hace falta suscribirse a nada.
+const sinSuscripcion = () => () => {};
+
 export default function QaBanner() {
-  const [isQa, setIsQa] = useState<boolean>(() => isQaFromEnv());
+  // En el servidor solo se conoce el env; en el cliente también el hostname.
+  const isQa = useSyncExternalStore(sinSuscripcion, isQaEnCliente, isQaFromEnv);
 
   useEffect(() => {
-    const detected =
-      isQaFromEnv() ||
-      (typeof window !== "undefined" &&
-        QA_HOST_PATTERN.test(window.location.hostname));
-
-    setIsQa(detected);
-
     if (typeof document !== "undefined") {
-      if (detected) {
+      if (isQa) {
         document.documentElement.style.setProperty("--qa-banner-offset", "32px");
       } else {
         document.documentElement.style.removeProperty("--qa-banner-offset");
@@ -39,7 +40,7 @@ export default function QaBanner() {
         document.documentElement.style.removeProperty("--qa-banner-offset");
       }
     };
-  }, []);
+  }, [isQa]);
 
   if (!isQa) {
     return null;
