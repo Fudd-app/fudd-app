@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -278,6 +279,10 @@ func EscribirSesion(w http.ResponseWriter, r *http.Request, usuario *UsuarioAuth
 		Path:        "/",
 		MaxAge:      60 * 60 * 24 * 30,
 	})
+
+	go func(uid string) {
+		_ = RegistrarLoginUsuario(context.Background(), uid)
+	}(usuario.ID)
 
 	uname := ""
 	if usuario.Username != nil {

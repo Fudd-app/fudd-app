@@ -27,6 +27,40 @@ var colorHexPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 var slugPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
+var slugsReservados = map[string]struct{}{
+	"admin":         {},
+	"superadmin":    {},
+	"platform":      {},
+	"dashboard":     {},
+	"login":         {},
+	"logout":        {},
+	"auth":          {},
+	"kds":           {},
+	"cocina":        {},
+	"mesa":          {},
+	"mesas":         {},
+	"api":           {},
+	"public":        {},
+	"publica":       {},
+	"static":        {},
+	"pedidos":       {},
+	"pedido":        {},
+	"carta":         {},
+	"menu":          {},
+	"onboarding":    {},
+	"terminos":      {},
+	"privacidad":    {},
+	"ayuda":         {},
+	"status":        {},
+	"health":        {},
+	"configuracion": {},
+}
+
+func EsSlugReservado(slug string) bool {
+	_, reservado := slugsReservados[strings.ToLower(strings.TrimSpace(slug))]
+	return reservado
+}
+
 func NuevoServiceConGoogle(s Store, google VerificadorGoogle) *Service {
 	return &Service{store: s, google: google}
 }
@@ -34,6 +68,9 @@ func NuevoServiceConGoogle(s Store, google VerificadorGoogle) *Service {
 func (svc *Service) Crear(ctx context.Context, input OnboardingInput) (*Tenant, error) {
 	if input.Slug == "" {
 		return nil, fmt.Errorf("%w: slug requerido", ErrValidation)
+	}
+	if EsSlugReservado(input.Slug) {
+		return nil, fmt.Errorf("%w: el nombre en URL está reservado por el sistema", ErrValidation)
 	}
 	if strings.TrimSpace(input.GoogleCredential) != "" {
 		if err := svc.aplicarIdentidadGoogle(ctx, &input); err != nil {
@@ -195,6 +232,9 @@ func (svc *Service) SlugDisponible(ctx context.Context, slug string) (bool, erro
 	slug = strings.ToLower(strings.TrimSpace(slug))
 	if !slugPattern.MatchString(slug) {
 		return false, fmt.Errorf("%w: nombre en URL inválido", ErrValidation)
+	}
+	if EsSlugReservado(slug) {
+		return false, nil
 	}
 
 	enUso, err := svc.store.SlugEnUso(ctx, slug)
