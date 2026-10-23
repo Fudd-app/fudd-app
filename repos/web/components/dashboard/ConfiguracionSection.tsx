@@ -7,10 +7,11 @@ import EquipoSection from "./EquipoSection";
 import PlanesSection from "./PlanesSection";
 import UpgradeModal from "./UpgradeModal";
 import AparienciaMenuPreview from "./AparienciaMenuPreview";
+import AsistentesIaTab from "./AsistentesIaTab";
 
 /* ─────────────────────────── contenedor ─────────────────────────── */
 
-const TABS = ["negocio", "apariencia", "equipo", "sucursales", "planes", "mercadopago"] as const;
+const TABS = ["negocio", "apariencia", "equipo", "sucursales", "planes", "mercadopago", "asistentes"] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABELS: Record<Tab, string> = {
   negocio: "Negocio",
@@ -19,6 +20,7 @@ const TAB_LABELS: Record<Tab, string> = {
   sucursales: "Sucursales",
   planes: "Planes y Suscripción",
   mercadopago: "Mercado Pago",
+  asistentes: "Asistentes de IA",
 };
 
 export default function ConfiguracionSection({
@@ -127,6 +129,7 @@ export default function ConfiguracionSection({
         />
       )}
       {tab === "equipo" && <EquipoTab />}
+      {tab === "asistentes" && <AsistentesIaTab />}
       {tab === "sucursales" && (
         <SucursalesTab
           key={sucursalSelId || "sin-sucursal"}

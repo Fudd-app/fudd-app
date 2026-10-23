@@ -50,6 +50,17 @@ export function esPlanLimitReached(err: unknown): boolean {
   return false;
 }
 
+export function codigoError(err: unknown): string | undefined {
+  if (typeof err === 'object' && err !== null) {
+    const apiErr = err as { data?: unknown };
+    if (typeof apiErr.data === 'object' && apiErr.data !== null) {
+      const codigo = (apiErr.data as Record<string, unknown>).codigo;
+      if (typeof codigo === 'string') return codigo;
+    }
+  }
+  return undefined;
+}
+
 export function detallePlanLimit(err: unknown): DetallePlanLimit | null {
   if (!esPlanLimitReached(err)) return null;
   const data = (err as { data: Record<string, unknown> }).data;
@@ -420,6 +431,24 @@ export interface SesionUsuario {
   nombre: string;
   rol: 'admin' | 'encargado' | 'mozo' | 'cocina';
   sucursal_id?: string | null;
+}
+
+export interface SolicitudMcp {
+  id: string;
+  client_name: string;
+  dominio_retorno: string;
+  negocio: string;
+  permisos: string[];
+  solo_lectura: boolean;
+  mismo_navegador: boolean;
+  expira_at: string;
+}
+
+export interface ConexionMcp {
+  id: string;
+  client_name: string;
+  creado_at: string;
+  ultimo_uso_at: string | null;
 }
 
 export interface InvitacionEquipoAPI {
@@ -1019,6 +1048,31 @@ export const api = {
 		method: 'POST',
 		body: JSON.stringify({ credential, nombre }),
 	}),
+
+  // Asistentes de IA (MCP / OAuth)
+  obtenerSolicitudMcp: async (id: string) => {
+    return apiFetch<SolicitudMcp>(`/oauth/solicitudes/${encodeURIComponent(id)}`);
+  },
+
+  aprobarSolicitudMcp: async (id: string) => {
+    return apiFetch<{ redirect_url: string }>(`/oauth/solicitudes/${encodeURIComponent(id)}/aprobar`, {
+      method: 'POST',
+    });
+  },
+
+  rechazarSolicitudMcp: async (id: string) => {
+    return apiFetch<{ redirect_url: string }>(`/oauth/solicitudes/${encodeURIComponent(id)}/rechazar`, {
+      method: 'POST',
+    });
+  },
+
+  listarConexionesMcp: async () => {
+    return apiFetch<ConexionMcp[]>('/oauth/conexiones');
+  },
+
+  revocarConexionMcp: async (id: string) => {
+    return apiFetch<void>(`/oauth/conexiones/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
 
   // 7. Flujo Público Comensal (US-42, US-43, US-44)
   obtenerMesaPorQR: async (qrToken: string) => {

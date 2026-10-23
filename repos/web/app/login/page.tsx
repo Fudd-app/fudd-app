@@ -1,17 +1,30 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- imagen de referencia de la maqueta (Unsplash) */
 
-import React, { useCallback, useState } from "react";
+import React, { Suspense, useCallback, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api, getErrorMessage } from "@/lib/api";
 import LandingIcon from "@/components/landing/LandingIcon";
 import RegistroBrand from "@/components/registro/RegistroBrand";
 import "@/components/registro/registro.css";
 import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
+import { returnToSeguro } from "@/lib/returnTo";
 
 export default function LoginPage() {
+  // useSearchParams requiere un límite de Suspense para que la página siga prerrenderizable.
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const returnToParam = useSearchParams().get("returnTo");
+  // Se valida contra window.location.origin, por eso solo en el cliente (los usos son en handlers).
+  const returnTo = typeof window === "undefined" ? null : returnToSeguro(returnToParam, window.location.origin);
   const [metodo, setMetodo] = useState<"password" | "magic">("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,13 +41,13 @@ export default function LoginPage() {
     setError("");
     try {
       await api.autenticarConGoogle(credential);
-      router.replace("/dashboard");
+      router.replace(returnTo ?? "/dashboard");
     } catch (err: unknown) {
       setError(getErrorMessage(err, "No pudimos iniciar sesión con Google."));
     } finally {
       setGoogleLoading(false);
     }
-  }, [router]);
+  }, [router, returnTo]);
 
   const handlePasswordLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -47,7 +60,7 @@ export default function LoginPage() {
     setError("");
     try {
       await api.autenticarConPassword(email, password);
-      router.replace("/dashboard");
+      router.replace(returnTo ?? "/dashboard");
     } catch (err: unknown) {
       setError(getErrorMessage(err, "No pudimos iniciar sesión."));
     } finally {
