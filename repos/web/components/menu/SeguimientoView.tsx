@@ -27,19 +27,23 @@ interface Props {
   onCalificar?: () => void;
 }
 
-const PASOS: EstadoPedido[] = ['recibido', 'preparando', 'listo'];
+const PASOS: EstadoPedido[] = ['recibido', 'confirmado', 'preparando', 'listo', 'entregado'];
 
 const PASO_LABELS: Record<EstadoPedido, string> = {
-  recibido: 'Pedido recibido',
+  recibido: 'Pedido enviado',
+  confirmado: 'Confirmado',
   preparando: 'En preparación',
-  listo: '¡Listo para retirar!',
+  listo: '¡Listo!',
+  entregado: 'Entregado',
   cerrado: 'Pedido finalizado',
 };
 
 const DEMORA_LABELS: Record<EstadoPedido, string> = {
-  recibido: 'Estimado: ~15 min',
+  recibido: 'Esperando confirmación del salón',
+  confirmado: 'Estimado: ~15 min',
   preparando: 'Estimado: ~8 min',
   listo: '¡Tu pedido está listo!',
+  entregado: '¡Buen provecho!',
   cerrado: 'Mesa cerrada',
 };
 
@@ -68,7 +72,8 @@ export default function SeguimientoView({
   const [solicitandoCuenta, setSolicitandoCuenta] = useState(false);
   const [modoCuenta, setModoCuenta] = useState<'mesa' | 'comensales'>('mesa');
   const total = items.reduce((n, i) => n + i.precio * i.cantidad, 0);
-  const pasoActual = PASOS.indexOf(estadoPedido);
+  // "cerrado" se muestra como el último paso completado.
+  const pasoActual = estadoPedido === 'cerrado' ? PASOS.length - 1 : PASOS.indexOf(estadoPedido);
   const gruposComensales = useMemo(() => {
     const nombresActuales = new Map<string, string>();
     if (comensalId?.trim() && comensalNombre?.trim()) {

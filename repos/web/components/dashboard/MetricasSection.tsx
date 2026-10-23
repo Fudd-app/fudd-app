@@ -17,13 +17,17 @@ const FORMATO_MONEDA = new Intl.NumberFormat("es-AR", {
 
 const ESTADO_LABELS: Record<string, string> = {
   recibido: "Recibidos",
+  confirmado: "Confirmados",
   preparando: "En preparación",
   listo: "Listos",
+  entregado: "Entregados",
   cerrado: "Cerrados",
 };
 
 const ESTADO_STYLES: Record<string, string> = {
   recibido: "border-[#F3D4A3] bg-[#FFF9EF] text-[#8A4D00]",
+  confirmado: "border-[#C9DCF7] bg-[#EFF6FF] text-[#285F9F]",
+  entregado: "border-[#A7E4CC] bg-[#EAF8F2] text-[#087657]",
   preparando: "border-[#C9DCF7] bg-[#EFF6FF] text-[#285F9F]",
   listo: "border-[#A7E4CC] bg-[#EAF8F2] text-[#087657]",
   cerrado: "border-concrete bg-ghost-fog text-sage-green",

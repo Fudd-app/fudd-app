@@ -27,6 +27,32 @@ interface GuestOrderStatusViewProps {
   formatPrice?: (price: number) => string;
 }
 
+// Orden de avance del pedido; "cerrado" se muestra igual que "entregado".
+const PASO_POR_ESTADO: Record<EstadoPedido, number> = {
+  recibido: 0,
+  confirmado: 1,
+  preparando: 2,
+  listo: 3,
+  entregado: 4,
+  cerrado: 4,
+};
+
+const PASOS_COMENSAL: Array<{ titulo: string; detalle: [string, string] }> = [
+  { titulo: "Pedido enviado", detalle: ["Esperando confirmación", "Recibimos tu pedido"] },
+  { titulo: "Confirmado", detalle: ["El salón lo está revisando", "El salón confirmó tu pedido"] },
+  { titulo: "En preparación", detalle: ["En espera de cocina", "Cocina comenzó tu pedido"] },
+  { titulo: "¡Listo!", detalle: ["Te avisaremos", "¡Listo para servir!"] },
+  { titulo: "Entregado", detalle: ["Te lo llevamos a la mesa", "¡Que lo disfrutes!"] },
+];
+
+const TITULOS_COMENSAL = [
+  "Pedido enviado",
+  "Tu pedido fue confirmado",
+  "Tu pedido ya está en cocina",
+  "¡Tu pedido está listo!",
+  "Tu pedido fue entregado",
+];
+
 export default function GuestOrderStatusView({
   mesaNumero,
   sector,
@@ -66,8 +92,7 @@ export default function GuestOrderStatusView({
   }, [pedidos, mesaNumero]);
 
   // Stepper state
-  const esListo = estadoPedido === "listo" || todosListos;
-  const esPreparando = estadoPedido === "preparando" || esListo;
+  const paso = Math.max(PASO_POR_ESTADO[estadoPedido], todosListos ? 3 : 0);
 
   const gruposComensales = useMemo(() => {
     const nombres = new Map<string, string>();
@@ -89,7 +114,7 @@ export default function GuestOrderStatusView({
   return (
     <section className="order-status">
       <span className="status-check">
-        <ComensalIcon name={esListo ? "spark" : "check"} size={32} />
+        <ComensalIcon name={paso >= 3 ? "spark" : "check"} size={32} />
       </span>
 
       <span className="table-chip">
@@ -97,59 +122,39 @@ export default function GuestOrderStatusView({
         {sector ? ` · ${sector}` : ""}
       </span>
 
-      <h1>
-        {esListo
-          ? "¡Tu pedido está listo!"
-          : esPreparando
-          ? "Tu pedido ya está en cocina"
-          : "Pedido recibido"}
-      </h1>
+      <h1>{TITULOS_COMENSAL[paso]}</h1>
 
       <p>
-        {esListo
+        {paso === 3
           ? "El equipo de salón te lo llevará en breve a la mesa. ¡Que lo disfrutes!"
+          : paso === 4
+          ? "¡Buen provecho! Si necesitás algo más, podés seguir agregando a tu pedido."
+          : paso === 0
+          ? "Estamos esperando que el salón confirme tu pedido. Mientras tanto, podés seguir agregando lo que quieras."
           : "Te avisamos cuando esté listo. Mientras tanto, podés seguir agregando lo que quieras."}
       </p>
 
       {/* Stepper de estado */}
       <div className="order-stepper">
-        <div className="done">
-          <i>
-            <ComensalIcon name="check" size={13} />
-          </i>
-          <span>
-            <strong>Pedido recibido</strong>
-            <small>Comanda confirmada</small>
-          </span>
-        </div>
-
-        <div className={esListo ? "done" : esPreparando ? "active" : ""}>
-          <i>
-            {esListo ? (
-              <ComensalIcon name="check" size={13} />
-            ) : esPreparando ? (
-              <span className="block w-2.5 h-2.5 rounded-full bg-[var(--green)]" />
-            ) : null}
-          </i>
-          <span>
-            <strong>En preparación</strong>
-            <small>
-              {esPreparando ? "Cocina comenzó tu pedido" : "En espera de cocina"}
-            </small>
-          </span>
-        </div>
-
-        <div className={esListo ? "active" : ""}>
-          <i>
-            {esListo ? (
-              <span className="block w-2.5 h-2.5 rounded-full bg-[var(--green)]" />
-            ) : null}
-          </i>
-          <span>
-            <strong>Listo para servir</strong>
-            <small>{esListo ? "¡Listo en mesa!" : "Te avisaremos"}</small>
-          </span>
-        </div>
+        {PASOS_COMENSAL.map((p, i) => {
+          const hecho = i < paso || (i === paso && paso === 4);
+          const activo = i === paso && !hecho;
+          return (
+            <div key={p.titulo} className={hecho ? "done" : activo ? "active" : ""}>
+              <i>
+                {hecho ? (
+                  <ComensalIcon name="check" size={13} />
+                ) : activo ? (
+                  <span className="block w-2.5 h-2.5 rounded-full bg-[var(--green)]" />
+                ) : null}
+              </i>
+              <span>
+                <strong>{p.titulo}</strong>
+                <small>{p.detalle[i <= paso ? 1 : 0]}</small>
+              </span>
+            </div>
+          );
+        })}
       </div>
 
       {/* Notificaciones de Pago */}
@@ -251,7 +256,7 @@ export default function GuestOrderStatusView({
         )}
 
         {/* Smart Google Review Funnel */}
-        {esListo && !yaCalificado && onCalificar && (
+        {paso >= 3 && !yaCalificado && onCalificar && (
           <button
             type="button"
             className="guest-secondary border-dashed"
