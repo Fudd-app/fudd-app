@@ -6,6 +6,7 @@ import (
 	"html"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -119,14 +120,18 @@ func (h *Handlers) Autorizar(w http.ResponseWriter, r *http.Request) {
 	id, nonce, err := h.svc.IniciarAutorizacion(r.Context(), p)
 	switch {
 	case err == nil:
+		// La web consume la API vía /api-proxy desde otro host: Domain hace que la
+		// cookie viaje al dominio de la web, y Path "/" cubre la ruta proxeada.
 		http.SetCookie(w, &http.Cookie{
 			Name:     cookieSolicitud + id,
 			Value:    nonce,
-			Path:     "/oauth/solicitudes/",
+			Path:     "/",
+			Domain:   h.svc.cfg.DominioCookie,
 			HttpOnly: true,
 			SameSite: http.SameSiteLaxMode,
 			MaxAge:   int(DuracionSolicitud.Seconds()),
-			Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+			Secure: r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" ||
+				strings.EqualFold(os.Getenv("APP_ENV"), "production"),
 		})
 		http.Redirect(w, r, h.svc.URLConsentimiento(id), http.StatusFound)
 	case errors.Is(err, ErrClienteInvalido), errors.Is(err, ErrRedirectInvalido):

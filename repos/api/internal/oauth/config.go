@@ -21,6 +21,9 @@ type Config struct {
 	Resource string // Issuer + "/mcp"
 	AppURL   string // APP_URL
 	Secreto  []byte // clave derivada de JWT_SECRET
+
+	// DominioCookie (MCP_COOKIE_DOMAIN) es el dominio de la cookie de solicitud; vacío = host-only.
+	DominioCookie string
 }
 
 func ConfigDesdeEntorno() (Config, error) {
@@ -46,5 +49,7 @@ func ConfigDesdeEntorno() (Config, error) {
 		Resource: issuer + "/mcp",
 		AppURL:   appURL,
 		Secreto:  clave[:],
+
+		DominioCookie: strings.TrimPrefix(strings.TrimSpace(os.Getenv("MCP_COOKIE_DOMAIN")), "."),
 	}, nil
 }
