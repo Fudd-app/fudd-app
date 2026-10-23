@@ -8,7 +8,7 @@ import { api, getErrorMessage } from "@/lib/api";
 import LandingIcon, { type LandingIconName } from "@/components/landing/LandingIcon";
 import RegistroBrand from "@/components/registro/RegistroBrand";
 import { useRegistro } from "@/components/registro/RegistroContext";
-import { emailValido, esErrorDeConexion, generarSlug, limpiarSlugEscrito, SLUG_RE } from "@/components/registro/validaciones";
+import { emailValido, esErrorDeConexion, esSlugReservado, generarSlug, limpiarSlugEscrito, SLUG_RE } from "@/components/registro/validaciones";
 import { formatearPrecioPlan, PLAN_MONEDA, PLAN_PRUEBA_MESES } from "@/lib/planes";
 
 const TOTAL_PASOS = 3;
@@ -66,6 +66,10 @@ export default function OnboardingPage() {
   // Verifica el nombre en URL con una pequeña espera mientras se escribe.
   useEffect(() => {
     if (!slugValido) return;
+    if (esSlugReservado(slug)) {
+      setResultadoSlug({ slug, estado: "en-uso" });
+      return;
+    }
     let cancelado = false;
     const timer = setTimeout(async () => {
       try {
