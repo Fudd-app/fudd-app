@@ -10,7 +10,7 @@ require (
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/joho/godotenv v1.5.1
 	github.com/modelcontextprotocol/go-sdk v1.8.0
-	github.com/xuri/excelize/v2 v2.11.1-0.20260930021559-01a9ff32fb3c
+	github.com/xuri/excelize/v2 v2.11.1-0.20260930021559-01a9ff32fb3c // commit con fixes de GO-2026-6684/6685/6688/6689; pasar al primer release v2.11.x que los incluya
 	golang.org/x/crypto v0.57.0
 )
 

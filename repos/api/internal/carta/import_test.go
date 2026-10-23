@@ -3,6 +3,7 @@ package carta
 import (
 	"archive/zip"
 	"bytes"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -96,8 +97,21 @@ func TestParsearXLSX_ArchivoCorrupto(t *testing.T) {
 	}
 }
 
-// Una hoja con un número de fila desmedido debe rechazarse sin colgar el
-// parseo (familia de GO-2026-6685; este input no reproduce ese CVE exacto).
+// hojaConFilas arma el XML de una hoja con una celda en `columna` por fila.
+func hojaConFilas(cantidad int, columna string) string {
+	var b strings.Builder
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+		`<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>`)
+	for i := 1; i <= cantidad; i++ {
+		fmt.Fprintf(&b, `<row r="%d"><c r="%s%d" t="inlineStr"><is><t>x</t></is></c></row>`, i, columna, i)
+	}
+	b.WriteString(`</sheetData></worksheet>`)
+	return b.String()
+}
+
+// Una hoja con un número de fila fuera del rango de Excel debe rechazarse sin
+// colgar el parseo. Es un test de robustez: no reproduce GO-2026-6685, que se
+// cubre actualizando excelize.
 func TestParsearXLSX_NumeroDeFilaDesmedido(t *testing.T) {
 	hoja := `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
 		`<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>` +
@@ -111,19 +125,49 @@ func TestParsearXLSX_NumeroDeFilaDesmedido(t *testing.T) {
 	}
 }
 
+// Una celda en la columna XFD por fila cuesta ~1 MB por fila en excelize aunque
+// el archivo pese pocos KB. Pasado el máximo de filas el archivo se rechaza.
+func TestParsearXLSX_CeldasEnUltimaColumna(t *testing.T) {
+	contenido := reemplazarHoja(t, xlsxValido(t), hojaConFilas(maxFilasXLSX+1, "XFD"))
+
+	filas, errores := parsearConTimeout(t, contenido)
+	if len(filas) != 0 || len(errores) == 0 || !strings.Contains(errores[0].Motivo, "máximo") {
+		t.Fatalf("se esperaba rechazo por máximo de filas, se obtuvo filas=%+v errores=%+v", filas, errores)
+	}
+}
+
+// Las columnas más allá de maxColumnasXLSX se descartan sin romper las filas válidas.
+func TestLeerFilasXLSX_RecortaColumnas(t *testing.T) {
+	f := excelize.NewFile()
+	defer f.Close()
+	hoja := f.GetSheetName(0)
+	_ = f.SetSheetRow(hoja, "A1", &[]any{"categoria", "nombre", "precio"})
+	_ = f.SetSheetRow(hoja, "A2", &[]any{"Bebidas", "Agua", 1500})
+	_ = f.SetCellValue(hoja, "XFD2", "basura")
+
+	filas, errFila := leerFilasXLSX(f, hoja)
+	if errFila != nil {
+		t.Fatalf("error inesperado: %+v", errFila)
+	}
+	if len(filas) != 2 || len(filas[1]) != maxColumnasXLSX || filas[1][1] != "Agua" {
+		t.Fatalf("filas inesperadas: %+v", filas)
+	}
+}
+
 func TestParsearXLSX_ZipBomb(t *testing.T) {
-	// Más de limiteDescompresionXLSX descomprimido, pero muy chico comprimido.
-	relleno := strings.Repeat(" ", limiteDescompresionXLSX+1)
+	limiteOriginal := limiteDescompresionXLSX
+	limiteDescompresionXLSX = 1 << 20 // 1 MB, para no armar 50 MB en cada corrida
+	t.Cleanup(func() { limiteDescompresionXLSX = limiteOriginal })
+
+	// Más del límite descomprimido, pero muy chico comprimido.
+	relleno := strings.Repeat(" ", int(limiteDescompresionXLSX)+1)
 	hoja := `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
 		`<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
 		relleno + `<sheetData/></worksheet>`
 	contenido := reemplazarHoja(t, xlsxValido(t), hoja)
-	if len(contenido) > 5<<20 {
-		t.Fatalf("el archivo de prueba debería pasar el límite de subida de 5 MB, pesa %d bytes", len(contenido))
-	}
 
 	filas, errores := parsearConTimeout(t, contenido)
-	if len(filas) != 0 || len(errores) == 0 || !strings.Contains(errores[0].Motivo, "malformado") {
+	if len(filas) != 0 || len(errores) == 0 || !strings.Contains(errores[0].Motivo, "demasiado grande") {
 		t.Fatalf("se esperaba rechazo por tamaño descomprimido, se obtuvo filas=%+v errores=%+v", filas, errores)
 	}
 }

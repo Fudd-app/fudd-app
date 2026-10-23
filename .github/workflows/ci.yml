@@ -33,7 +33,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.26.10'
+          go-version-file: repos/api/go.mod
 
       - name: Build and run backend tests
         env:
