@@ -37,7 +37,7 @@ mesa-click/
 
 ## Desarrollo local
 
-Requisitos: Docker, Node.js 20+ y (opcional, para correr la API fuera de Docker) Go 1.25+.
+Requisitos: Docker, Node.js 24+ y (opcional, para correr la API fuera de Docker) Go 1.25+.
 
 ```powershell
 npm run setup   # primera vez: levanta PostgreSQL, API y web con Docker y siembra datos demo
