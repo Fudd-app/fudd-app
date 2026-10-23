@@ -2,6 +2,7 @@ package auth_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -111,5 +112,43 @@ func TestRequerirSuperadmin(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("se esperaba 200 para superadmin, obtenido: %d", rec.Code)
+	}
+}
+
+func TestMiSesionEsSuperadmin(t *testing.T) {
+	os.Setenv("SUPERADMIN_EMAILS", "admin@fudd.com.ar")
+	defer os.Unsetenv("SUPERADMIN_EMAILS")
+
+	mock := &mockStore{
+		obtenerUsuarioPorIDFn: func(ctx context.Context, id string) (*auth.UsuarioAuth, error) {
+			email := "mortal@negocio.com"
+			if id == "u-super" {
+				email = "admin@fudd.com.ar"
+			}
+			return &auth.UsuarioAuth{ID: id, TenantID: "t-1", Email: email, Rol: auth.RolDuenio, Estado: "activo"}, nil
+		},
+	}
+	h := auth.NuevosHandlers(auth.NuevoServiceConGoogle(mock, nil, "", nil), false)
+
+	casos := []struct {
+		usuarioID string
+		esperado  bool
+	}{
+		{"u-super", true},
+		{"u-mortal", false},
+	}
+	for _, c := range casos {
+		req := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
+		req = req.WithContext(auth.ContextConClaims(req.Context(), &auth.Claims{UsuarioID: c.usuarioID}))
+		rec := httptest.NewRecorder()
+		h.MiSesion(rec, req)
+
+		var body map[string]any
+		if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+			t.Fatalf("respuesta inválida: %v", err)
+		}
+		if body["es_superadmin"] != c.esperado {
+			t.Errorf("%s: es_superadmin = %v; se esperaba %v", c.usuarioID, body["es_superadmin"], c.esperado)
+		}
 	}
 }

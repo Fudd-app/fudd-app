@@ -228,6 +228,8 @@ func (h *Handlers) MiSesion(w http.ResponseWriter, r *http.Request) {
 		"nombre":      usuario.Nombre,
 		"rol":         usuario.Rol,
 		"sucursal_id": usuario.SucursalID,
+		// Solo informativo para el frontend; la autorización real la aplica RequerirSuperadmin.
+		"es_superadmin": EsSuperadmin(usuario.Email),
 	})
 }
 
