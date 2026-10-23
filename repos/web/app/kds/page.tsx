@@ -27,8 +27,6 @@ import {
   setAutoPrintEnabled,
 } from "@/components/kds/TicketTermico";
 
-const RANGO_ITEM: Record<string, number> = { pendiente: 0, preparando: 1, listo: 2 };
-
 const VENTANA_AGRUPACION_MS = 5 * 60 * 1000;
 
 // Cocina solo trabaja pedidos ya confirmados por recepción; "recibido" no entra.
@@ -38,14 +36,12 @@ function esVisibleEnKDS(pedido: PedidoAPI): boolean {
   return ESTADOS_VISIBLES_KDS.includes(pedido.estado);
 }
 
-// Mezcla un pedido entrante sin retroceder: el estado solo se aplica si avanza
-// y los ítems se actualizan por id, conservando los que ya llegaron por SSE.
+// Mezcla un pedido entrante: el estado del pedido solo se aplica si avanza (la API
+// nunca lo hace retroceder), pero cada ítem toma el valor del servidor porque la
+// cocina puede deshacer un ítem. Los ítems se actualizan por id sin perder los demás.
 function fusionarPedido(actual: PedidoAPI, entrante: PedidoAPI): PedidoAPI {
   const estado = avanza(actual.estado, entrante.estado) ? entrante.estado : actual.estado;
-  const items = actual.items?.map((it) => {
-    const nuevo = entrante.items?.find((n) => n.id === it.id);
-    return nuevo && RANGO_ITEM[nuevo.estado ?? "pendiente"] >= RANGO_ITEM[it.estado ?? "pendiente"] ? nuevo : it;
-  });
+  const items = actual.items?.map((it) => entrante.items?.find((n) => n.id === it.id) ?? it);
   return { ...actual, estado, items };
 }
 
