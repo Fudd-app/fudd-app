@@ -57,7 +57,7 @@ repos/web/
 
 ## Reglas de código
 
-- **Git workflow**: ramas (`feat/US-XX-*`, `fix/<nro-issue>-*`) siempre desde `qa`, PR con título `[web] ...` y code review antes del merge. `qa` se despliega en Vercel como `qa.fudd.com.ar` y `main` como `fudd.com.ar`.
+- **Git workflow**: ramas (`feat/<nro-issue>-*`, `fix/<nro-issue>-*`) siempre desde `qa`, PR con título `[web] ...` y code review antes del merge. `qa` se despliega en Vercel como `qa.fudd.com.ar` y `main` como `fudd.com.ar`.
 - Un issue `[web]` no modifica `repos/api`; si hace falta un cambio de backend, se crea el issue `[api]` correspondiente.
 - Validar con `npm run build` antes de abrir el PR
 - No instalar librerías sin justificación explícita en la US

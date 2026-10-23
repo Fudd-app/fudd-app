@@ -13,7 +13,7 @@
  1. Cargar requerimiento / bug                  5. Tomar el ítem (En Curso)
  2. Refinar                                     6. Rama nueva desde qa
  3. Crear issue(s) [web] / [api] + proyecto     7. Desarrollar + testear + regresión
- 4. Estimar                                     8. Commit + PR hacia qa (En Review)
+ 4. Estimar                                     8. Commit + PR hacia qa (sigue En Curso)
                                                 9. Code review del PR
                                                10. Merge a qa (En QA) → main (Resuelta)
 ```
@@ -33,10 +33,10 @@ Cada issue toca **un solo** repo interno. El repo va como prefijo del título:
 
 Formatos:
 
-- User Story: `[web] US-88: Título descriptivo` · `[api] US-89: Título descriptivo`
+- User Story: `[web] Título descriptivo` · `[api] Título descriptivo`. Se identifica por el número que asigna GitHub (`#88`), no se agrega número en el título. Los issues anteriores conservan su `US-N` histórico.
 - Bug: `[web] BUG: Descripción corta del problema` · `[api] BUG: ...`
 
-Si un requerimiento necesita cambios en ambos repos, **se divide en dos issues** (uno `[api]` y uno `[web]`), cada uno con su número de US, y el de `[web]` declara `Depende de #N` del de `[api]`. El contrato (endpoint, payload, códigos de error) se define en el issue `[api]` y el `[web]` lo referencia.
+Si un requerimiento necesita cambios en ambos repos, **se divide en dos issues** (uno `[api]` y uno `[web]`), cada uno con su propio número de issue, y el de `[web]` declara `Depende de #N` del de `[api]`. El contrato (endpoint, payload, códigos de error) se define en el issue `[api]` y el `[web]` lo referencia.
 
 Los mismos prefijos se usan en el **título del PR**. En los commits se usa el scope de Conventional Commits: `feat(web): ...`, `fix(api): ...`.
 
@@ -66,17 +66,12 @@ Para entender el impacto, el agente debe leer el código involucrado (y `docs/fl
 
 Usar las plantillas de `.github/ISSUE_TEMPLATE/` (`user-story.md` o `bug-fix.md`).
 
-Siguiente número de US disponible:
-
-```bash
-gh issue list --state all --limit 500 --search "US- in:title" --json title \
-  --jq '[.[].title | capture("US-(?<n>[0-9]+)").n | tonumber] | max + 1'
-```
+El número del issue lo asigna GitHub al crearlo y es el que se usa en la rama, el PR y las referencias (`#88`).
 
 Crear el issue y agregarlo al proyecto:
 
 ```bash
-gh issue create --title "[api] US-88: ..." --body-file cuerpo.md --label enhancement   # bug → --label bug
+gh issue create --title "[api] Título descriptivo" --body-file cuerpo.md --label enhancement   # bug → --label bug
 gh project item-add 1 --owner Fudd-app --url <URL-del-issue>
 ```
 
@@ -86,11 +81,11 @@ Campos del proyecto a completar en el ítem:
 
 | Campo | Valor |
 |---|---|
-| **Status** | `📥 Por refinar` mientras falte información · `📋 Pendiente` cuando está refinado y estimado |
+| **Status** | Sin Status mientras falte información · `📋 Pendiente` cuando está refinado y estimado |
 | **Estimación** | Story points Fibonacci: `1`, `2`, `3`, `5`, `8`. **Más de 8 → dividir el ítem** |
-| **Sprint** | Sprint en el que se planifica |
+| **Sprint** | Sprint en el que se planifica. Vacío = backlog (todavía no planificado) |
 | **Tipo** | `Frontend` para `[web]`, `Backend` para `[api]`, `Bug / Fix` para bugs |
-| **Rama** | `feat/US-88-descripcion-corta` o `fix/<nro-issue>-descripcion-corta` |
+| **Rama** | `feat/<nro-issue>-descripcion-corta` o `fix/<nro-issue>-descripcion-corta` |
 
 Guía de puntos: `1` cambio trivial y localizado · `2` cambio chico en 1–2 archivos · `3` feature chica con tests · `5` feature con varias piezas o migración · `8` feature grande o con incertidumbre.
 
@@ -107,7 +102,7 @@ gh project item-edit --project-id PVT_kwDOFJl_Ms4BoSi1 --id <item-id> \
 gh project item-edit --project-id PVT_kwDOFJl_Ms4BoSi1 --id <item-id> \
   --field-id <field-id> --number 3                            # Estimación
 gh project item-edit --project-id PVT_kwDOFJl_Ms4BoSi1 --id <item-id> \
-  --field-id <field-id> --text "feat/US-88-..."               # Rama
+  --field-id <field-id> --text "feat/88-..."               # Rama
 ```
 
 ---
@@ -122,7 +117,7 @@ Solo ítems en `📋 Pendiente` del sprint en curso. Asignarse el issue (`gh iss
 
 ```bash
 git checkout qa && git pull origin qa
-git checkout -b feat/US-88-descripcion-corta      # o fix/<nro-issue>-descripcion-corta
+git checkout -b feat/88-descripcion-corta         # o fix/<nro-issue>-descripcion-corta
 ```
 
 Una rama por issue. Nunca trabajar sobre `qa` ni `main` directamente.
@@ -147,12 +142,12 @@ Commits con Conventional Commits y scope del repo, explicando el **por qué**:
 
 ```bash
 git commit -m "feat(api): validar cuota de sucursales antes de crear para respetar el plan Free"
-git push -u origin feat/US-88-descripcion-corta
-gh pr create --base qa --title "[api] US-88: Título" --body-file pr.md   # usa .github/pull_request_template.md
+git push -u origin feat/88-descripcion-corta
+gh pr create --base qa --title "[api] Título" --body-file pr.md   # usa .github/pull_request_template.md
 ```
 
 - El cuerpo del PR lleva `Closes #<nro-issue>`, el resultado de tests y regresión, y cómo probarlo.
-- Mover el ítem a `👀 En Review`.
+- El ítem sigue en `⚡ En Curso` mientras el PR está abierto; el PR queda visible en el campo "Linked pull requests" del tablero.
 
 ### 9. Code review antes de mergear
 
@@ -178,9 +173,8 @@ Los hallazgos se corrigen en la misma rama y se vuelve a pedir review.
 
 | Status | Significa | Quién lo mueve |
 |---|---|---|
-| `📥 Por refinar` | Cargado, falta información o estimación | Quien lo carga |
+| Sin Status | Cargado, falta información o estimación | Quien lo carga |
 | `📋 Pendiente` | Refinado y estimado, listo para tomar | Quien refina |
 | `⚡ En Curso` | Asignado, rama creada | Quien lo toma |
-| `👀 En Review` | PR abierto hacia `qa` | Autor del PR |
 | `🧪 En QA` | Mergeado en `qa`, en validación | Quien mergea |
 | `✅ Resuelta` | En `main` / producción | Quien promueve a `main` |
