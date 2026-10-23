@@ -61,7 +61,14 @@ func nuevoHandler(autenticar func(http.Handler) http.Handler, deps Dependencias)
 			return nil
 		}
 		return construirServidor(claims, deps, limiteTools)
-	}, &sdk.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
+	}, &sdk.StreamableHTTPOptions{
+		Stateless:    true,
+		JSONResponse: true,
+		// La protección anti DNS rebinding del SDK es para servidores locales sin auth. Detrás del proxy
+		// de Render el tráfico llega por loopback con Host público y devolvía 403; acá exigimos un Bearer
+		// OAuth que un ataque de rebinding no puede obtener.
+		DisableLocalhostProtection: true,
+	})
 
 	cadena := autenticar(registrarUsuario(limitarPorUsuario(ratelimit.Nuevo(300, time.Minute), sdkHandler)))
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -199,6 +200,24 @@ func TestHandlerSinTokenDevuelve401(t *testing.T) {
 	h.ServeHTTP(rec, r)
 	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Header().Get("WWW-Authenticate"), "resource_metadata") {
 		t.Errorf("esperaba 401 con desafío, obtuve %d %q", rec.Code, rec.Header().Get("WWW-Authenticate"))
+	}
+}
+
+func TestHandlerAceptaHostPublicoDetrasDeProxyLoopback(t *testing.T) {
+	h := nuevoHandlerDePrueba(t, nuevoStoreFalso())
+	cuerpo := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}`
+	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(cuerpo))
+	r.Host = "apiqa.fudd.com.ar"
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("Accept", "application/json, text/event-stream")
+	r.Header.Set("X-Tenant", "t-a")
+	r.Header.Set("X-Usuario", "u-1")
+	addr := &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 8080}
+	r = r.WithContext(context.WithValue(r.Context(), http.LocalAddrContextKey, addr))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, r)
+	if rec.Code != http.StatusOK {
+		t.Errorf("esperaba 200 con Host público sobre loopback, obtuve %d: %s", rec.Code, rec.Body)
 	}
 }
 
