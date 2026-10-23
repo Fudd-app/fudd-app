@@ -49,7 +49,7 @@ func (s *pgStore) ObtenerMetricasGlobales(ctx context.Context) (*StatusPlataform
 			(SELECT COUNT(*) FROM mesas),
 			(SELECT COUNT(*) FROM usuarios WHERE deleted_at IS NULL),
 			(SELECT COUNT(*) FROM pedidos WHERE created_at >= CURRENT_DATE),
-			(SELECT COALESCE(SUM(total), 0) FROM pedidos WHERE created_at >= CURRENT_DATE)
+			(SELECT COALESCE(SUM(pi.cantidad * pi.precio_unitario), 0) FROM pedido_items pi JOIN pedidos p ON p.id = pi.pedido_id WHERE p.created_at >= CURRENT_DATE)
 	`).Scan(
 		&st.TotalTenants,
 		&st.TotalSucursales,
@@ -78,9 +78,9 @@ func (s *pgStore) ListarTenantsConsolidado(ctx context.Context) ([]TenantResumen
 			(SELECT COUNT(*) FROM mesas m JOIN sucursales s ON s.id = m.sucursal_id WHERE s.tenant_id = t.id) AS total_mesas,
 			(SELECT COUNT(*) FROM mesas m JOIN sucursales s ON s.id = m.sucursal_id WHERE s.tenant_id = t.id AND m.activa = true) AS mesas_activas,
 			(SELECT COUNT(*) FROM usuarios u WHERE u.tenant_id = t.id AND u.deleted_at IS NULL) AS total_usuarios,
-			(SELECT COUNT(*) FROM pedidos p WHERE p.tenant_id = t.id) AS total_pedidos,
-			(SELECT COALESCE(SUM(p.total), 0) FROM pedidos p WHERE p.tenant_id = t.id) AS total_ventas,
-			(SELECT MAX(p.created_at) FROM pedidos p WHERE p.tenant_id = t.id) AS ultimo_pedido_at
+			(SELECT COUNT(*) FROM pedidos p JOIN sucursales s ON s.id = p.sucursal_id WHERE s.tenant_id = t.id) AS total_pedidos,
+			(SELECT COALESCE(SUM(pi.cantidad * pi.precio_unitario), 0) FROM pedido_items pi JOIN pedidos p ON p.id = pi.pedido_id JOIN sucursales s ON s.id = p.sucursal_id WHERE s.tenant_id = t.id) AS total_ventas,
+			(SELECT MAX(p.created_at) FROM pedidos p JOIN sucursales s ON s.id = p.sucursal_id WHERE s.tenant_id = t.id) AS ultimo_pedido_at
 		FROM tenants t
 		ORDER BY t.created_at DESC
 	`)
@@ -150,9 +150,9 @@ func (s *pgStore) ObtenerDetalleTenant(ctx context.Context, tenantID string) (*T
 			(SELECT COUNT(*) FROM mesas m JOIN sucursales s ON s.id = m.sucursal_id WHERE s.tenant_id = t.id) AS total_mesas,
 			(SELECT COUNT(*) FROM mesas m JOIN sucursales s ON s.id = m.sucursal_id WHERE s.tenant_id = t.id AND m.activa = true) AS mesas_activas,
 			(SELECT COUNT(*) FROM usuarios u WHERE u.tenant_id = t.id AND u.deleted_at IS NULL) AS total_usuarios,
-			(SELECT COUNT(*) FROM pedidos p WHERE p.tenant_id = t.id) AS total_pedidos,
-			(SELECT COALESCE(SUM(p.total), 0) FROM pedidos p WHERE p.tenant_id = t.id) AS total_ventas,
-			(SELECT MAX(p.created_at) FROM pedidos p WHERE p.tenant_id = t.id) AS ultimo_pedido_at
+			(SELECT COUNT(*) FROM pedidos p JOIN sucursales s ON s.id = p.sucursal_id WHERE s.tenant_id = t.id) AS total_pedidos,
+			(SELECT COALESCE(SUM(pi.cantidad * pi.precio_unitario), 0) FROM pedido_items pi JOIN pedidos p ON p.id = pi.pedido_id JOIN sucursales s ON s.id = p.sucursal_id WHERE s.tenant_id = t.id) AS total_ventas,
+			(SELECT MAX(p.created_at) FROM pedidos p JOIN sucursales s ON s.id = p.sucursal_id WHERE s.tenant_id = t.id) AS ultimo_pedido_at
 		FROM tenants t
 		WHERE t.id = $1
 	`, tenantID).Scan(
@@ -201,11 +201,14 @@ func (s *pgStore) ObtenerDetalleTenant(ctx context.Context, tenantID string) (*T
 	var movimientos []Movimiento
 
 	pRows, err := db.Pool.Query(ctx, `
-		SELECT p.id, p.total, p.estado, p.origen, COALESCE(p.creado_por_nombre, 'Comensal'),
+		SELECT p.id,
+		       COALESCE((SELECT SUM(pi.cantidad * pi.precio_unitario) FROM pedido_items pi WHERE pi.pedido_id = p.id), 0) AS total,
+		       p.estado, p.origen, COALESCE(p.creado_por_nombre, 'Comensal'),
 		       COALESCE(m.numero, 0), p.created_at
 		FROM pedidos p
+		JOIN sucursales s ON s.id = p.sucursal_id
 		LEFT JOIN mesas m ON m.id = p.mesa_id
-		WHERE p.tenant_id = $1
+		WHERE s.tenant_id = $1
 		ORDER BY p.created_at DESC
 		LIMIT 30
 	`, tenantID)
