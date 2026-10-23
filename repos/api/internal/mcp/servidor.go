@@ -9,6 +9,7 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -73,18 +74,44 @@ func nuevoHandler(autenticar func(http.Handler) http.Handler, deps Dependencias)
 	}))
 }
 
-const maxBodyLog = 1 << 20
+const (
+	maxBodyLog     = 64 << 10
+	maxCampoLog    = 120
+	maxBatchLog    = 10
+	metodoDesconoc = "otro"
+)
+
+// metodosConocidos es la lista blanca de lo que se loguea como rpc_method:
+// el resto es controlado por el cliente y se registra como "otro".
+var metodosConocidos = map[string]bool{
+	"initialize": true, "ping": true, "tools/list": true, "tools/call": true,
+	"resources/list": true, "resources/templates/list": true, "resources/read": true,
+	"prompts/list": true, "prompts/get": true, "logging/setLevel": true,
+	"completion/complete": true, "notifications/initialized": true,
+	"notifications/cancelled": true, "notifications/progress": true,
+	"notifications/roots/list_changed": true,
+}
+
+// acotar limita a maxCampoLog caracteres un valor que viene del cliente.
+func acotar(valor string) string {
+	runas := []rune(valor)
+	if len(runas) <= maxCampoLog {
+		return valor
+	}
+	return string(runas[:maxCampoLog])
+}
 
 type claveUsuarioLog struct{}
 
 // registrarRequests es la primera capa: loguea cada request a /mcp con lo que
 // importa para diagnosticar clientes (método RPC, status, cabeceras), nunca el
-// valor de Authorization ni los params.
+// valor de Authorization ni los params. Todo lo que viene del cliente se acota
+// antes de loguearlo, y el body solo se inspecciona si el endpoint está habilitado.
 func registrarRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		inicio := time.Now()
 		rpcMethod := ""
-		if r.Method == http.MethodPost && esJSON(r.Header.Get("Content-Type")) && r.Body != nil {
+		if os.Getenv("MCP_HABILITADO") == "true" && r.Method == http.MethodPost && esJSON(r.Header.Get("Content-Type")) && r.Body != nil {
 			cuerpo, _ := io.ReadAll(io.LimitReader(r.Body, maxBodyLog))
 			// Se restaura lo leído más lo que quede sin leer, para que el SDK vea el body intacto.
 			r.Body = struct {
@@ -104,17 +131,21 @@ func registrarRequests(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(rw, r)
 
-		attrs := []any{
-			"http_method", r.Method,
+		attrs := []any{"http_method", r.Method}
+		if sw.status == http.StatusNotFound && os.Getenv("MCP_HABILITADO") != "true" {
+			slog.InfoContext(r.Context(), "mcp request", append(attrs, "status", sw.status)...)
+			return
+		}
+		attrs = append(attrs,
 			"rpc_method", rpcMethod,
 			"status", sw.status,
 			"duracion_ms", time.Since(inicio).Milliseconds(),
 			"tiene_authorization", r.Header.Get("Authorization") != "",
-			"user_agent", r.UserAgent(),
-			"mcp_protocol_version", r.Header.Get("MCP-Protocol-Version"),
-			"accept", r.Header.Get("Accept"),
-			"content_type", r.Header.Get("Content-Type"),
-		}
+			"user_agent", acotar(r.UserAgent()),
+			"mcp_protocol_version", acotar(r.Header.Get("MCP-Protocol-Version")),
+			"accept", acotar(r.Header.Get("Accept")),
+			"content_type", acotar(r.Header.Get("Content-Type")),
+		)
 		if *usuario != "" {
 			attrs = append(attrs, "usuario_id", *usuario)
 		}
@@ -143,7 +174,16 @@ func esJSON(contentType string) bool {
 	return err == nil && (tipo == "application/json" || strings.HasSuffix(tipo, "+json"))
 }
 
-// metodosRPC extrae solo el campo method del JSON-RPC (o los de un batch, separados por coma).
+// nombreMetodo devuelve el método si es conocido y "otro" si no.
+func nombreMetodo(metodo string) string {
+	if metodosConocidos[metodo] {
+		return metodo
+	}
+	return metodoDesconoc
+}
+
+// metodosRPC extrae solo el campo method del JSON-RPC (o los de un batch, separados por coma,
+// hasta maxBatchLog entradas más "+N" con las restantes). Los valores salen de la lista blanca.
 func metodosRPC(cuerpo []byte) string {
 	cuerpo = bytes.TrimSpace(cuerpo)
 	if len(cuerpo) > 0 && cuerpo[0] == '[' {
@@ -153,9 +193,13 @@ func metodosRPC(cuerpo []byte) string {
 		if json.Unmarshal(cuerpo, &batch) != nil {
 			return "?"
 		}
-		metodos := make([]string, 0, len(batch))
-		for _, m := range batch {
-			metodos = append(metodos, m.Method)
+		metodos := make([]string, 0, maxBatchLog+1)
+		for i, m := range batch {
+			if i == maxBatchLog {
+				metodos = append(metodos, "+"+strconv.Itoa(len(batch)-maxBatchLog))
+				break
+			}
+			metodos = append(metodos, nombreMetodo(m.Method))
 		}
 		return strings.Join(metodos, ",")
 	}
@@ -165,7 +209,7 @@ func metodosRPC(cuerpo []byte) string {
 	if json.Unmarshal(cuerpo, &msg) != nil {
 		return "?"
 	}
-	return msg.Method
+	return nombreMetodo(msg.Method)
 }
 
 type statusWriter struct {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -543,5 +544,75 @@ func TestLogNoConsumeElBodyDelSDK(t *testing.T) {
 	}
 	if !strings.Contains(logs.String(), "rpc_method=tools/call") {
 		t.Errorf("el log no contiene rpc_method=tools/call: %s", logs)
+	}
+}
+
+func postLogueado(h http.Handler, cuerpo string, cabeceras map[string]string) *httptest.ResponseRecorder {
+	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(cuerpo))
+	r.Header.Set("Content-Type", "application/json")
+	for k, v := range cabeceras {
+		r.Header.Set(k, v)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, r)
+	return rec
+}
+
+func TestLogMetodoDesconocidoOLargoSeRegistraComoOtro(t *testing.T) {
+	logs := capturarLogs(t)
+	h := nuevoHandlerDePrueba(t, nuevoStoreFalso())
+	postLogueado(h, `{"jsonrpc":"2.0","id":1,"method":"`+strings.Repeat("x", 5000)+`"}`, nil)
+	salida := logs.String()
+	if !strings.Contains(salida, "rpc_method=otro") || strings.Contains(salida, "xxxxx") {
+		t.Errorf("esperaba rpc_method=otro: %s", salida)
+	}
+}
+
+func TestLogBatchAcotaEntradas(t *testing.T) {
+	logs := capturarLogs(t)
+	h := nuevoHandlerDePrueba(t, nuevoStoreFalso())
+	entradas := make([]string, 15)
+	for i := range entradas {
+		entradas[i] = `{"jsonrpc":"2.0","id":1,"method":"ping"}`
+	}
+	postLogueado(h, "["+strings.Join(entradas, ",")+"]", nil)
+	esperado := "rpc_method=" + strings.TrimSuffix(strings.Repeat("ping,", 10), ",") + ",+5"
+	if !strings.Contains(logs.String(), esperado) {
+		t.Errorf("esperaba %q: %s", esperado, logs)
+	}
+}
+
+func TestLogTruncaCabecerasDelCliente(t *testing.T) {
+	logs := capturarLogs(t)
+	h := nuevoHandlerDePrueba(t, nuevoStoreFalso())
+	postLogueado(h, `{"jsonrpc":"2.0","id":1,"method":"ping"}`, map[string]string{"User-Agent": strings.Repeat("a", 1000)})
+	salida := logs.String()
+	if !strings.Contains(salida, "user_agent="+strings.Repeat("a", 120)+" ") {
+		t.Errorf("user_agent no quedó en 120: %s", salida)
+	}
+}
+
+type bodyEspia struct {
+	leido bool
+}
+
+func (b *bodyEspia) Read([]byte) (int, error) { b.leido = true; return 0, io.EOF }
+func (b *bodyEspia) Close() error             { return nil }
+
+func TestLogDeshabilitadoNoLeeElBody(t *testing.T) {
+	logs := capturarLogs(t)
+	t.Setenv("MCP_HABILITADO", "")
+	h := nuevoHandler(authDePrueba, Dependencias{Store: nuevoStoreFalso()})
+	espia := &bodyEspia{}
+	r := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	r.Body = espia
+	r.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, r)
+	if rec.Code != http.StatusNotFound || espia.leido {
+		t.Errorf("esperaba 404 sin leer el body: code=%d leido=%v", rec.Code, espia.leido)
+	}
+	if salida := logs.String(); !strings.Contains(salida, "status=404") || strings.Contains(salida, "rpc_method") {
+		t.Errorf("log incorrecto: %s", salida)
 	}
 }
