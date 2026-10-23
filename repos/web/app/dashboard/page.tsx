@@ -159,9 +159,6 @@ export default function DashboardPage() {
           </span>
 			{tenant && sesion?.rol === 'admin' && (
             <>
-              <span className="hidden rounded-full border border-concrete bg-ghost-fog px-8 py-2 text-10 font-mono text-sage-green lg:inline-block">
-                /{tenant.slug}
-              </span>
               <button
                 type="button"
                 onClick={() => {
@@ -212,7 +209,15 @@ export default function DashboardPage() {
                     <p className="truncate text-13 font-semibold text-ash-graphite">{tenant ? tenant.nombre : "Administrador"}</p>
                     <p className="mt-2 truncate text-11 text-sage-green">Sesión activa</p>
                   </div>
-                  <UserMenuItem icon="account_circle" label="Perfil" />
+                  <UserMenuItem
+                    icon="account_circle"
+                    label="Perfil"
+                    onClick={() => {
+                      setConfiguracionTab("negocio");
+                      setActiveSection("configuracion");
+                      setIsUserMenuOpen(false);
+                    }}
+                  />
 					{sesion?.rol === 'admin' && (
                     <UserMenuItem
                       icon="credit_card"
@@ -308,7 +313,7 @@ export default function DashboardPage() {
             >
               <span className="material-symbols-outlined text-20" aria-hidden="true">skillet</span>
               <span className="flex-1 text-13 font-medium">Cocina (KDS)</span>
-              <span className="rounded border border-concrete bg-ghost-fog px-6 py-1 text-10 font-bold text-sage-green">PRO ↗</span>
+			  <span className="material-symbols-outlined text-16" aria-hidden="true">open_in_new</span>
 			</Link>}
 			{(sesion?.rol === 'admin' || sesion?.rol === 'encargado') && <NavItem
               icon="monitoring"
@@ -381,7 +386,7 @@ export default function DashboardPage() {
               {isExpanded && (
                 <div className="flex items-center justify-between flex-1 min-w-0">
                   <span className="text-13 font-medium whitespace-nowrap">Cocina (KDS)</span>
-                  <span className="rounded border border-concrete bg-ghost-fog px-6 py-1 text-10 font-bold text-sage-green">PRO ↗</span>
+                  <span className="material-symbols-outlined text-16" aria-hidden="true">open_in_new</span>
                 </div>
               )}
 			</Link>}

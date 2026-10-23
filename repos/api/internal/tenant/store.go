@@ -36,12 +36,12 @@ func (s *pgStore) Crear(ctx context.Context, input OnboardingInput) (*Tenant, er
 
 	var t Tenant
 	err = tx.QueryRow(ctx,
-		`INSERT INTO tenants (nombre, nombre_fantasia, rubro, slug, plan, plan_desde, plan_hasta, trial_hasta)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		 RETURNING id, nombre, nombre_fantasia, rubro, slug, plan, plan_desde, plan_hasta, trial_hasta, created_at`,
-		input.Nombre, input.NombreFantasia, input.Rubro, input.Slug,
+		`INSERT INTO tenants (nombre, nombre_fantasia, rubro, descripcion, slug, plan, plan_desde, plan_hasta, trial_hasta)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		 RETURNING id, nombre, nombre_fantasia, rubro, descripcion, slug, plan, plan_desde, plan_hasta, trial_hasta, created_at`,
+		input.Nombre, input.NombreFantasia, input.Rubro, optionalString(input.Descripcion), input.Slug,
 		input.Plan, input.PlanDesde, input.PlanHasta, input.TrialHasta,
-	).Scan(&t.ID, &t.Nombre, &t.NombreFantasia, &t.Rubro, &t.Slug,
+	).Scan(&t.ID, &t.Nombre, &t.NombreFantasia, &t.Rubro, &t.Descripcion, &t.Slug,
 		&t.Plan, &t.PlanDesde, &t.PlanHasta, &t.TrialHasta, &t.CreatedAt)
 	if err != nil {
 		if isUniqueConstraint(err, "tenants_slug_key") {

@@ -272,6 +272,26 @@ func (svc *Service) ImportarCarta(ctx context.Context, tenantID string, filas []
 			continue
 		}
 
+		existe, err := svc.store.ExisteArticuloImportado(
+			ctx,
+			tenantID,
+			catID,
+			fila.Nombre,
+			fila.Descripcion,
+		)
+		if err != nil {
+			resultado.Errores = append(resultado.Errores, ErrorFila{
+				Fila:   fila.Numero,
+				Motivo: fmt.Sprintf("error comprobando artículo %q: %v", fila.Nombre, err),
+			})
+			resultado.Omitidos++
+			continue
+		}
+		if existe {
+			resultado.Omitidos++
+			continue
+		}
+
 		// Crear artículo
 		_, err = svc.store.CrearArticulo(ctx, tenantID, ArticuloInput{
 			CategoriaID: catID,

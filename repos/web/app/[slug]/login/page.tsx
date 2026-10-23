@@ -163,7 +163,7 @@ export default function LoginEquipoPage() {
 
   return (
     <div className="flex min-h-screen flex-col justify-between bg-ghost-fog/60 font-inter">
-      <header className="flex items-center justify-between border-b border-concrete bg-canvas-white px-16 py-12 sm:px-24">
+      <header className="flex items-center border-b border-concrete bg-canvas-white px-16 py-12 sm:px-24">
         <Link
           href="/"
           className="flex items-center gap-8 text-ash-graphite transition-opacity hover:opacity-80"
@@ -171,26 +171,23 @@ export default function LoginEquipoPage() {
           <Logo mark="full" className="h-24 w-auto" />
           <span className="sr-only">fudd</span>
         </Link>
-        <span className="rounded-full border border-concrete bg-ghost-fog px-10 py-4 font-mono text-11 text-sage-green">
-          /{negocio.slug}/login
-        </span>
       </header>
 
       <main className="flex flex-1 items-center justify-center p-16 sm:p-24">
-        <div className="w-full max-w-[460px] overflow-hidden rounded-2xl border border-concrete bg-canvas-white shadow-xl">
+        <div className="w-full max-w-[420px] overflow-hidden rounded-2xl border border-concrete bg-canvas-white shadow-xl">
           <div className="h-6 w-full" style={{ backgroundColor: colorAcento }} />
 
-          <div className="p-24 sm:p-32">
-            <div className="mb-24 flex flex-col items-center text-center">
+          <div className="p-20 sm:p-24">
+            <div className="mb-20 flex flex-col items-center text-center">
               {negocio.logo_url ? (
                 <img
                   src={negocio.logo_url}
                   alt={nombreComercial}
-                  className="mb-12 h-64 w-64 rounded-2xl border border-concrete object-cover shadow-xs"
+                  className="mb-10 h-56 w-56 rounded-xl border border-concrete object-cover shadow-xs"
                 />
               ) : (
                 <div
-                  className="mb-12 flex h-64 w-64 items-center justify-center rounded-2xl text-20 font-bold text-canvas-white shadow-xs"
+                  className="mb-10 flex h-56 w-56 items-center justify-center rounded-xl text-18 font-bold text-canvas-white shadow-xs"
                   style={{ backgroundColor: colorAcento }}
                 >
                   {iniciales}
@@ -199,7 +196,7 @@ export default function LoginEquipoPage() {
               <span className="inline-flex items-center gap-4 rounded-full border border-concrete bg-ghost-fog px-10 py-2 text-11 font-semibold text-sage-green">
                 Acceso de Equipo · {nombreComercial}
               </span>
-              <h1 className="mt-8 text-22 font-bold tracking-tight text-ash-graphite">
+              <h1 className="mt-8 text-20 font-bold tracking-tight text-ash-graphite">
                 Iniciar turno en {nombreComercial}
               </h1>
               <p className="mt-4 text-12 text-sage-green">
@@ -212,7 +209,7 @@ export default function LoginEquipoPage() {
                 <span className="text-12 font-semibold text-ash-graphite">
                   Usuario o correo electrónico
                 </span>
-                <div className="flex h-46 items-center rounded-xl border border-concrete bg-canvas-white px-12 focus-within:border-plain-green">
+                <div className="flex h-44 items-center rounded-lg border border-concrete bg-canvas-white px-12 focus-within:border-plain-green">
                   <span className="material-symbols-outlined mr-8 text-18 text-sage-green">
                     badge
                   </span>
@@ -224,14 +221,14 @@ export default function LoginEquipoPage() {
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="Ej: mozo_juan o cocina_1"
-                    className="h-full flex-1 bg-transparent text-14 text-ash-graphite outline-none"
+                    className="h-full min-h-0 flex-1 rounded-none border-0 bg-transparent p-0 text-13 text-ash-graphite outline-none"
                   />
                 </div>
               </label>
 
               <label className="block space-y-6">
                 <span className="text-12 font-semibold text-ash-graphite">Contraseña</span>
-                <div className="flex h-46 items-center rounded-xl border border-concrete bg-canvas-white px-12 focus-within:border-plain-green">
+                <div className="flex h-44 items-center rounded-lg border border-concrete bg-canvas-white px-12 focus-within:border-plain-green">
                   <span className="material-symbols-outlined mr-8 text-18 text-sage-green">
                     lock
                   </span>
@@ -241,7 +238,7 @@ export default function LoginEquipoPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Tu clave de acceso"
-                    className="h-full flex-1 bg-transparent text-14 text-ash-graphite outline-none"
+                    className="h-full min-h-0 flex-1 rounded-none border-0 bg-transparent p-0 text-13 text-ash-graphite outline-none"
                   />
                   <button
                     type="button"
@@ -256,7 +253,7 @@ export default function LoginEquipoPage() {
               <button
                 type="submit"
                 disabled={enviando}
-                className="flex h-46 w-full items-center justify-center gap-8 rounded-xl bg-plain-green px-16 text-14 font-semibold text-canvas-white transition-colors hover:bg-plain-green-muted disabled:opacity-50"
+                className="flex h-44 w-full items-center justify-center gap-8 rounded-lg bg-plain-green px-16 text-13 font-semibold text-canvas-white transition-colors hover:bg-plain-green-muted disabled:opacity-50"
               >
                 {enviando ? "Ingresando al local…" : "Ingresar con usuario y clave"}
                 {!enviando && <span className="material-symbols-outlined text-18">login</span>}

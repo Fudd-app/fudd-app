@@ -81,6 +81,7 @@ type Action =
   | { type: "SET_PEDIDOS"; payload: PedidoSesion[] }
   | { type: "UPSERT_PEDIDO"; payload: PedidoSesion }
   | { type: "SET_ESTADO_PEDIDO"; payload: { pedidoId: string; estado: EstadoPedido } }
+  | { type: "RENOMBRAR_COMENSAL"; payload: { comensalId: string; nombre: string } }
   | { type: "SYNC_CUENTA"; payload: { cuentaSolicitada: boolean; pagoHabilitado?: boolean; cuentaVersion: number } }
   | { type: "RESET_SESSION" };
 
@@ -197,6 +198,23 @@ function reducer(state: State, action: Action): State {
         estadoPedido:
           state.pedidoId === action.payload.pedidoId ? action.payload.estado : state.estadoPedido,
       };
+    case "RENOMBRAR_COMENSAL":
+      return {
+        ...state,
+        items: state.items.map((item) =>
+          item.comensalId === action.payload.comensalId
+            ? { ...item, comensalNombre: action.payload.nombre }
+            : item
+        ),
+        pedidos: state.pedidos.map((pedido) => ({
+          ...pedido,
+          items: pedido.items.map((item) =>
+            item.comensalId === action.payload.comensalId
+              ? { ...item, comensalNombre: action.payload.nombre }
+              : item
+          ),
+        })),
+      };
     case "SYNC_CUENTA": {
       const cuentaCambio = state.cuentaVersion !== action.payload.cuentaVersion;
       const tieneSesionAnterior = state.items.length > 0 || state.pedidos.length > 0 || state.cuentaSolicitada;
@@ -228,6 +246,14 @@ function isVista(value: unknown): value is Vista {
 
 function isEstadoPedido(value: unknown): value is EstadoPedido {
   return value === "recibido" || value === "preparando" || value === "listo" || value === "cerrado";
+}
+
+function normalizarBusqueda(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es")
+    .trim();
 }
 
 function parseCartItems(value: unknown): CartItem[] {
@@ -753,15 +779,30 @@ export default function MesaPage() {
   }, [token, isDemo, pagoExitoso, pagoError]);
 
   // 6. Acciones del comensal
+  const volverAlInicioDelTelefono = () => {
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>(".guest-phone")?.scrollTo({ top: 0 });
+      window.scrollTo({ top: 0 });
+    });
+  };
+
   const handleGuardarComensal = (nombre: string) => {
     if (!mesa) return;
+    const nombreLimpio = nombre.trim();
     const identidad = comensal
-      ? { ...comensal, nombre: nombre.trim(), cuentaVersion: mesa.cuenta_version }
-      : createComensalIdentity(nombre, mesa.cuenta_version);
+      ? { ...comensal, nombre: nombreLimpio, cuentaVersion: mesa.cuenta_version }
+      : createComensalIdentity(nombreLimpio, mesa.cuenta_version);
     saveComensalIdentity(identidad, mesa.id);
+    if (comensal) {
+      dispatch({
+        type: "RENOMBRAR_COMENSAL",
+        payload: { comensalId: comensal.id, nombre: nombreLimpio },
+      });
+    }
     setComensal(identidad);
     setEditandoComensal(false);
     setIdentidadLista(true);
+    volverAlInicioDelTelefono();
   };
 
   const handleContinuarSinAlias = () => {
@@ -771,6 +812,7 @@ export default function MesaPage() {
     setComensal(identidad);
     setEditandoComensal(false);
     setIdentidadLista(true);
+    volverAlInicioDelTelefono();
   };
 
   const handleAddToCart = (
@@ -779,6 +821,7 @@ export default function MesaPage() {
     variantes: VariantePublica[],
     nota: string
   ) => {
+    if (state.cuentaSolicitada) return;
     const recargos = variantes.reduce((acc, v) => acc + (v.precio_adicional || 0), 0);
     const precioUnitario = item.precio + recargos;
 
@@ -958,7 +1001,7 @@ export default function MesaPage() {
   }
 
   // Si el usuario aún no se ha sumado a la mesa (fase Welcome Screen de la maqueta)
-  const yaSeSumo = Boolean(comensal && !editandoComensal);
+  const yaSeSumo = identidadLista && Boolean(comensal);
   if (!yaSeSumo) {
     return (
       <div className="guest-page" data-estilo-visual={theme.visualStyle} style={themeStyle}>
@@ -977,15 +1020,15 @@ export default function MesaPage() {
 
   // Filtrado de carta por categoría y búsqueda
   const categoriasNombres = ["Todos", ...menu.map((c) => c.nombre)];
-  const busquedaQuery = busqueda.trim().toLowerCase();
+  const busquedaQuery = normalizarBusqueda(busqueda);
 
   const articulosFiltrados = menu.flatMap((c) => {
     if (categoriaActiva !== "Todos" && c.nombre !== categoriaActiva) return [];
     return c.items.filter((item) => {
       if (!busquedaQuery) return true;
       return (
-        item.nombre.toLowerCase().includes(busquedaQuery) ||
-        (item.descripcion && item.descripcion.toLowerCase().includes(busquedaQuery))
+        normalizarBusqueda(item.nombre).includes(busquedaQuery) ||
+        (item.descripcion && normalizarBusqueda(item.descripcion).includes(busquedaQuery))
       );
     });
   });
@@ -1035,7 +1078,7 @@ export default function MesaPage() {
               <label className="guest-search">
                 <ComensalIcon name="search" size={19} />
                 <input
-                  type="search"
+                  type="text"
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
                   placeholder="¿Qué te gustaría comer?"
@@ -1142,6 +1185,9 @@ export default function MesaPage() {
             type="button"
             className={state.vista === "carta" ? "active" : ""}
             onClick={() => dispatch({ type: "SET_VISTA", payload: "carta" })}
+            disabled={state.cuentaSolicitada}
+            aria-disabled={state.cuentaSolicitada}
+            title={state.cuentaSolicitada ? "La cuenta ya fue solicitada" : "Ver carta"}
           >
             <ComensalIcon name="book" size={20} />
             <span>Carta</span>
@@ -1170,7 +1216,7 @@ export default function MesaPage() {
         </nav>
 
         {/* Modal de personalización de artículo */}
-        {itemParaPersonalizar && (
+        {itemParaPersonalizar && !state.cuentaSolicitada && (
           <GuestDetailSheet
             item={itemParaPersonalizar}
             onClose={() => setItemParaPersonalizar(null)}
@@ -1180,7 +1226,7 @@ export default function MesaPage() {
         )}
 
         {/* Bottom sheet de carrito */}
-        {carritoAbierto && (
+        {carritoAbierto && !state.cuentaSolicitada && (
           <GuestCartSheet
             mesaNumero={mesa.numero}
             dinerName={comensal?.nombre}

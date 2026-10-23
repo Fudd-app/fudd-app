@@ -76,6 +76,7 @@ type OnboardingInput struct {
 	Nombre         string `json:"nombre"`
 	NombreFantasia string `json:"nombre_fantasia"`
 	Rubro          string `json:"rubro"`
+	Descripcion    string `json:"descripcion"`
 	Slug           string `json:"slug"`
 	EmailAdmin     string `json:"email_admin"`
 	NombreAdmin    string `json:"nombre_admin"`

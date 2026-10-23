@@ -46,7 +46,7 @@ export default function WelcomeView({
             type="button"
             className="guest-demo-exit"
             onClick={() => {
-              window.location.href = "/";
+              window.location.assign("/#inicio");
             }}
             aria-label="Volver a la landing"
           >

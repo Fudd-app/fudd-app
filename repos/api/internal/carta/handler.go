@@ -284,6 +284,8 @@ func (h *Handlers) AsignarFranjaArticulo(w http.ResponseWriter, r *http.Request)
 
 func (h *Handlers) responderErrorFranja(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
+	case errors.Is(err, ErrFranjaDuplicada):
+		jsonError(w, ErrFranjaDuplicada.Error(), http.StatusConflict)
 	case errors.Is(err, ErrValidation):
 		jsonError(w, err.Error(), http.StatusBadRequest)
 	case errors.Is(err, ErrNotFound):

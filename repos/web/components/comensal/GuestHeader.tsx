@@ -1,6 +1,7 @@
 "use client";
 
 import ComensalIcon from "@/components/menu/ComensalIcon";
+import { BrandMark } from "@/components/menu/BrandHeader";
 import type { MesaPublica } from "@/lib/api";
 
 interface GuestHeaderProps {
@@ -22,18 +23,21 @@ export default function GuestHeader({
 
   return (
     <header className="guest-header">
-      <div>
-        <button
-          type="button"
-          className="guest-venue"
-          onClick={onEditDiner}
-          title="Ver restaurante y mesa"
-        >
-          {venueName} <ComensalIcon name="chevron" size={14} className="rotate-90" />
-        </button>
-        <span>
-          Mesa {mesa.numero}{sectorLabel}
-        </span>
+      <div className="guest-identity">
+        <BrandMark branding={{ ...mesa, nombre: venueName }} className="guest-header-logo" />
+        <div>
+          <button
+            type="button"
+            className="guest-venue"
+            onClick={onEditDiner}
+            title="Cambiar nombre del comensal"
+          >
+            {venueName}
+          </button>
+          <span>
+            Mesa {mesa.numero}{sectorLabel}
+          </span>
+        </div>
       </div>
 
       <div className="guest-header-actions">

@@ -8,6 +8,7 @@ import (
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/db"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Store define las operaciones de persistencia del módulo carta.
@@ -19,6 +20,7 @@ type Store interface {
 	// creándola si no existe. Usado en importaciones masivas.
 	BuscarOCrearCategoria(ctx context.Context, tenantID, nombre string) (string, error)
 	ListarArticulos(ctx context.Context, tenantID string) ([]Articulo, error)
+	ExisteArticuloImportado(ctx context.Context, tenantID, categoriaID, nombre, descripcion string) (bool, error)
 	CrearArticulo(ctx context.Context, tenantID string, input ArticuloInput) (*Articulo, error)
 	ActualizarArticulo(ctx context.Context, id, tenantID string, u ArticuloUpdate) (*Articulo, error)
 	ActualizarDisponibilidad(ctx context.Context, id, tenantID string, disponible bool) (*Articulo, error)
@@ -162,6 +164,29 @@ func (s *pgStore) ListarArticulos(ctx context.Context, tenantID string) ([]Artic
 		return nil, err
 	}
 	return arts, nil
+}
+
+// ExisteArticuloImportado aplica la identidad usada por la carga masiva:
+// misma categoría, mismo nombre y misma descripción, sin distinguir mayúsculas
+// ni espacios exteriores. El precio no forma parte de la identidad para no
+// reemplazar silenciosamente un artículo existente durante una importación.
+func (s *pgStore) ExisteArticuloImportado(
+	ctx context.Context,
+	tenantID, categoriaID, nombre, descripcion string,
+) (bool, error) {
+	var existe bool
+	err := db.Pool.QueryRow(ctx,
+		`SELECT EXISTS (
+			SELECT 1
+			FROM articulos
+			WHERE tenant_id = $1
+			  AND categoria_id = $2
+			  AND LOWER(BTRIM(nombre)) = LOWER(BTRIM($3))
+			  AND LOWER(BTRIM(COALESCE(descripcion, ''))) = LOWER(BTRIM($4))
+		)`,
+		tenantID, categoriaID, nombre, descripcion,
+	).Scan(&existe)
+	return existe, err
 }
 
 func (s *pgStore) CrearArticulo(ctx context.Context, tenantID string, input ArticuloInput) (*Articulo, error) {
@@ -388,6 +413,9 @@ func (s *pgStore) CrearFranjaHoraria(ctx context.Context, tenantID string, input
 		 RETURNING id, tenant_id, nombre, TO_CHAR(hora_inicio, 'HH24:MI'), TO_CHAR(hora_fin, 'HH24:MI')`,
 		tenantID, input.Nombre, input.HoraInicio, input.HoraFin,
 	).Scan(&franja.ID, &franja.TenantID, &franja.Nombre, &franja.HoraInicio, &franja.HoraFin)
+	if esConstraintUnica(err, "franjas_horarias_nombre_tenant_unique") {
+		return nil, ErrFranjaDuplicada
+	}
 	return franja, err
 }
 
@@ -403,7 +431,15 @@ func (s *pgStore) ActualizarFranjaHoraria(ctx context.Context, id, tenantID stri
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
+	if esConstraintUnica(err, "franjas_horarias_nombre_tenant_unique") {
+		return nil, ErrFranjaDuplicada
+	}
 	return franja, err
+}
+
+func esConstraintUnica(err error, nombre string) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == nombre
 }
 
 func (s *pgStore) EliminarFranjaHoraria(ctx context.Context, id, tenantID string) error {

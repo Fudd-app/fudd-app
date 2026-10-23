@@ -36,6 +36,12 @@ const HORARIO_ESTANDAR = Object.fromEntries(
 
 type EstadoSlug = "vacio" | "invalido" | "verificando" | "disponible" | "en-uso" | "sin-verificar";
 
+function normalizarWhatsapp(value: string) {
+  const sinInvalidos = value.replace(/[^\d+ ]/g, "");
+  const soloUnPrefijo = sinInvalidos.replace(/\+/g, (signo, offset) => (offset === 0 ? signo : ""));
+  return soloUnPrefijo.replace(/ {2,}/g, " ").slice(0, 25);
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
   const { cuenta, setCuenta } = useRegistro();
@@ -44,6 +50,7 @@ export default function OnboardingPage() {
   const [enviado, setEnviado] = useState(false);
   const [nombreNegocio, setNombreNegocio] = useState("");
   const [rubro, setRubro] = useState(RUBROS[0].valor);
+  const [rubroDetalle, setRubroDetalle] = useState("");
   const [slugManual, setSlugManual] = useState<string | null>(null);
   const [editandoSlug, setEditandoSlug] = useState(false);
   const [resultadoSlug, setResultadoSlug] = useState<{ slug: string; estado: EstadoSlug } | null>(null);
@@ -125,6 +132,7 @@ export default function OnboardingPage() {
         nombre_fantasia: nombreNegocio.trim(),
         slug,
         rubro,
+        descripcion: rubro === "otro" ? rubroDetalle.trim() : undefined,
         email_admin: cuenta.email,
         nombre_admin: cuenta.nombre,
         password: cuenta.usarMagicLink || cuenta.googleCredential ? undefined : cuenta.password,
@@ -195,7 +203,6 @@ export default function OnboardingPage() {
       console.warn("No se pudieron crear todas las mesas del registro:", err);
     }
 
-    setCuenta(null);
     router.replace("/dashboard");
   };
 
@@ -270,6 +277,19 @@ export default function OnboardingPage() {
                 </div>
               </fieldset>
 
+              {rubro === "otro" && (
+                <label className="onboarding-field">
+                  <span>¿Qué tipo de negocio es? <em>Opcional</em></span>
+                  <input
+                    value={rubroDetalle}
+                    onChange={(event) => setRubroDetalle(event.target.value.slice(0, 120))}
+                    placeholder="Ej: panadería artesanal, food truck…"
+                    autoFocus
+                  />
+                  <small>Nos ayuda a adaptar mejor la experiencia; podés completarlo después.</small>
+                </label>
+              )}
+
               <div className="slug-preview">
                 <span className="onboarding-icon small"><LandingIcon name="book" size={18} /></span>
                 <div>
@@ -324,7 +344,14 @@ export default function OnboardingPage() {
               <div className="onboarding-field-row">
                 <label className="onboarding-field">
                   <span>WhatsApp <em>Opcional</em></span>
-                  <input value={whatsapp} onChange={(event) => setWhatsapp(event.target.value)} placeholder="+54 9 11 1234 5678" inputMode="tel" />
+                  <input
+                    value={whatsapp}
+                    onChange={(event) => setWhatsapp(normalizarWhatsapp(event.target.value))}
+                    placeholder="+54 9 11 1234 5678"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    aria-label="WhatsApp del local"
+                  />
                 </label>
                 <label className="onboarding-field">
                   <span>Correo del local <em>Opcional</em></span>
