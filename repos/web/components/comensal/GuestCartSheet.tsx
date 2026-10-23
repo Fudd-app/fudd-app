@@ -109,8 +109,8 @@ export default function GuestCartSheet({
           onClick={onConfirmar}
           disabled={enviando || items.length === 0}
         >
-          <ComensalIcon name="kitchen" size={18} />
-          {enviando ? "Enviando comanda..." : "Confirmar y enviar a cocina"}
+          <ComensalIcon name="check" size={18} />
+          {enviando ? "Confirmando pedido..." : "Confirmar pedido"}
         </button>
 
         <button
