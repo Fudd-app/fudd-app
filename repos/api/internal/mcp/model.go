@@ -106,6 +106,7 @@ type PedidoDemorado struct {
 
 type ResumenCocina struct {
 	Recibidos                  int             `json:"recibidos"`
+	Confirmados                int             `json:"confirmados"`
 	Preparando                 int             `json:"preparando"`
 	Listos                     int             `json:"listos"`
 	PedidoMasDemorado          *PedidoDemorado `json:"pedido_mas_demorado"`

@@ -54,7 +54,7 @@ func (h *herramientas) registrar(s *sdk.Server) {
 	}
 	sdk.AddTool(s, def("listar_sucursales", "Listar sucursales", "Lista las sucursales del negocio con su cantidad de mesas activas."), h.listarSucursales)
 	sdk.AddTool(s, def("estado_salon", "Estado del salón", "Estado actual de cada mesa activa: libre, ocupada, cuenta solicitada o pago habilitado, con comensales, pedidos activos, tiempo y total parcial."), h.estadoSalon)
-	sdk.AddTool(s, def("estado_cocina", "Estado de cocina", "Pedidos en cocina (recibido, preparando, listo) con su demora y el despacho promedio de la última hora: tiempo promedio desde que entra un pedido hasta que cocina lo marca listo, en la última hora."), h.estadoCocina)
+	sdk.AddTool(s, def("estado_cocina", "Estado de cocina", "Pedidos en cocina (recibido, confirmado, preparando, listo) con su demora y el despacho promedio de la última hora: tiempo promedio desde que entra un pedido hasta que cocina lo marca listo, en la última hora."), h.estadoCocina)
 	sdk.AddTool(s, def("resumen_turno", "Resumen del turno", "Resumen de hoy hasta ahora: pedidos, comensales atendidos, facturación, ticket promedio y despacho promedio (despacho_promedio_min es el promedio del día sobre pedidos cerrados)."), h.resumenTurno)
 }
 
@@ -194,17 +194,19 @@ func (h *herramientas) estadoCocina(ctx context.Context, _ *sdk.CallToolRequest,
 			switch p.Estado {
 			case "recibido":
 				resumen.Recibidos++
+			case "confirmado":
+				resumen.Confirmados++
 			case "preparando":
 				resumen.Preparando++
 			case "listo":
 				resumen.Listos++
 			}
-			if (p.Estado == "recibido" || p.Estado == "preparando") &&
+			if (p.Estado == "recibido" || p.Estado == "confirmado" || p.Estado == "preparando") &&
 				(resumen.PedidoMasDemorado == nil || p.Minutos > resumen.PedidoMasDemorado.Minutos) {
 				resumen.PedidoMasDemorado = &PedidoDemorado{Mesa: p.Mesa, Estado: p.Estado, Minutos: p.Minutos}
 			}
 		}
-		texto := fmt.Sprintf("%s: %d recibidos, %d preparando, %d listos.", suc.Nombre, resumen.Recibidos, resumen.Preparando, resumen.Listos)
+		texto := fmt.Sprintf("%s: %d recibidos, %d confirmados, %d preparando, %d listos.", suc.Nombre, resumen.Recibidos, resumen.Confirmados, resumen.Preparando, resumen.Listos)
 		if d := resumen.PedidoMasDemorado; d != nil {
 			texto += fmt.Sprintf(" Más demorado: mesa %d (%s) hace %d min.", d.Mesa, d.Estado, d.Minutos)
 		}

@@ -147,7 +147,7 @@ func (s *pgStore) PedidosCocina(ctx context.Context, tenantID, sucursalID string
 		JOIN mesas m ON m.id = p.mesa_id AND p.cuenta_version = m.cuenta_version
 		LEFT JOIN pedido_items pi ON pi.pedido_id = p.id
 		WHERE su.tenant_id = $1 AND p.sucursal_id = $2
-		  AND p.estado IN ('recibido', 'preparando', 'listo')
+		  AND p.estado IN ('recibido', 'confirmado', 'preparando', 'listo')
 		GROUP BY p.id, m.numero, p.estado, p.created_at
 		ORDER BY p.created_at, p.id`, tenantID, sucursalID, ahora)
 	if err != nil {

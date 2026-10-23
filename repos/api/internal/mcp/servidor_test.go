@@ -395,7 +395,7 @@ func TestToolsCallConDatos(t *testing.T) {
 		if strings.Contains(string(resp.Result.StructuredContent), "despacho_promedio_hoy_min") {
 			t.Errorf("estado_cocina no debe exponer el despacho de hoy: %s", resp.Result.StructuredContent)
 		}
-		if got := resp.Result.Content[0].Text; !strings.Contains(got, "1 recibidos, 1 preparando, 1 listos") {
+		if got := resp.Result.Content[0].Text; !strings.Contains(got, "1 recibidos, 0 confirmados, 1 preparando, 1 listos") {
 			t.Errorf("texto: %q", got)
 		}
 	})

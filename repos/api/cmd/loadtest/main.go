@@ -468,11 +468,21 @@ func main() {
 					respBytes, code, reqErr := recordRequest("POST /pedidos", reqOrder)
 					if reqErr == nil && code == http.StatusCreated {
 						var created struct {
+							ID    string `json:"id"`
 							Items []struct {
 								ID string `json:"id"`
 							} `json:"items"`
 						}
 						if json.Unmarshal(respBytes, &created) == nil {
+							// Recepción confirma el pedido: cocina solo opera pedidos confirmados.
+							confirmBody, _ := json.Marshal(map[string]string{"estado": "confirmado"})
+							reqConfirm, cErr := http.NewRequestWithContext(loadCtx, http.MethodPatch,
+								fmt.Sprintf("%s/pedidos/%s/estado", *baseURL, created.ID), bytes.NewReader(confirmBody))
+							if cErr == nil {
+								reqConfirm.Header.Set("Content-Type", "application/json")
+								reqConfirm.Header.Set("Authorization", "Bearer "+token)
+								_, _, _ = recordRequest("PATCH /pedidos/{id}/estado", reqConfirm)
+							}
 							for _, it := range created.Items {
 								select {
 								case itemQueue <- it.ID:

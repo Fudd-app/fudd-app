@@ -2,12 +2,14 @@ package main_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/carta"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/db"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/mesa"
@@ -201,6 +203,15 @@ func TestIntegracion_FlujoCompletoPedido(t *testing.T) {
 		if item.Estado != "pendiente" {
 			t.Errorf("estado inicial del item incorrecto: got %q, want %q", item.Estado, "pendiente")
 		}
+	}
+
+	// Cocina no puede operar un pedido que recepción todavía no confirmó.
+	if _, err := pedidoSvc.CambiarEstadoItem(ctx, createdPedido.Items[0].ID, createdTenant.ID, "", "preparando"); !errors.Is(err, pedido.ErrPedidoSinConfirmar) {
+		t.Fatalf("se esperaba ErrPedidoSinConfirmar sobre un pedido recibido, got %v", err)
+	}
+	if _, err := pedidoSvc.CambiarEstado(ctx, &auth.Claims{TenantID: createdTenant.ID, Rol: auth.RolDuenio}, createdPedido.ID,
+		pedido.CambiarEstadoInput{Estado: "confirmado"}); err != nil {
+		t.Fatalf("error confirmando el pedido: %v", err)
 	}
 
 	// F.1 CAMBIAR ESTADOS POR ÍTEM (Simula la interacción del KDS)
