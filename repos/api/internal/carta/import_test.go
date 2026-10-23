@@ -3,12 +3,35 @@ package carta_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/carta"
 	"github.com/xuri/excelize/v2"
 )
+
+func TestImportarCartaPropagaFalloAtomicoSinReportarExito(t *testing.T) {
+	errTransaccion := errors.New("falló la transacción")
+	store := &mockStore{
+		importarCartaFn: func(context.Context, string, []carta.FilaImportacion) (carta.ResultadoImportacion, error) {
+			return carta.ResultadoImportacion{}, errTransaccion
+		},
+	}
+
+	resultado, err := carta.NuevoService(store).ImportarCarta(
+		context.Background(),
+		"tenant-1",
+		[]carta.FilaImportacion{{Numero: 2, Categoria: "Cafés", Nombre: "Latte", Precio: 2800}},
+	)
+
+	if !errors.Is(err, errTransaccion) {
+		t.Fatalf("se esperaba propagar el error transaccional, obtenido %v", err)
+	}
+	if resultado.Creados != 0 {
+		t.Fatalf("una transacción fallida no debe reportar creados: %+v", resultado)
+	}
+}
 
 func TestImportarCartaIgnoraIdenticosYConservaVariantesDeDescripcion(t *testing.T) {
 	store := &mockStore{

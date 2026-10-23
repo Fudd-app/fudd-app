@@ -13,6 +13,7 @@ import (
 type mockStore struct {
 	categorias       []carta.Categoria
 	articulos        []carta.Articulo
+	importarCartaFn  func(ctx context.Context, tenantID string, filas []carta.FilaImportacion) (carta.ResultadoImportacion, error)
 	ajustarPreciosFn func(ctx context.Context, tenantID string, input carta.AjustePreciosInput) (*carta.AjustePreciosResultado, error)
 	actualizarDispFn func(ctx context.Context, id, tenantID string, disponible bool) (*carta.Articulo, error)
 	reponerTodosFn   func(ctx context.Context, tenantID string) (int, error)
@@ -55,6 +56,46 @@ func (m *mockStore) ExisteArticuloImportado(ctx context.Context, tenantID, categ
 		}
 	}
 	return false, nil
+}
+func (m *mockStore) ImportarCartaAtomica(ctx context.Context, tenantID string, filas []carta.FilaImportacion) (carta.ResultadoImportacion, error) {
+	if m.importarCartaFn != nil {
+		return m.importarCartaFn(ctx, tenantID, filas)
+	}
+	resultado := carta.ResultadoImportacion{Errores: []carta.ErrorFila{}}
+	categoriasOriginales := append([]carta.Categoria(nil), m.categorias...)
+	articulosOriginales := append([]carta.Articulo(nil), m.articulos...)
+
+	for _, fila := range filas {
+		catID, err := m.BuscarOCrearCategoria(ctx, tenantID, fila.Categoria)
+		if err != nil {
+			m.categorias = categoriasOriginales
+			m.articulos = articulosOriginales
+			return resultado, err
+		}
+		existe, err := m.ExisteArticuloImportado(ctx, tenantID, catID, fila.Nombre, fila.Descripcion)
+		if err != nil {
+			m.categorias = categoriasOriginales
+			m.articulos = articulosOriginales
+			return resultado, err
+		}
+		if existe {
+			resultado.Omitidos++
+			continue
+		}
+		_, err = m.CrearArticulo(ctx, tenantID, carta.ArticuloInput{
+			CategoriaID: catID,
+			Nombre:      strings.TrimSpace(fila.Nombre),
+			Descripcion: strings.TrimSpace(fila.Descripcion),
+			Precio:      fila.Precio,
+		})
+		if err != nil {
+			m.categorias = categoriasOriginales
+			m.articulos = articulosOriginales
+			return resultado, err
+		}
+		resultado.Creados++
+	}
+	return resultado, nil
 }
 func (m *mockStore) CrearArticulo(ctx context.Context, tenantID string, input carta.ArticuloInput) (*carta.Articulo, error) {
 	a := carta.Articulo{ID: "art-1", TenantID: tenantID, CategoriaID: input.CategoriaID, Nombre: input.Nombre, Descripcion: input.Descripcion, Precio: input.Precio, FotoURL: input.FotoURL, Activo: true}

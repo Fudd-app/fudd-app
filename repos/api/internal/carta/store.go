@@ -21,6 +21,7 @@ type Store interface {
 	BuscarOCrearCategoria(ctx context.Context, tenantID, nombre string) (string, error)
 	ListarArticulos(ctx context.Context, tenantID string) ([]Articulo, error)
 	ExisteArticuloImportado(ctx context.Context, tenantID, categoriaID, nombre, descripcion string) (bool, error)
+	ImportarCartaAtomica(ctx context.Context, tenantID string, filas []FilaImportacion) (ResultadoImportacion, error)
 	CrearArticulo(ctx context.Context, tenantID string, input ArticuloInput) (*Articulo, error)
 	ActualizarArticulo(ctx context.Context, id, tenantID string, u ArticuloUpdate) (*Articulo, error)
 	ActualizarDisponibilidad(ctx context.Context, id, tenantID string, disponible bool) (*Articulo, error)
@@ -187,6 +188,91 @@ func (s *pgStore) ExisteArticuloImportado(
 		tenantID, categoriaID, nombre, descripcion,
 	).Scan(&existe)
 	return existe, err
+}
+
+// ImportarCartaAtomica procesa toda la carga dentro de una única transacción.
+// El advisory lock serializa las importaciones de un mismo tenant y evita que
+// dos archivos concurrentes superen juntos la comprobación de duplicados.
+func (s *pgStore) ImportarCartaAtomica(
+	ctx context.Context,
+	tenantID string,
+	filas []FilaImportacion,
+) (ResultadoImportacion, error) {
+	resultado := ResultadoImportacion{Errores: []ErrorFila{}}
+	if len(filas) == 0 {
+		return resultado, nil
+	}
+
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return resultado, err
+	}
+	defer tx.Rollback(ctx) // no-op después de Commit
+
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, "carta-import:"+tenantID); err != nil {
+		return resultado, err
+	}
+
+	catCache := make(map[string]string)
+	for _, fila := range filas {
+		claveCategoria := strings.ToLower(strings.TrimSpace(fila.Categoria))
+		catID, ok := catCache[claveCategoria]
+		if !ok {
+			err = tx.QueryRow(ctx,
+				`SELECT id
+				 FROM categorias
+				 WHERE tenant_id = $1
+				   AND LOWER(BTRIM(nombre)) = LOWER(BTRIM($2))
+				 ORDER BY orden, id
+				 LIMIT 1`,
+				tenantID, fila.Categoria,
+			).Scan(&catID)
+			if errors.Is(err, pgx.ErrNoRows) {
+				err = tx.QueryRow(ctx,
+					`INSERT INTO categorias (tenant_id, nombre, orden)
+					 VALUES ($1, BTRIM($2), COALESCE((SELECT MAX(orden) + 1 FROM categorias WHERE tenant_id = $1), 1))
+					 RETURNING id`,
+					tenantID, fila.Categoria,
+				).Scan(&catID)
+			}
+			if err != nil {
+				return resultado, err
+			}
+			catCache[claveCategoria] = catID
+		}
+
+		var articuloID string
+		err = tx.QueryRow(ctx,
+			`INSERT INTO articulos (
+				tenant_id, categoria_id, nombre, descripcion, precio,
+				foto_url, activo, disponible, reponer_diariamente
+			)
+			SELECT $1, $2, BTRIM($3), BTRIM($4), $5, '', true, $6, true
+			WHERE NOT EXISTS (
+				SELECT 1
+				FROM articulos
+				WHERE tenant_id = $1
+				  AND categoria_id = $2
+				  AND LOWER(BTRIM(nombre)) = LOWER(BTRIM($3))
+				  AND LOWER(BTRIM(COALESCE(descripcion, ''))) = LOWER(BTRIM($4))
+			)
+			RETURNING id`,
+			tenantID, catID, fila.Nombre, fila.Descripcion, fila.Precio, fila.Disponible,
+		).Scan(&articuloID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			resultado.Omitidos++
+			continue
+		}
+		if err != nil {
+			return resultado, err
+		}
+		resultado.Creados++
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return resultado, err
+	}
+	return resultado, nil
 }
 
 func (s *pgStore) CrearArticulo(ctx context.Context, tenantID string, input ArticuloInput) (*Articulo, error) {
