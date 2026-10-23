@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { avanza } from "@/lib/estadoPedido";
 import { api, codigoError, getErrorMessage, EstadoPedidoAPI, ModoEntregaPedido, PedidoAPI, Sucursal, MesaAPI } from "@/lib/api";
 import { agruparPorComensal } from "@/lib/desgloseCuenta";
 import { EmptyState, Skeleton, useToast, useConfirm } from "@/components/ui";
@@ -68,6 +69,11 @@ const ESTADO_STYLES: Record<PedidoVista['estado'], string> = {
 function estadoVista(estado: EstadoPedidoAPI): Pick<PedidoVista, 'estado' | 'finalizado'> {
   if (estado === 'cerrado') return { estado: 'entregado', finalizado: true };
   return { estado, finalizado: false };
+}
+
+// Estado de la API equivalente al de una vista (los finalizados llegan como "cerrado").
+function estadoApiDeVista(p: Pick<PedidoVista, 'estado' | 'finalizado'>): EstadoPedidoAPI {
+  return p.finalizado ? 'cerrado' : p.estado;
 }
 
 function mensajeErrorPedido(err: unknown): string {
@@ -690,6 +696,8 @@ export default function RecepcionistaSection() {
   const [modalTicketAbierto, setModalTicketAbierto] = useState<boolean>(false);
   const [errorImpresionTicket, setErrorImpresionTicket] = useState<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  // Guarda síncrona contra doble click; el estado React solo deshabilita los botones.
+  const accionesEnCursoRef = useRef<Set<string>>(new Set());
 
   // Refresca la antigüedad de los pedidos por confirmar.
   useEffect(() => {
@@ -795,7 +803,11 @@ export default function RecepcionistaSection() {
         const data: PedidoAPI = JSON.parse(e.data);
         if (data && data.id) {
           const nuevo = transformarPedidoApi(data, mesas);
-          setPedidos(prev => [nuevo, ...prev.filter(p => p.id !== data.id)]);
+          setPedidos(prev => {
+            const existente = prev.find(p => p.id === data.id);
+            if (existente && !avanza(estadoApiDeVista(existente), data.estado)) return prev;
+            return [nuevo, ...prev.filter(p => p.id !== data.id)];
+          });
         }
       } catch (err) {
         console.warn("Error parseando pedido_creado SSE:", err);
@@ -808,6 +820,7 @@ export default function RecepcionistaSection() {
         if (data && data.id) {
           setPedidos(prev => {
             const pedidoAnterior = prev.find(p => p.id === data.id);
+            if (pedidoAnterior && !avanza(estadoApiDeVista(pedidoAnterior), data.estado)) return prev;
             const eraListo = pedidoAnterior?.estado === 'listo';
             const esAhoraListo = data.estado === 'listo';
 
@@ -933,16 +946,20 @@ export default function RecepcionistaSection() {
     accion: () => Promise<PedidoAPI>,
     mensajeExito: string,
   ) => {
-    if (accionesEnCurso.has(pedidoId)) return;
+    if (accionesEnCursoRef.current.has(pedidoId)) return;
+    accionesEnCursoRef.current.add(pedidoId);
     setAccionesEnCurso(prev => new Set(prev).add(pedidoId));
     try {
       const actualizado = await accion();
-      setPedidos(prev => prev.map(p => (p.id === pedidoId ? { ...p, ...estadoVista(actualizado.estado) } : p)));
+      setPedidos(prev => prev.map(p => (
+        p.id === pedidoId && avanza(estadoApiDeVista(p), actualizado.estado) ? { ...p, ...estadoVista(actualizado.estado) } : p
+      )));
       toast.success(mensajeExito);
     } catch (err) {
       console.error("Error al actualizar el pedido:", err);
       toast.error(mensajeErrorPedido(err));
     } finally {
+      accionesEnCursoRef.current.delete(pedidoId);
       setAccionesEnCurso(prev => {
         const siguiente = new Set(prev);
         siguiente.delete(pedidoId);
@@ -981,11 +998,12 @@ export default function RecepcionistaSection() {
         pendientes.filter((_, index) => resultados[index].status === 'fulfilled').map(pedido => pedido.id),
       );
       setPedidos(prev => prev.map(pedido =>
-        pedidosActualizados.has(pedido.id) ? { ...pedido, estado: 'listo' } : pedido,
+        pedidosActualizados.has(pedido.id) && avanza(estadoApiDeVista(pedido), 'listo') ? { ...pedido, estado: 'listo' } : pedido,
       ));
 
-      if (resultados.some(resultado => resultado.status === 'rejected')) {
-        toast.error('Algunos pedidos no pudieron actualizarse. Revisa el estado de la mesa.');
+      const rechazado = resultados.find((resultado): resultado is PromiseRejectedResult => resultado.status === 'rejected');
+      if (rechazado) {
+        toast.error(mensajeErrorPedido(rechazado.reason));
       } else {
         toast.success('Todos los pedidos marcados como listos.');
       }
@@ -1182,7 +1200,7 @@ export default function RecepcionistaSection() {
   );
   const listosParaRetirar = pedidos.filter(p => p.estado === 'listo');
   const enCurso = mesasAgrupadas.filter(
-    grupo => !grupo.cuentaSolicitada && !grupo.pedidos.some(p => p.estado === 'listo')
+    grupo => !grupo.cuentaSolicitada && grupo.pedidos.some(p => p.estado === 'confirmado' || p.estado === 'preparando')
   );
   const abrirMesaDePedido = (pedido: PedidoVista) => setMesaDetalleKey(pedido.mesaId || `mesa-${pedido.mesa}`);
 
