@@ -12,6 +12,7 @@ import {
 import { KDSHeader } from "@/components/kds/KDSHeader";
 import { ComandaCard } from "@/components/kds/ComandaCard";
 import { HistorialDespachoDrawer } from "@/components/kds/HistorialDespachoDrawer";
+import { avanza } from "@/lib/estadoPedido";
 import { playNewOrderSound, playOrderReadySound } from "@/components/kds/AudioAlerts";
 import {
   AnchoTicketTermico,
@@ -26,6 +27,8 @@ import {
   setAutoPrintEnabled,
 } from "@/components/kds/TicketTermico";
 
+const RANGO_ITEM: Record<string, number> = { pendiente: 0, preparando: 1, listo: 2 };
+
 const VENTANA_AGRUPACION_MS = 5 * 60 * 1000;
 
 // Cocina solo trabaja pedidos ya confirmados por recepción; "recibido" no entra.
@@ -33,6 +36,17 @@ const ESTADOS_VISIBLES_KDS: ReadonlyArray<PedidoAPI["estado"]> = ["confirmado", 
 
 function esVisibleEnKDS(pedido: PedidoAPI): boolean {
   return ESTADOS_VISIBLES_KDS.includes(pedido.estado);
+}
+
+// Mezcla un pedido entrante sin retroceder: el estado solo se aplica si avanza
+// y los ítems se actualizan por id, conservando los que ya llegaron por SSE.
+function fusionarPedido(actual: PedidoAPI, entrante: PedidoAPI): PedidoAPI {
+  const estado = avanza(actual.estado, entrante.estado) ? entrante.estado : actual.estado;
+  const items = actual.items?.map((it) => {
+    const nuevo = entrante.items?.find((n) => n.id === it.id);
+    return nuevo && RANGO_ITEM[nuevo.estado ?? "pendiente"] >= RANGO_ITEM[it.estado ?? "pendiente"] ? nuevo : it;
+  });
+  return { ...actual, estado, items };
 }
 
 function mensajeErrorKDS(err: unknown): string {
@@ -295,8 +309,9 @@ export default function KDSPage() {
             // Confirmado entra a cocina; el resto actualiza el pedido existente
             setPedidosActivos((prev) => {
               const existe = prev.some((p) => p.id === pedidoActualizado.id);
+              if (!existe && pedidoActualizado.estado === "confirmado") playNewOrderSound();
               if (existe) {
-                return prev.map((p) => (p.id === pedidoActualizado.id ? pedidoActualizado : p));
+                return prev.map((p) => (p.id === pedidoActualizado.id ? fusionarPedido(p, pedidoActualizado) : p));
               }
               return [...prev, pedidoActualizado];
             });
@@ -319,8 +334,11 @@ export default function KDSPage() {
           if (!esVisibleEnKDS(pedidoActualizado)) {
             setPedidosActivos((prev) => prev.filter((p) => p.id !== pedidoActualizado.id));
           } else {
+            // Si el pedido no estaba en la lista (evento perdido), se incorpora
             setPedidosActivos((prev) =>
-              prev.map((p) => (p.id === pedidoActualizado.id ? pedidoActualizado : p))
+              prev.some((p) => p.id === pedidoActualizado.id)
+                ? prev.map((p) => (p.id === pedidoActualizado.id ? fusionarPedido(p, pedidoActualizado) : p))
+                : [...prev, pedidoActualizado]
             );
 
             // Verificar si todos los ítems están listos
@@ -373,7 +391,7 @@ export default function KDSPage() {
       try {
         const pedActualizado = await api.cambiarEstadoItem(itemId, nuevoEstado);
         setPedidosActivos((prev) =>
-          prev.map((p) => (p.id === pedActualizado.id ? pedActualizado : p))
+          prev.map((p) => (p.id === pedActualizado.id ? fusionarPedido(p, pedActualizado) : p))
         );
         if (pedActualizado.estado === "listo") {
           playOrderReadySound();
