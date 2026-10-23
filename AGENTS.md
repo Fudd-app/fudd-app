@@ -44,7 +44,7 @@ Estas reglas aplican a cualquier agente de IA (Claude, Gemini, CLI, etc.) que tr
 | | |
 |---|---|
 | **Fase actual** | Fase 4 — Evolución, Monetización & Analítica (2do Cuatrimestre) |
-| **Sprint en curso** | **Sprint 18 (Business Analytics, Reputación & Exportación)** — pendientes US-74 y US-75. Sprints semanales (S10 a S19, 31/08 → 08/11/2026); 16, 17 y 19 completados por adelantado. El estado al día de cada ítem está en el [tablero](https://github.com/orgs/Fudd-app/projects/1) |
+| **Sprint en curso** | **Fase 4 completada** (Sprints 10 a 19 completados). El estado al día de cada ítem está en el [tablero](https://github.com/orgs/Fudd-app/projects/1) |
 | **Objetivo Fase 4** | Llevar Mesa CLICK a nivel comercial: SaaS Freemium (Free vs Pro), Mobile-First comensal, carga masiva CSV/Excel, KDS de cocina, disponibilidad/franjas horarias, métricas y analítica de negocio |
 
 ### Sprints detallados
@@ -68,7 +68,7 @@ Estas reglas aplican a cualquier agente de IA (Claude, Gemini, CLI, etc.) que tr
 | 15 | KDS, impresión de comandas térmicas & acceso del equipo (credenciales, login por negocio, Google) · 05/10–11/10 | ✓ Completado |
 | 16 | Modelo Freemium (Free vs Pro) & control de suscripciones · 12/10–18/10 | ✓ Completado (adelantado) |
 | 17 | Dashboard con métricas (KPIs, agregaciones SQL) · 19/10–25/10 | ✓ Completado (adelantado) |
-| 18 | Business Analytics, Reputación (Reseñas & Google Funnel) & exportación · 26/10–01/11 | ⚡ En Curso (US-74, US-75) |
+| 18 | Business Analytics, Reputación (Reseñas & Google Funnel) & exportación · 26/10–01/11 | ✓ Completado |
 | 19 | QA E2E, Load Testing, Polish final & Demo de cierre · 02/11–08/11 | ✓ Completado (adelantado) |
 
 ---
