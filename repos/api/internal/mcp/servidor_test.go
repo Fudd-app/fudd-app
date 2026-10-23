@@ -19,6 +19,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/evento"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/metrica"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/oauth"
 )
@@ -31,6 +32,8 @@ type storeFalso struct {
 	porHora    []HoraTurno
 	comensales int
 	falla      error
+	mesasRef   map[string][]MesaRef        // por sucursal
+	eventos    map[string][]evento.Evento // por sucursal
 }
 
 func (s *storeFalso) SucursalDelTenant(_ context.Context, tenantID, sucursalID string) (*SucursalRef, error) {
@@ -136,6 +139,8 @@ func nuevoStoreFalso() *storeFalso {
 			{Hora: "12:00", Pedidos: 3, Comensales: 4, Facturacion: 1000},
 		},
 		comensales: 11,
+		mesasRef:   map[string][]MesaRef{"s-a": {{ID: "m-1", Numero: 1}, {ID: "m-2", Numero: 2}}},
+		eventos:    map[string][]evento.Evento{"s-a": eventosDePrueba()},
 	}
 }
 
@@ -262,7 +267,8 @@ func TestInitializeYListadoDeTools(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("tools/list: %d %s", rec.Code, rec.Body)
 	}
-	esperadas := map[string]bool{"listar_sucursales": false, "estado_salon": false, "estado_cocina": false, "resumen_turno": false}
+	esperadas := map[string]bool{"listar_sucursales": false, "estado_salon": false, "estado_cocina": false, "resumen_turno": false,
+		"estado_mesas": false, "historial_mesa": false}
 	for _, tool := range resp.Result.Tools {
 		if _, ok := esperadas[tool.Name]; !ok {
 			t.Errorf("tool inesperada %q", tool.Name)
@@ -589,10 +595,13 @@ func TestDescripcionesDeLasTools(t *testing.T) {
 		"estado_salon":      {"minutos_en_espera", "por_tomador", "mesas_esperando", "tomado_por", "incluir_libres", "no hay registro de personal", "no hay confirmación"},
 		"estado_cocina":     {"balance_60min", "p90", "ultima_hora", "cola", "historial"},
 		"resumen_turno":     {"por_hora", "ticket_promedio", "00:00", "zona horaria"},
+		"estado_mesas":      {"hace una hora", "hace 60 min", "sin_datos", "historial_desde", "no necesariamente cuándo se entregó", "despliegue"},
+		"historial_mesa":    {"mesa 5", "minutos_espera_cocina", "minutos_a_entrega", "no necesariamente cuándo se entregó", "despliegue"},
 	}
 	descripciones := map[string]string{
 		"listar_sucursales": descListarSucursales, "estado_salon": descEstadoSalon,
 		"estado_cocina": descEstadoCocina, "resumen_turno": descResumenTurno,
+		"estado_mesas": descEstadoMesas, "historial_mesa": descHistorialMesa,
 	}
 	for tool, esperados := range campos {
 		for _, e := range esperados {
@@ -910,9 +919,10 @@ func TestLogDeshabilitadoNoLeeElBody(t *testing.T) {
 func TestStructuredContentCumpleOutputSchema(t *testing.T) {
 	h := nuevoHandlerDePrueba(t, nuevoStoreFalso())
 	_, lista := rpc(t, h, "t-a", "u-1", "tools/list", map[string]any{})
-	if len(lista.Result.Tools) != 4 {
-		t.Fatalf("esperaba 4 tools: %d", len(lista.Result.Tools))
+	if len(lista.Result.Tools) != 6 {
+		t.Fatalf("esperaba 6 tools: %d", len(lista.Result.Tools))
 	}
+	argumentos := map[string]map[string]any{"historial_mesa": {"mesa": 1}}
 	for _, tool := range lista.Result.Tools {
 		t.Run(tool.Name, func(t *testing.T) {
 			var esquema jsonschema.Schema
@@ -923,7 +933,7 @@ func TestStructuredContentCumpleOutputSchema(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Resolve: %v", err)
 			}
-			resp := llamarTool(t, h, "t-a", tool.Name, nil)
+			resp := llamarTool(t, h, "t-a", tool.Name, argumentos[tool.Name])
 			if resp.Result.IsError {
 				t.Fatalf("la tool falló: %+v", resp.Result)
 			}
