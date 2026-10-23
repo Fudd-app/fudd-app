@@ -15,6 +15,8 @@ type Store interface {
 	ListarPorDia(ctx context.Context, tenantID, sucursalID string, desde, hasta time.Time, zonaHoraria string) ([]MetricaDiaria, error)
 	ListarPorTurno(ctx context.Context, tenantID, sucursalID string, desde, hasta time.Time, zonaHoraria string) ([]MetricaTurno, error)
 	ListarPorEstado(ctx context.Context, tenantID, sucursalID string, desde, hasta time.Time) ([]MetricaEstado, error)
+	ListarPorCategoria(ctx context.Context, tenantID, sucursalID string, desde, hasta time.Time) ([]MetricaCategoria, error)
+	ListarMapaCalor(ctx context.Context, tenantID, sucursalID string, desde, hasta time.Time, zonaHoraria string) ([]CeldaCalor, error)
 }
 
 type pgStore struct{}
@@ -275,6 +277,89 @@ func (s *pgStore) ListarPorEstado(
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error recorriendo métricas por estado: %w", err)
+	}
+	return resultado, nil
+}
+
+func (s *pgStore) ListarPorCategoria(
+	ctx context.Context,
+	tenantID, sucursalID string,
+	desde, hasta time.Time,
+) ([]MetricaCategoria, error) {
+	const query = `
+		SELECT c.id, c.nombre,
+		       SUM(pi.cantidad)::bigint AS unidades,
+		       COALESCE(SUM(pi.cantidad * pi.precio_unitario), 0)::double precision AS monto
+		FROM pedidos p
+		JOIN sucursales su ON su.id = p.sucursal_id
+		JOIN pedido_items pi ON pi.pedido_id = p.id
+		JOIN articulos a ON a.id = pi.articulo_id
+		JOIN categorias c ON c.id = a.categoria_id
+		WHERE su.tenant_id = $1
+		  AND (NULLIF($2, '')::uuid IS NULL OR p.sucursal_id = NULLIF($2, '')::uuid)
+		  AND p.created_at >= $3
+		  AND p.created_at < $4
+		  AND p.estado = 'cerrado'
+		GROUP BY c.id, c.nombre
+		ORDER BY monto DESC, unidades DESC, c.nombre`
+
+	rows, err := db.Pool.Query(ctx, query, tenantID, sucursalID, desde, hasta)
+	if err != nil {
+		return nil, fmt.Errorf("error agrupando métricas por categoría: %w", err)
+	}
+	defer rows.Close()
+
+	resultado := make([]MetricaCategoria, 0)
+	for rows.Next() {
+		var item MetricaCategoria
+		if err := rows.Scan(&item.CategoriaID, &item.Nombre, &item.Unidades, &item.Monto); err != nil {
+			return nil, fmt.Errorf("error leyendo métricas por categoría: %w", err)
+		}
+		resultado = append(resultado, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error recorriendo métricas por categoría: %w", err)
+	}
+	return resultado, nil
+}
+
+func (s *pgStore) ListarMapaCalor(
+	ctx context.Context,
+	tenantID, sucursalID string,
+	desde, hasta time.Time,
+	zonaHoraria string,
+) ([]CeldaCalor, error) {
+	const query = `
+		SELECT EXTRACT(DOW FROM p.created_at AT TIME ZONE $5)::int AS dia_semana,
+		       EXTRACT(HOUR FROM p.created_at AT TIME ZONE $5)::int AS hora,
+		       COUNT(DISTINCT p.id)::bigint AS pedidos,
+		       COALESCE(SUM(pi.cantidad * pi.precio_unitario) FILTER (WHERE p.estado = 'cerrado'), 0)::double precision AS monto
+		FROM pedidos p
+		JOIN sucursales su ON su.id = p.sucursal_id
+		LEFT JOIN pedido_items pi ON pi.pedido_id = p.id
+		WHERE su.tenant_id = $1
+		  AND (NULLIF($2, '')::uuid IS NULL OR p.sucursal_id = NULLIF($2, '')::uuid)
+		  AND p.created_at >= $3
+		  AND p.created_at < $4
+		GROUP BY dia_semana, hora
+		ORDER BY dia_semana, hora`
+
+	rows, err := db.Pool.Query(ctx, query, tenantID, sucursalID, desde, hasta, zonaHoraria)
+	if err != nil {
+		return nil, fmt.Errorf("error calculando mapa de calor: %w", err)
+	}
+	defer rows.Close()
+
+	resultado := make([]CeldaCalor, 0)
+	for rows.Next() {
+		var item CeldaCalor
+		if err := rows.Scan(&item.DiaSemana, &item.Hora, &item.Pedidos, &item.Monto); err != nil {
+			return nil, fmt.Errorf("error leyendo celda del mapa de calor: %w", err)
+		}
+		resultado = append(resultado, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error recorriendo celdas del mapa de calor: %w", err)
 	}
 	return resultado, nil
 }

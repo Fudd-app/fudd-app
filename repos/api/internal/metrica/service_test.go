@@ -10,13 +10,15 @@ import (
 const sucursalValida = "b7fcf135-c45f-454d-a7e0-eb7874be0561"
 
 type storeFalso struct {
-	pertenece bool
-	bases     []ResumenBase
-	baseCalls int
-	platos    []PlatoEstrella
-	porDia    []MetricaDiaria
-	porTurno  []MetricaTurno
-	porEstado []MetricaEstado
+	pertenece    bool
+	bases        []ResumenBase
+	baseCalls    int
+	platos       []PlatoEstrella
+	porDia       []MetricaDiaria
+	porTurno     []MetricaTurno
+	porEstado    []MetricaEstado
+	porCategoria []MetricaCategoria
+	mapaCalor    []CeldaCalor
 }
 
 func (s *storeFalso) SucursalPerteneceATenant(context.Context, string, string) (bool, error) {
@@ -48,6 +50,14 @@ func (s *storeFalso) ListarPorEstado(context.Context, string, string, time.Time,
 	return s.porEstado, nil
 }
 
+func (s *storeFalso) ListarPorCategoria(context.Context, string, string, time.Time, time.Time) ([]MetricaCategoria, error) {
+	return s.porCategoria, nil
+}
+
+func (s *storeFalso) ListarMapaCalor(context.Context, string, string, time.Time, time.Time, string) ([]CeldaCalor, error) {
+	return s.mapaCalor, nil
+}
+
 func TestObtenerResumenCalculaKPIsYVariaciones(t *testing.T) {
 	store := &storeFalso{
 		pertenece: true,
@@ -72,6 +82,13 @@ func TestObtenerResumenCalculaKPIsYVariaciones(t *testing.T) {
 		porDia:    []MetricaDiaria{{Fecha: "2026-10-06", FacturacionTotal: 100000, PedidosTotales: 4, PedidosCerrados: 2}},
 		porTurno:  []MetricaTurno{{Turno: "Noche", FacturacionTotal: 100000, PedidosTotales: 4, PedidosCerrados: 2}},
 		porEstado: []MetricaEstado{{Estado: "cerrado", Cantidad: 2}},
+		porCategoria: []MetricaCategoria{
+			{CategoriaID: "cat-1", Nombre: "Platos Principales", Unidades: 8, Monto: 75000},
+			{CategoriaID: "cat-2", Nombre: "Bebidas", Unidades: 10, Monto: 25000},
+		},
+		mapaCalor: []CeldaCalor{
+			{DiaSemana: 5, Hora: 21, Pedidos: 4, Monto: 100000},
+		},
 	}
 	svc := NuevoService(store)
 
@@ -96,6 +113,20 @@ func TestObtenerResumenCalculaKPIsYVariaciones(t *testing.T) {
 	assertPorcentaje(t, resumen.Variaciones.TicketPromedio, 25)
 	assertPorcentaje(t, resumen.Variaciones.PedidosTotales, 100)
 	assertPorcentaje(t, resumen.Variaciones.TiempoPromedioDespachoMinutos, -20)
+
+	if len(resumen.PorCategoria) != 2 {
+		t.Fatalf("se esperaban 2 categorías, obtuvo %d", len(resumen.PorCategoria))
+	}
+	if resumen.PorCategoria[0].Porcentaje != 75.0 {
+		t.Errorf("porcentaje de categoría 0 esperado 75.0, obtuvo %f", resumen.PorCategoria[0].Porcentaje)
+	}
+	if resumen.PorCategoria[1].Porcentaje != 25.0 {
+		t.Errorf("porcentaje de categoría 1 esperado 25.0, obtuvo %f", resumen.PorCategoria[1].Porcentaje)
+	}
+
+	if len(resumen.MapaCalor) != 1 || resumen.MapaCalor[0].DiaSemana != 5 || resumen.MapaCalor[0].Hora != 21 || resumen.MapaCalor[0].Pedidos != 4 {
+		t.Fatalf("mapa de calor inesperado: %+v", resumen.MapaCalor)
+	}
 
 	duracion := resumen.Periodo.Hasta.Sub(resumen.Periodo.Desde)
 	if duracion != 24*time.Hour {
