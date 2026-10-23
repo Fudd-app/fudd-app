@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 	"time"
@@ -17,8 +18,10 @@ type VerificadorGoogle interface {
 }
 
 type Service struct {
-	store  Store
-	google VerificadorGoogle
+	store           Store
+	google          VerificadorGoogle
+	ahora           func() time.Time
+	funcionalidades cacheFuncionalidades
 }
 
 func NuevoService(s Store) *Service { return &Service{store: s} }
@@ -303,6 +306,7 @@ type EstadoPlanDTO struct {
 	Uso                 map[string]int  `json:"uso"`
 	Disponibles         map[string]int  `json:"disponibles"`
 	Alcanzado           map[string]bool `json:"alcanzado"`
+	Funcionalidades     map[string]bool `json:"funcionalidades,omitempty"`
 }
 
 func (svc *Service) EstadoPlan(ctx context.Context, tenantID string) (*EstadoPlanDTO, error) {
@@ -333,6 +337,15 @@ func (svc *Service) EstadoPlan(ctx context.Context, tenantID string) (*EstadoPla
 		diasRestantesPrueba = &dias
 	}
 
+	// Es información adicional: si falla, el resto del estado del plan sigue siendo válido.
+	var funcionalidades map[string]bool
+	accesoMCP, err := svc.AccesoFuncionalidad(ctx, tenantID, RecursoMCP)
+	if err != nil {
+		slog.ErrorContext(ctx, "error consultando funcionalidades del plan", "tenant_id", tenantID, "error", err)
+	} else {
+		funcionalidades = map[string]bool{string(RecursoMCP): accesoMCP}
+	}
+
 	usoMesas := cuotas.Uso[RecursoMesas]
 	usoProductos := cuotas.Uso[RecursoProductos]
 	usoSucursales := cuotas.Uso[RecursoSucursales]
@@ -350,6 +363,7 @@ func (svc *Service) EstadoPlan(ctx context.Context, tenantID string) (*EstadoPla
 		MesesPrueba:         MesesPruebaInicial,
 		UpgradeSolicitadoAt: cuotas.UpgradeSolicitadoAt,
 		UpgradeNota:         cuotas.UpgradeNota,
+		Funcionalidades:     funcionalidades,
 		Uso: map[string]int{
 			string(RecursoMesas):      usoMesas,
 			string(RecursoProductos):  usoProductos,

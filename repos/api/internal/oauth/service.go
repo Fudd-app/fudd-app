@@ -35,6 +35,11 @@ type Negocios interface {
 	NombreNegocio(ctx context.Context, tenantID string) (string, error)
 }
 
+// AccesoPlan resuelve si el plan (o una excepción) del negocio incluye MCP.
+type AccesoPlan interface {
+	AccesoMCP(ctx context.Context, tenantID string) (bool, error)
+}
+
 type ParamsAutorizacion struct {
 	ClientID, RedirectURI, ResponseType, CodeChallenge, CodeChallengeMethod, State, Scope, Resource string
 }
@@ -49,12 +54,13 @@ type Service struct {
 	store    Store
 	usuarios Usuarios
 	negocios Negocios
+	acceso   AccesoPlan
 	cfg      Config
 	ahora    func() time.Time
 }
 
-func NuevoService(store Store, usuarios Usuarios, negocios Negocios, cfg Config) *Service {
-	return &Service{store: store, usuarios: usuarios, negocios: negocios, cfg: cfg, ahora: time.Now}
+func NuevoService(store Store, usuarios Usuarios, negocios Negocios, acceso AccesoPlan, cfg Config) *Service {
+	return &Service{store: store, usuarios: usuarios, negocios: negocios, acceso: acceso, cfg: cfg, ahora: time.Now}
 }
 
 func (s *Service) RegistrarCliente(ctx context.Context, nombre string, redirectURIs []string) (*Cliente, error) {
@@ -175,6 +181,13 @@ func (s *Service) VerSolicitud(ctx context.Context, id, nonce string, claims *au
 func (s *Service) Aprobar(ctx context.Context, id, nonce string, claims *auth.Claims) (string, error) {
 	if claims.Rol != auth.RolDuenio {
 		return "", ErrSoloDuenio
+	}
+	incluido, err := s.acceso.AccesoMCP(ctx, claims.TenantID)
+	if err != nil {
+		return "", fmt.Errorf("verificando acceso a MCP: %w", err)
+	}
+	if !incluido {
+		return "", ErrPlanSinMCP
 	}
 	sol, err := s.solicitudPendiente(ctx, id)
 	if err != nil {

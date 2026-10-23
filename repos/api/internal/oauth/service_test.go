@@ -287,10 +287,21 @@ func (memNegocios) NombreNegocio(_ context.Context, tenantID string) (string, er
 	return "Negocio " + tenantID, nil
 }
 
+// accesoFalso decide el acceso a MCP por tenant; por defecto lo permite.
+type accesoFalso struct {
+	denegados map[string]bool
+	err       error
+}
+
+func (a *accesoFalso) AccesoMCP(_ context.Context, tenantID string) (bool, error) {
+	return !a.denegados[tenantID], a.err
+}
+
 type entorno struct {
 	svc      *Service
 	store    *memStore
 	usuarios *memUsuarios
+	acceso   *accesoFalso
 	reloj    *reloj
 }
 
@@ -313,9 +324,10 @@ func nuevoEntorno(t *testing.T) *entorno {
 		"u-duenio": {ID: "u-duenio", TenantID: "t-1", Rol: auth.RolDuenio, Estado: "activo", SessionVersion: 3},
 		"u-otro":   {ID: "u-otro", TenantID: "t-2", Rol: auth.RolDuenio, Estado: "activo", SessionVersion: 1},
 	}}
-	svc := NuevoService(st, us, memNegocios{}, cfg)
+	acceso := &accesoFalso{denegados: map[string]bool{}}
+	svc := NuevoService(st, us, memNegocios{}, acceso, cfg)
 	svc.ahora = r.Ahora
-	return &entorno{svc: svc, store: st, usuarios: us, reloj: r}
+	return &entorno{svc: svc, store: st, usuarios: us, acceso: acceso, reloj: r}
 }
 
 func desafioTest() string {
@@ -460,6 +472,51 @@ func TestVerSolicitud(t *testing.T) {
 		if err != nil || v.MismoNavegador {
 			t.Errorf("nonce %q: err=%v mismo_navegador=%v", n, err, v != nil && v.MismoNavegador)
 		}
+	}
+}
+
+func TestAprobar_PlanSinMCP(t *testing.T) {
+	e := nuevoEntorno(t)
+	ctx := context.Background()
+	c := e.registrar(t)
+	id, nonce, err := e.svc.IniciarAutorizacion(ctx, e.paramsOK(c.ClientID))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	e.acceso.denegados["t-1"] = true
+	if _, err := e.svc.Aprobar(ctx, id, nonce, claimsDuenio()); !errors.Is(err, ErrPlanSinMCP) {
+		t.Fatalf("sin acceso: %v", err)
+	}
+
+	e.acceso.denegados["t-1"] = false
+	e.acceso.err = errors.New("db caída")
+	if _, err := e.svc.Aprobar(ctx, id, nonce, claimsDuenio()); err == nil || errors.Is(err, ErrPlanSinMCP) {
+		t.Fatalf("un error de DB no es \"sin acceso\": %v", err)
+	}
+
+	e.acceso.err = nil
+	if _, err := e.svc.Aprobar(ctx, id, nonce, claimsDuenio()); err != nil {
+		t.Fatalf("con acceso: %v", err)
+	}
+}
+
+func TestAprobar_PrecedenciaPlanSinMCP(t *testing.T) {
+	e := nuevoEntorno(t)
+	ctx := context.Background()
+	c := e.registrar(t)
+	id, nonce, err := e.svc.IniciarAutorizacion(ctx, e.paramsOK(c.ClientID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.acceso.denegados["t-1"] = true
+
+	mozo := &auth.Claims{UsuarioID: "u-mozo", TenantID: "t-1", Rol: auth.RolMozo}
+	if _, err := e.svc.Aprobar(ctx, id, nonce, mozo); !errors.Is(err, ErrSoloDuenio) {
+		t.Errorf("mozo con plan sin MCP: %v", err)
+	}
+	if _, err := e.svc.Aprobar(ctx, id, "nonce-de-otro-navegador", claimsDuenio()); !errors.Is(err, ErrPlanSinMCP) {
+		t.Errorf("dueño sin MCP con nonce ajeno: %v", err)
 	}
 }
 

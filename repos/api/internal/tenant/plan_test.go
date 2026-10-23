@@ -2,9 +2,13 @@ package tenant_test
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/tenant"
 )
 
@@ -214,6 +218,9 @@ func TestEstadoPlanDTO_Calculo(t *testing.T) {
 		if dto.Alcanzado["mesas"] != false || dto.Alcanzado["productos"] != false || dto.Alcanzado["sucursales"] != true {
 			t.Errorf("Alcanzado inesperado: %+v", dto.Alcanzado)
 		}
+		if mcp, ok := dto.Funcionalidades["mcp"]; !ok || mcp {
+			t.Errorf("Funcionalidades: free debería tener mcp=false, obtenido %+v", dto.Funcionalidades)
+		}
 	})
 
 	t.Run("Plan Pro calcula ilimitado y dias restantes", func(t *testing.T) {
@@ -246,6 +253,9 @@ func TestEstadoPlanDTO_Calculo(t *testing.T) {
 		if !dto.EnPrueba || dto.PruebaHasta == nil || dto.DiasRestantesPrueba == nil || *dto.DiasRestantesPrueba <= 0 {
 			t.Errorf("se esperaba una prueba Pro activa, obtenido %+v", dto)
 		}
+		if !dto.Funcionalidades["mcp"] {
+			t.Errorf("Funcionalidades: pro debería tener mcp=true, obtenido %+v", dto.Funcionalidades)
+		}
 		if dto.PrecioMensual != 30000 || dto.Moneda != "ARS" || dto.MesesPrueba != 3 {
 			t.Errorf("condiciones comerciales inesperadas: precio=%d moneda=%q meses=%d", dto.PrecioMensual, dto.Moneda, dto.MesesPrueba)
 		}
@@ -256,4 +266,34 @@ func TestEstadoPlanDTO_Calculo(t *testing.T) {
 			t.Errorf("Alcanzado en Pro debe ser false: %+v", dto.Alcanzado)
 		}
 	})
+}
+
+func TestObtenerMiPlan_IncluyeFuncionalidades(t *testing.T) {
+	store := &mockStore{
+		obtenerEstadoCuotasFn: func(ctx context.Context, tenantID string) (*tenant.EstadoCuotas, error) {
+			return &tenant.EstadoCuotas{Plan: tenant.PlanFree}, nil
+		},
+		funcionalidadHabilitadaFn: func(ctx context.Context, tenantID string, rec tenant.Recurso, plan string, ahora time.Time) (bool, error) {
+			return true, nil // excepción del negocio
+		},
+	}
+	h := tenant.NuevosHandlers(tenant.NuevoService(store))
+	r := httptest.NewRequest(http.MethodGet, "/tenants/me/plan", nil)
+	r = r.WithContext(auth.ContextConClaims(r.Context(), &auth.Claims{UsuarioID: "u-1", TenantID: "t-1", Rol: auth.RolDuenio}))
+	w := httptest.NewRecorder()
+	h.ObtenerMiPlan(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", w.Code, w.Body)
+	}
+	var cuerpo struct {
+		Plan            string          `json:"plan"`
+		Funcionalidades map[string]bool `json:"funcionalidades"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &cuerpo); err != nil {
+		t.Fatal(err)
+	}
+	if cuerpo.Plan != "free" || !cuerpo.Funcionalidades["mcp"] {
+		t.Errorf("respuesta inesperada: %s", w.Body)
+	}
 }

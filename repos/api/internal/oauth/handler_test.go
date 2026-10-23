@@ -288,6 +288,34 @@ func TestHandlers_Revocar(t *testing.T) {
 	}
 }
 
+func TestHandlers_AprobarPlanSinMCP(t *testing.T) {
+	e, h := nuevoHandlers(t)
+	c := e.registrar(t)
+	id, nonce, _ := e.svc.IniciarAutorizacion(context.Background(), e.paramsOK(c.ClientID))
+	aprobar := func() *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "/oauth/solicitudes/"+id+"/aprobar", nil)
+		r.SetPathValue("id", id)
+		r.AddCookie(&http.Cookie{Name: cookieSolicitud + id, Value: nonce})
+		r = r.WithContext(auth.ContextConClaims(r.Context(), claimsDuenio()))
+		rec := httptest.NewRecorder()
+		h.Aprobar(rec, r)
+		return rec
+	}
+
+	e.acceso.denegados["t-1"] = true
+	rec := aprobar()
+	m := decodificar(t, rec)
+	detalle, _ := m["detalle"].(map[string]any)
+	if rec.Code != 403 || m["codigo"] != "PLAN_LIMIT_REACHED" || detalle["recurso"] != "mcp" || detalle["accion"] != "upgrade" {
+		t.Errorf("sin acceso: %d %s", rec.Code, rec.Body)
+	}
+
+	e.acceso.denegados["t-1"] = false
+	if rec := aprobar(); rec.Code != 200 {
+		t.Errorf("con acceso: %d %s", rec.Code, rec.Body)
+	}
+}
+
 func TestHandlers_AprobarRolMozo(t *testing.T) {
 	e, h := nuevoHandlers(t)
 	c := e.registrar(t)

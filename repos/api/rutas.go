@@ -249,7 +249,7 @@ func registrarRutas(mux *http.ServeMux) {
 	if oauthCfg, err := oauth.ConfigDesdeEntorno(); err != nil {
 		slog.Error("OAuth MCP deshabilitado", "error", err)
 	} else {
-		oauthSvc := oauth.NuevoService(oauth.NuevoStore(), authStore, negociosOAuth{tenantStore}, oauthCfg)
+		oauthSvc := oauth.NuevoService(oauth.NuevoStore(), authStore, negociosOAuth{tenantStore}, tenantSvc, oauthCfg)
 		oauthH := oauth.NuevosHandlers(oauthSvc)
 		mux.HandleFunc("GET /.well-known/oauth-protected-resource", oauthH.MetadataRecurso)
 		mux.HandleFunc("GET /.well-known/oauth-protected-resource/mcp", oauthH.MetadataRecurso)
@@ -268,6 +268,8 @@ func registrarRutas(mux *http.ServeMux) {
 		mux.Handle("/mcp", mcp.NuevoHandler(oauthSvc, mcp.Dependencias{
 			Store:    mcp.NuevoStore(),
 			Metricas: metricaSvc,
+			Acceso:   tenantSvc,
+			AppURL:   oauthCfg.AppURL,
 			Ahora:    time.Now,
 		}))
 	}
