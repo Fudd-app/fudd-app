@@ -76,6 +76,10 @@ func TestHandlers_Registrar(t *testing.T) {
 	if rec.Code != 400 || decodificar(t, rec)["error"] != "invalid_client_metadata" {
 		t.Errorf("auth method: %d %s", rec.Code, rec.Body)
 	}
+	rec = post(`{"client_name":"` + strings.Repeat("a", maxBodyBytes) + `","redirect_uris":["https://a.com/cb"]}`)
+	if rec.Code != 400 || decodificar(t, rec)["error"] != "invalid_client_metadata" {
+		t.Errorf("body excedido: %d %s", rec.Code, rec.Body)
+	}
 }
 
 func TestHandlers_Registrar_RateLimit(t *testing.T) {
@@ -130,8 +134,47 @@ func TestHandlers_Autorizar(t *testing.T) {
 		t.Errorf("invalid_scope: %d %s", rec.Code, loc)
 	}
 	rec = consulta(nil)
-	if loc := rec.Header().Get("Location"); rec.Code != 302 || !strings.HasPrefix(loc, "https://app.test/conectar?solicitud=") {
-		t.Errorf("ok: %d %s", rec.Code, loc)
+	loc := rec.Header().Get("Location")
+	if rec.Code != 302 || !strings.HasPrefix(loc, "https://app.test/conectar?solicitud=") {
+		t.Fatalf("ok: %d %s", rec.Code, loc)
+	}
+	id := strings.TrimPrefix(loc, "https://app.test/conectar?solicitud=")
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("esperaba 1 cookie, hay %d", len(cookies))
+	}
+	ck := cookies[0]
+	if ck.Name != "mcp_sol_"+id || ck.Value == "" || ck.Path != "/oauth/solicitudes/" || !ck.HttpOnly ||
+		ck.SameSite != http.SameSiteLaxMode || ck.MaxAge != 600 || ck.Secure {
+		t.Errorf("cookie: %+v", ck)
+	}
+
+	r := httptest.NewRequest("GET", "/oauth/authorize?"+url.Values{
+		"client_id": {p.ClientID}, "redirect_uri": {p.RedirectURI}, "response_type": {"code"},
+		"code_challenge": {p.CodeChallenge}, "code_challenge_method": {"S256"}, "resource": {p.Resource},
+	}.Encode(), nil)
+	r.Header.Set("X-Forwarded-Proto", "https")
+	rec = httptest.NewRecorder()
+	h.Autorizar(rec, r)
+	if c := rec.Result().Cookies(); len(c) != 1 || !c[0].Secure {
+		t.Errorf("detrás de proxy https la cookie debe ser Secure: %+v", c)
+	}
+}
+
+func TestHandlers_Autorizar_RateLimit(t *testing.T) {
+	_, h := nuevoHandlers(t)
+	var ultimo *httptest.ResponseRecorder
+	for i := 0; i < 31; i++ {
+		ultimo = httptest.NewRecorder()
+		r := httptest.NewRequest("GET", "/oauth/authorize?client_id=nope", nil)
+		r.RemoteAddr = "1.2.3.4:5000"
+		h.Autorizar(ultimo, r)
+		if i < 30 && ultimo.Code != 400 {
+			t.Fatalf("solicitud %d: %d", i+1, ultimo.Code)
+		}
+	}
+	if ultimo.Code != 429 || ultimo.Header().Get("Location") != "" {
+		t.Errorf("esperaba 429 sin redirección: %d", ultimo.Code)
 	}
 }
 
@@ -150,6 +193,23 @@ func TestHandlers_Token(t *testing.T) {
 	if rec := post(url.Values{"grant_type": {"authorization_code"}}); rec.Code != 400 || decodificar(t, rec)["error"] != "invalid_request" {
 		t.Errorf("faltan params: %d %s", rec.Code, rec.Body)
 	}
+	r := httptest.NewRequest("POST", "/oauth/token", strings.NewReader(`{"grant_type":"password"}`))
+	r.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.Token(rec, r)
+	if rec.Code != 400 || decodificar(t, rec)["error"] != "invalid_request" {
+		t.Errorf("content-type: %d %s", rec.Code, rec.Body)
+	}
+	r = httptest.NewRequest("POST", "/oauth/token", strings.NewReader("grant_type=password"))
+	r.Header.Set("Content-Type", "Application/X-WWW-Form-Urlencoded; charset=utf-8")
+	rec = httptest.NewRecorder()
+	h.Token(rec, r)
+	if rec.Code != 400 || decodificar(t, rec)["error"] != "unsupported_grant_type" {
+		t.Errorf("content-type con parámetros: %d %s", rec.Code, rec.Body)
+	}
+	if rec := post(url.Values{"grant_type": {"authorization_code"}, "code": {strings.Repeat("a", maxBodyBytes)}}); rec.Code != 400 || decodificar(t, rec)["error"] != "invalid_request" {
+		t.Errorf("body excedido: %d %s", rec.Code, rec.Body)
+	}
 	if rec := post(url.Values{"grant_type": {"password"}}); rec.Code != 400 || decodificar(t, rec)["error"] != "unsupported_grant_type" {
 		t.Errorf("grant: %d %s", rec.Code, rec.Body)
 	}
@@ -160,7 +220,7 @@ func TestHandlers_Token(t *testing.T) {
 
 	code := e.aprobada(t, c.ClientID)
 	ok := url.Values{"grant_type": {"authorization_code"}, "code": {code}, "code_verifier": {verifierTest}, "client_id": {c.ClientID}, "redirect_uri": {redirectTest}}
-	rec := post(ok)
+	rec = post(ok)
 	m := decodificar(t, rec)
 	if rec.Code != 200 || m["access_token"] == "" || m["refresh_token"] == "" || m["token_type"] != "Bearer" {
 		t.Fatalf("ok: %d %s", rec.Code, rec.Body)
@@ -179,12 +239,17 @@ func TestHandlers_Revocar(t *testing.T) {
 	if rec.Code != 200 {
 		t.Errorf("revocar: %d", rec.Code)
 	}
+	rec = httptest.NewRecorder()
+	h.Revocar(rec, peticionForm("POST", "/oauth/revoke", url.Values{}))
+	if rec.Code != 400 || decodificar(t, rec)["error"] != "invalid_request" {
+		t.Errorf("sin token: %d %s", rec.Code, rec.Body)
+	}
 }
 
 func TestHandlers_AprobarRolMozo(t *testing.T) {
 	e, h := nuevoHandlers(t)
 	c := e.registrar(t)
-	id, _ := e.svc.IniciarAutorizacion(context.Background(), e.paramsOK(c.ClientID))
+	id, _, _ := e.svc.IniciarAutorizacion(context.Background(), e.paramsOK(c.ClientID))
 
 	r := httptest.NewRequest("POST", "/oauth/solicitudes/"+id+"/aprobar", nil)
 	r.SetPathValue("id", id)
@@ -238,5 +303,49 @@ func TestHandlers_Conexiones(t *testing.T) {
 	h.RevocarConexion(rec, r)
 	if rec.Code != 404 {
 		t.Errorf("revocar de nuevo: %d", rec.Code)
+	}
+}
+
+func TestHandlers_SolicitudLigadaAlNavegador(t *testing.T) {
+	e, h := nuevoHandlers(t)
+	c := e.registrar(t)
+	id, nonce, _ := e.svc.IniciarAutorizacion(context.Background(), e.paramsOK(c.ClientID))
+	otroID, otroNonce, _ := e.svc.IniciarAutorizacion(context.Background(), e.paramsOK(c.ClientID))
+
+	llamar := func(f http.HandlerFunc, cookie *http.Cookie) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "/oauth/solicitudes/"+id, nil)
+		r.SetPathValue("id", id)
+		if cookie != nil {
+			r.AddCookie(cookie)
+		}
+		r = r.WithContext(auth.ContextConClaims(r.Context(), claimsDuenio()))
+		rec := httptest.NewRecorder()
+		f(rec, r)
+		return rec
+	}
+
+	for nombre, ck := range map[string]*http.Cookie{
+		"sin cookie":     nil,
+		"cookie de otra": {Name: "mcp_sol_" + otroID, Value: otroNonce},
+		"nonce de otra":  {Name: "mcp_sol_" + id, Value: otroNonce},
+	} {
+		rec := llamar(h.Aprobar, ck)
+		if rec.Code != 403 || decodificar(t, rec)["codigo"] != "SOLICITUD_OTRO_NAVEGADOR" {
+			t.Errorf("%s: %d %s", nombre, rec.Code, rec.Body)
+		}
+	}
+
+	rec := llamar(h.VerSolicitud, nil)
+	if m := decodificar(t, rec); rec.Code != 200 || m["mismo_navegador"] != false {
+		t.Errorf("ver sin cookie: %d %s", rec.Code, rec.Body)
+	}
+	ok := &http.Cookie{Name: "mcp_sol_" + id, Value: nonce}
+	rec = llamar(h.VerSolicitud, ok)
+	if m := decodificar(t, rec); rec.Code != 200 || m["mismo_navegador"] != true {
+		t.Errorf("ver con cookie: %d %s", rec.Code, rec.Body)
+	}
+	rec = llamar(h.Aprobar, ok)
+	if rec.Code != 200 || decodificar(t, rec)["redirect_url"] == "" {
+		t.Errorf("aprobar con cookie: %d %s", rec.Code, rec.Body)
 	}
 }

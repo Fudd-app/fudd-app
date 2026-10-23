@@ -18,8 +18,9 @@ func RequerirTokenMCP(svc *Service) func(http.Handler) http.Handler {
 
 			cabecera := r.Header.Get("Authorization")
 			token := ""
-			if strings.HasPrefix(cabecera, "Bearer ") {
-				token = strings.TrimSpace(strings.TrimPrefix(cabecera, "Bearer "))
+			if len(cabecera) >= 7 && strings.EqualFold(cabecera[:7], "bearer ") {
+				token, _ = strings.CutPrefix(cabecera, cabecera[:7])
+				token = strings.TrimSpace(token)
 			}
 			if token == "" {
 				w.Header().Set("WWW-Authenticate", desafio)
@@ -31,7 +32,7 @@ func RequerirTokenMCP(svc *Service) func(http.Handler) http.Handler {
 			if err != nil {
 				if !errors.Is(err, ErrTokenInvalido) {
 					slog.ErrorContext(r.Context(), "error validando token MCP", "error", err)
-					jsonError(w, "error interno", http.StatusInternalServerError)
+					jsonError(w, "server_error", http.StatusInternalServerError)
 					return
 				}
 				w.Header().Set("WWW-Authenticate", desafio+`, error="invalid_token"`)

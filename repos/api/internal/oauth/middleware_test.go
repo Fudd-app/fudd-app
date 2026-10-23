@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -48,5 +49,16 @@ func TestRequerirTokenMCP(t *testing.T) {
 	rec = llamar(func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+resp.AccessToken) })
 	if rec.Code != 200 || claims == nil || claims.UsuarioID != "u-duenio" || claims.TenantID != "t-1" {
 		t.Errorf("token MCP válido: %d %+v", rec.Code, claims)
+	}
+
+	rec = llamar(func(r *http.Request) { r.Header.Set("Authorization", "bearer "+resp.AccessToken) })
+	if rec.Code != 200 {
+		t.Errorf("esquema bearer en minúsculas: %d", rec.Code)
+	}
+
+	e.usuarios.fallar(errors.New("db caída"))
+	rec = llamar(func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+resp.AccessToken) })
+	if rec.Code != 500 || rec.Header().Get("WWW-Authenticate") != "" || !strings.Contains(rec.Body.String(), `"server_error"`) {
+		t.Errorf("error de infraestructura: %d %q %s", rec.Code, rec.Header().Get("WWW-Authenticate"), rec.Body)
 	}
 }

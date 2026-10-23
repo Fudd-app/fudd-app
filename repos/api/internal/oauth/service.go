@@ -16,11 +16,16 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
 )
 
-const maxRedirectURIs = 10
+const (
+	maxRedirectURIs  = 10
+	maxLargoRedirect = 2048
+	maxLargoState    = 1024
+)
 
 type Usuarios interface {
 	ObtenerUsuarioPorID(ctx context.Context, id string) (*auth.UsuarioAuth, error)
@@ -80,21 +85,28 @@ func (s *Service) RegistrarCliente(ctx context.Context, nombre string, redirectU
 	return c, nil
 }
 
-func (s *Service) IniciarAutorizacion(ctx context.Context, p ParamsAutorizacion) (string, error) {
+// IniciarAutorizacion devuelve el id de la solicitud y un nonce que el handler
+// entrega al navegador en una cookie: la aprobación exige presentarlo.
+func (s *Service) IniciarAutorizacion(ctx context.Context, p ParamsAutorizacion) (string, string, error) {
 	cliente, err := s.store.ObtenerCliente(ctx, p.ClientID)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if !slices.Contains(cliente.RedirectURIs, p.RedirectURI) {
-		return "", ErrRedirectInvalido
+		return "", "", ErrRedirectInvalido
+	}
+	if p.Resource == "" {
+		p.Resource = s.cfg.Resource
 	}
 	if p.ResponseType != "code" || p.CodeChallengeMethod != "S256" ||
-		len(p.CodeChallenge) < 43 || len(p.CodeChallenge) > 128 || p.Resource != s.cfg.Resource {
-		return "", ErrSolicitudInvalida
+		len(p.CodeChallenge) < 43 || len(p.CodeChallenge) > 128 || len(p.State) > maxLargoState ||
+		strings.TrimRight(p.Resource, "/") != strings.TrimRight(s.cfg.Resource, "/") {
+		return "", "", ErrSolicitudInvalida
 	}
 	if strings.TrimSpace(p.Scope) != "" && !slices.Contains(strings.Fields(p.Scope), ScopeLectura) {
-		return "", ErrScopeInvalido
+		return "", "", ErrScopeInvalido
 	}
+	nonce := generarAleatorio(32)
 
 	sol := &Solicitud{
 		ClientID:      p.ClientID,
@@ -102,13 +114,14 @@ func (s *Service) IniciarAutorizacion(ctx context.Context, p ParamsAutorizacion)
 		CodeChallenge: p.CodeChallenge,
 		State:         p.State,
 		Scope:         ScopeLectura,
-		Resource:      p.Resource,
+		Resource:      s.cfg.Resource,
+		NavegadorHash: hashToken(nonce),
 		ExpiraAt:      s.ahora().Add(DuracionSolicitud),
 	}
 	if err := s.store.CrearSolicitud(ctx, sol); err != nil {
-		return "", err
+		return "", "", err
 	}
-	return sol.ID, nil
+	return sol.ID, nonce, nil
 }
 
 func (s *Service) URLConsentimiento(id string) string {
@@ -126,7 +139,7 @@ func (s *Service) solicitudPendiente(ctx context.Context, id string) (*Solicitud
 	return sol, nil
 }
 
-func (s *Service) VerSolicitud(ctx context.Context, id string, claims *auth.Claims) (*SolicitudVista, error) {
+func (s *Service) VerSolicitud(ctx context.Context, id, nonce string, claims *auth.Claims) (*SolicitudVista, error) {
 	sol, err := s.solicitudPendiente(ctx, id)
 	if err != nil {
 		return nil, err
@@ -153,18 +166,22 @@ func (s *Service) VerSolicitud(ctx context.Context, id string, claims *auth.Clai
 			"Ver el estado de la cocina",
 			"Ver el resumen del turno",
 		},
-		SoloLectura: true,
-		ExpiraAt:    sol.ExpiraAt,
+		SoloLectura:    true,
+		MismoNavegador: mismoNavegador(sol, nonce),
+		ExpiraAt:       sol.ExpiraAt,
 	}, nil
 }
 
-func (s *Service) Aprobar(ctx context.Context, id string, claims *auth.Claims) (string, error) {
+func (s *Service) Aprobar(ctx context.Context, id, nonce string, claims *auth.Claims) (string, error) {
 	if claims.Rol != auth.RolDuenio {
 		return "", ErrSoloDuenio
 	}
 	sol, err := s.solicitudPendiente(ctx, id)
 	if err != nil {
 		return "", err
+	}
+	if !mismoNavegador(sol, nonce) {
+		return "", ErrOtroNavegador
 	}
 	codigo := generarAleatorio(32)
 	if err := s.store.AprobarSolicitud(ctx, id, claims.UsuarioID, hashToken(codigo), s.ahora().Add(DuracionCodigo)); err != nil {
@@ -182,6 +199,11 @@ func (s *Service) Rechazar(ctx context.Context, id string, claims *auth.Claims) 
 		return "", err
 	}
 	return s.urlRetorno(sol, map[string]string{"error": "access_denied"})
+}
+
+func mismoNavegador(sol *Solicitud, nonce string) bool {
+	return nonce != "" && sol.NavegadorHash != "" &&
+		subtle.ConstantTimeCompare([]byte(hashToken(nonce)), []byte(sol.NavegadorHash)) == 1
 }
 
 // URLRetornoError arma la redirección de error para una solicitud que no
@@ -236,7 +258,13 @@ func (s *Service) CanjearCodigo(ctx context.Context, code, codeVerifier, clientI
 	}
 
 	usuario, err := s.usuarios.ObtenerUsuarioPorID(ctx, *sol.UsuarioID)
-	if err != nil || usuario.Estado != "activo" || usuario.Rol != auth.RolDuenio {
+	if err != nil {
+		if usuarioNoExiste(err) {
+			return nil, ErrGrantInvalido
+		}
+		return nil, fmt.Errorf("obtener usuario: %w", err)
+	}
+	if usuario.Estado != "activo" || usuario.Rol != auth.RolDuenio {
 		return nil, ErrGrantInvalido
 	}
 
@@ -271,7 +299,14 @@ func (s *Service) Refrescar(ctx context.Context, refreshToken, clientID string) 
 		return nil, s.revocarYRechazar(ctx, nuevoHash)
 	}
 	usuario, err := s.usuarios.ObtenerUsuarioPorID(ctx, conexion.UsuarioID)
-	if err != nil || usuario.Estado != "activo" || usuario.Rol != auth.RolDuenio ||
+	if err != nil {
+		if usuarioNoExiste(err) {
+			return nil, s.revocarYRechazar(ctx, nuevoHash)
+		}
+		// Falla transitoria: no se revoca, el refresh nuevo sigue sirviendo.
+		return nil, fmt.Errorf("obtener usuario: %w", err)
+	}
+	if usuario.Estado != "activo" || usuario.Rol != auth.RolDuenio ||
 		usuario.TenantID != conexion.TenantID || usuario.SessionVersion != conexion.SessionVersion {
 		return nil, s.revocarYRechazar(ctx, nuevoHash)
 	}
@@ -367,7 +402,13 @@ func (s *Service) ValidarAccessToken(ctx context.Context, token string) (*Acceso
 		return nil, ErrTokenInvalido
 	}
 	usuario, err := s.usuarios.ObtenerUsuarioPorID(ctx, sub)
-	if err != nil || usuario.Estado != "activo" || usuario.Rol != auth.RolDuenio ||
+	if err != nil {
+		if usuarioNoExiste(err) {
+			return nil, ErrTokenInvalido
+		}
+		return nil, fmt.Errorf("obtener usuario: %w", err)
+	}
+	if usuario.Estado != "activo" || usuario.Rol != auth.RolDuenio ||
 		usuario.TenantID != conexion.TenantID || usuario.SessionVersion != int64(svRaw) {
 		return nil, ErrTokenInvalido
 	}
@@ -387,6 +428,11 @@ func (s *Service) ValidarAccessToken(ctx context.Context, token string) (*Acceso
 	}, nil
 }
 
+// usuarioNoExiste reconoce el "no hay fila" que auth.Store envuelve con %w.
+func usuarioNoExiste(err error) bool {
+	return errors.Is(err, pgx.ErrNoRows)
+}
+
 func generarAleatorio(n int) string {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
@@ -401,7 +447,7 @@ func hashToken(s string) string {
 }
 
 func redirectValido(raw string) bool {
-	if strings.Contains(raw, "#") {
+	if len(raw) > maxLargoRedirect || strings.Contains(raw, "#") {
 		return false
 	}
 	u, err := url.Parse(raw)

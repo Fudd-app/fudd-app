@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
 )
@@ -242,19 +244,35 @@ func (m *memStore) MarcarUso(_ context.Context, id string) error {
 }
 
 type memUsuarios struct {
-	mu sync.Mutex
-	m  map[string]*auth.UsuarioAuth
+	mu    sync.Mutex
+	m     map[string]*auth.UsuarioAuth
+	fallo error
 }
 
 func (u *memUsuarios) ObtenerUsuarioPorID(_ context.Context, id string) (*auth.UsuarioAuth, error) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
+	if u.fallo != nil {
+		return nil, u.fallo
+	}
 	us, ok := u.m[id]
 	if !ok {
-		return nil, errors.New("usuario no encontrado")
+		return nil, fmt.Errorf("usuario no encontrado: %w", pgx.ErrNoRows)
 	}
 	cp := *us
 	return &cp, nil
+}
+
+func (u *memUsuarios) fallar(err error) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.fallo = err
+}
+
+func (u *memUsuarios) eliminar(id string) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	delete(u.m, id)
 }
 
 func (u *memUsuarios) modificar(id string, f func(*auth.UsuarioAuth)) {
@@ -325,11 +343,11 @@ func (e *entorno) paramsOK(clientID string) ParamsAutorizacion {
 // aprobada deja una solicitud aprobada y devuelve el código en claro.
 func (e *entorno) aprobada(t *testing.T, clientID string) string {
 	t.Helper()
-	id, err := e.svc.IniciarAutorizacion(context.Background(), e.paramsOK(clientID))
+	id, nonce, err := e.svc.IniciarAutorizacion(context.Background(), e.paramsOK(clientID))
 	if err != nil {
 		t.Fatal(err)
 	}
-	redir, err := e.svc.Aprobar(context.Background(), id, claimsDuenio())
+	redir, err := e.svc.Aprobar(context.Background(), id, nonce, claimsDuenio())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -385,13 +403,13 @@ func TestIniciarAutorizacion(t *testing.T) {
 	ctx := context.Background()
 	c := e.registrar(t)
 
-	if _, err := e.svc.IniciarAutorizacion(ctx, ParamsAutorizacion{ClientID: "nope"}); !errors.Is(err, ErrClienteInvalido) {
+	if _, _, err := e.svc.IniciarAutorizacion(ctx, ParamsAutorizacion{ClientID: "nope"}); !errors.Is(err, ErrClienteInvalido) {
 		t.Errorf("cliente inexistente: %v", err)
 	}
 	mod := func(f func(*ParamsAutorizacion)) error {
 		p := e.paramsOK(c.ClientID)
 		f(&p)
-		_, err := e.svc.IniciarAutorizacion(ctx, p)
+		_, _, err := e.svc.IniciarAutorizacion(ctx, p)
 		return err
 	}
 	if err := mod(func(p *ParamsAutorizacion) { p.RedirectURI = "https://otro.com/cb" }); !errors.Is(err, ErrRedirectInvalido) {
@@ -410,7 +428,7 @@ func TestIniciarAutorizacion(t *testing.T) {
 		t.Errorf("scope: %v", err)
 	}
 
-	id, err := e.svc.IniciarAutorizacion(ctx, e.paramsOK(c.ClientID))
+	id, _, err := e.svc.IniciarAutorizacion(ctx, e.paramsOK(c.ClientID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -426,13 +444,22 @@ func TestIniciarAutorizacion(t *testing.T) {
 func TestVerSolicitud(t *testing.T) {
 	e := nuevoEntorno(t)
 	c := e.registrar(t)
-	id, _ := e.svc.IniciarAutorizacion(context.Background(), e.paramsOK(c.ClientID))
-	v, err := e.svc.VerSolicitud(context.Background(), id, claimsDuenio())
+	id, nonce, _ := e.svc.IniciarAutorizacion(context.Background(), e.paramsOK(c.ClientID))
+	v, err := e.svc.VerSolicitud(context.Background(), id, nonce, claimsDuenio())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if v.ClientName != "Claude" || v.DominioRetorno != "claude.ai" || v.Negocio != "Negocio t-1" || !v.SoloLectura || len(v.Permisos) != 3 {
 		t.Errorf("vista: %+v", v)
+	}
+	if !v.MismoNavegador {
+		t.Error("con el nonce correcto debería informar mismo_navegador")
+	}
+	for _, n := range []string{"", "otro-nonce"} {
+		v, err := e.svc.VerSolicitud(context.Background(), id, n, claimsDuenio())
+		if err != nil || v.MismoNavegador {
+			t.Errorf("nonce %q: err=%v mismo_navegador=%v", n, err, v != nil && v.MismoNavegador)
+		}
 	}
 }
 
@@ -442,16 +469,25 @@ func TestAprobar(t *testing.T) {
 	c, _ := e.svc.RegistrarCliente(ctx, "Claude", []string{"https://claude.ai/cb?x=1"})
 	p := e.paramsOK(c.ClientID)
 	p.RedirectURI = "https://claude.ai/cb?x=1"
-	id, err := e.svc.IniciarAutorizacion(ctx, p)
+	id, nonce, err := e.svc.IniciarAutorizacion(ctx, p)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	mozo := &auth.Claims{UsuarioID: "u-mozo", TenantID: "t-1", Rol: auth.RolMozo}
-	if _, err := e.svc.Aprobar(ctx, id, mozo); !errors.Is(err, ErrSoloDuenio) {
+	if _, err := e.svc.Aprobar(ctx, id, nonce, mozo); !errors.Is(err, ErrSoloDuenio) {
 		t.Errorf("mozo: %v", err)
 	}
-	redir, err := e.svc.Aprobar(ctx, id, claimsDuenio())
+	if _, err := e.svc.Aprobar(ctx, id, "", claimsDuenio()); !errors.Is(err, ErrOtroNavegador) {
+		t.Errorf("sin nonce: %v", err)
+	}
+	if _, err := e.svc.Aprobar(ctx, id, "nonce-de-otra-solicitud", claimsDuenio()); !errors.Is(err, ErrOtroNavegador) {
+		t.Errorf("nonce ajeno: %v", err)
+	}
+	if _, err := e.svc.Aprobar(ctx, id, "", mozo); !errors.Is(err, ErrSoloDuenio) {
+		t.Errorf("el rol se chequea antes que el navegador: %v", err)
+	}
+	redir, err := e.svc.Aprobar(ctx, id, nonce, claimsDuenio())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -460,13 +496,13 @@ func TestAprobar(t *testing.T) {
 	if q.Get("x") != "1" || q.Get("code") == "" || q.Get("state") != "xyz" || q.Get("iss") != "https://mcp.test" {
 		t.Errorf("redirect: %s", redir)
 	}
-	if _, err := e.svc.Aprobar(ctx, id, claimsDuenio()); !errors.Is(err, ErrSolicitudNoEncontrada) {
+	if _, err := e.svc.Aprobar(ctx, id, nonce, claimsDuenio()); !errors.Is(err, ErrSolicitudNoEncontrada) {
 		t.Errorf("segunda aprobación: %v", err)
 	}
 
-	id2, _ := e.svc.IniciarAutorizacion(ctx, p)
+	id2, nonce2, _ := e.svc.IniciarAutorizacion(ctx, p)
 	e.reloj.Avanzar(DuracionSolicitud + time.Second)
-	if _, err := e.svc.Aprobar(ctx, id2, claimsDuenio()); !errors.Is(err, ErrSolicitudNoEncontrada) {
+	if _, err := e.svc.Aprobar(ctx, id2, nonce2, claimsDuenio()); !errors.Is(err, ErrSolicitudNoEncontrada) {
 		t.Errorf("vencida: %v", err)
 	}
 }
@@ -474,7 +510,7 @@ func TestAprobar(t *testing.T) {
 func TestRechazar(t *testing.T) {
 	e := nuevoEntorno(t)
 	c := e.registrar(t)
-	id, _ := e.svc.IniciarAutorizacion(context.Background(), e.paramsOK(c.ClientID))
+	id, _, _ := e.svc.IniciarAutorizacion(context.Background(), e.paramsOK(c.ClientID))
 	redir, err := e.svc.Rechazar(context.Background(), id, &auth.Claims{Rol: auth.RolMozo})
 	if err != nil {
 		t.Fatal(err)
@@ -729,5 +765,173 @@ func TestRevocarToken(t *testing.T) {
 	}
 	if _, err := e.svc.Refrescar(ctx, resp.RefreshToken, cid); !errors.Is(err, ErrGrantInvalido) {
 		t.Errorf("refresh revocado: %v", err)
+	}
+}
+
+func TestRechazar_NoExigeNavegador(t *testing.T) {
+	e := nuevoEntorno(t)
+	c := e.registrar(t)
+	id, _, _ := e.svc.IniciarAutorizacion(context.Background(), e.paramsOK(c.ClientID))
+	if _, err := e.svc.Rechazar(context.Background(), id, claimsDuenio()); err != nil {
+		t.Errorf("rechazar sin nonce: %v", err)
+	}
+}
+
+func TestIniciarAutorizacion_ResourceYLimites(t *testing.T) {
+	e := nuevoEntorno(t)
+	ctx := context.Background()
+	c := e.registrar(t)
+	probar := func(mod func(*ParamsAutorizacion)) error {
+		p := e.paramsOK(c.ClientID)
+		mod(&p)
+		_, _, err := e.svc.IniciarAutorizacion(ctx, p)
+		return err
+	}
+	if err := probar(func(p *ParamsAutorizacion) { p.Resource = "" }); err != nil {
+		t.Errorf("resource vacío debería aceptarse: %v", err)
+	}
+	if err := probar(func(p *ParamsAutorizacion) { p.Resource += "/" }); err != nil {
+		t.Errorf("resource con barra final debería aceptarse: %v", err)
+	}
+	if err := probar(func(p *ParamsAutorizacion) { p.State = strings.Repeat("a", maxLargoState) }); err != nil {
+		t.Errorf("state en el tope: %v", err)
+	}
+	if err := probar(func(p *ParamsAutorizacion) { p.State = strings.Repeat("a", maxLargoState+1) }); !errors.Is(err, ErrSolicitudInvalida) {
+		t.Errorf("state largo: %v", err)
+	}
+
+	p := e.paramsOK(c.ClientID)
+	p.Resource = e.svc.cfg.Resource + "/"
+	id, _, _ := e.svc.IniciarAutorizacion(ctx, p)
+	if sol, _ := e.store.ObtenerSolicitud(ctx, id); sol.Resource != e.svc.cfg.Resource {
+		t.Errorf("se persiste cfg.Resource: %q", sol.Resource)
+	}
+
+	largo := "https://claude.ai/" + strings.Repeat("a", maxLargoRedirect)
+	if _, err := e.svc.RegistrarCliente(ctx, "x", []string{largo}); !errors.Is(err, ErrRedirectInvalido) {
+		t.Errorf("redirect_uri largo: %v", err)
+	}
+}
+
+func TestCanjearCodigo_ErrorDeUsuarios(t *testing.T) {
+	ctx := context.Background()
+
+	e := nuevoEntorno(t)
+	cl := e.registrar(t)
+	code := e.aprobada(t, cl.ClientID)
+	e.usuarios.fallar(errors.New("db caída"))
+	if _, err := e.svc.CanjearCodigo(ctx, code, verifierTest, cl.ClientID, redirectTest); err == nil || errors.Is(err, ErrGrantInvalido) {
+		t.Errorf("esperaba error de infraestructura, got %v", err)
+	}
+
+	e = nuevoEntorno(t)
+	cl = e.registrar(t)
+	code = e.aprobada(t, cl.ClientID)
+	e.usuarios.eliminar("u-duenio")
+	if _, err := e.svc.CanjearCodigo(ctx, code, verifierTest, cl.ClientID, redirectTest); !errors.Is(err, ErrGrantInvalido) {
+		t.Errorf("usuario inexistente: %v", err)
+	}
+}
+
+func TestRefrescar_ErrorDeUsuariosNoRevoca(t *testing.T) {
+	ctx := context.Background()
+	e := nuevoEntorno(t)
+	r1, cid := e.conectar(t)
+
+	e.usuarios.fallar(errors.New("db caída"))
+	if _, err := e.svc.Refrescar(ctx, r1.RefreshToken, cid); err == nil || errors.Is(err, ErrGrantInvalido) {
+		t.Fatalf("esperaba error de infraestructura, got %v", err)
+	}
+	for _, c := range e.store.conexiones {
+		if c.RevocadaAt != nil {
+			t.Fatal("un error transitorio no debe revocar la conexión")
+		}
+	}
+}
+
+func TestRefrescar_Revocaciones(t *testing.T) {
+	ctx := context.Background()
+	revocadas := func(t *testing.T, e *entorno) {
+		t.Helper()
+		for _, c := range e.store.conexiones {
+			if c.RevocadaAt == nil {
+				t.Error("la conexión debería estar revocada")
+			}
+		}
+	}
+
+	t.Run("client_id distinto revoca la conexión", func(t *testing.T) {
+		e := nuevoEntorno(t)
+		r1, _ := e.conectar(t)
+		if _, err := e.svc.Refrescar(ctx, r1.RefreshToken, "mcp_otro"); !errors.Is(err, ErrGrantInvalido) {
+			t.Fatalf("client: %v", err)
+		}
+		revocadas(t, e)
+		if _, err := e.svc.ValidarAccessToken(ctx, r1.AccessToken); !errors.Is(err, ErrTokenInvalido) {
+			t.Errorf("access de conexión revocada: %v", err)
+		}
+	})
+
+	t.Run("tenant distinto revoca", func(t *testing.T) {
+		e := nuevoEntorno(t)
+		r1, cid := e.conectar(t)
+		e.usuarios.modificar("u-duenio", func(u *auth.UsuarioAuth) { u.TenantID = "t-9" })
+		if _, err := e.svc.Refrescar(ctx, r1.RefreshToken, cid); !errors.Is(err, ErrGrantInvalido) {
+			t.Fatalf("tenant: %v", err)
+		}
+		revocadas(t, e)
+	})
+
+	t.Run("usuario inexistente revoca", func(t *testing.T) {
+		e := nuevoEntorno(t)
+		r1, cid := e.conectar(t)
+		e.usuarios.eliminar("u-duenio")
+		if _, err := e.svc.Refrescar(ctx, r1.RefreshToken, cid); !errors.Is(err, ErrGrantInvalido) {
+			t.Fatalf("inexistente: %v", err)
+		}
+		revocadas(t, e)
+	})
+}
+
+func TestValidarAccessToken_ErrorDeUsuarios(t *testing.T) {
+	ctx := context.Background()
+	e := nuevoEntorno(t)
+	resp, _ := e.conectar(t)
+
+	e.usuarios.fallar(errors.New("db caída"))
+	if _, err := e.svc.ValidarAccessToken(ctx, resp.AccessToken); err == nil || errors.Is(err, ErrTokenInvalido) {
+		t.Errorf("error de usuarios: %v", err)
+	}
+	e.usuarios.fallar(nil)
+	if _, err := e.svc.ValidarAccessToken(ctx, resp.AccessToken); err != nil {
+		t.Errorf("tras recuperarse debería validar: %v", err)
+	}
+	e.usuarios.eliminar("u-duenio")
+	if _, err := e.svc.ValidarAccessToken(ctx, resp.AccessToken); !errors.Is(err, ErrTokenInvalido) {
+		t.Errorf("usuario inexistente: %v", err)
+	}
+}
+
+func TestValidarAccessToken_ConexionAjenaOTenantDistinto(t *testing.T) {
+	ctx := context.Background()
+	e := nuevoEntorno(t)
+	resp, _ := e.conectar(t)
+	acceso, _ := e.svc.ValidarAccessToken(ctx, resp.AccessToken)
+
+	firmado := func(sub string, sv int) string {
+		mc := jwt.MapClaims{
+			"iss": e.svc.cfg.Issuer, "aud": e.svc.cfg.Resource, "sub": sub, "cid": acceso.ConexionID,
+			"sv": sv, "scope": ScopeLectura, "iat": e.reloj.Ahora().Unix(), "exp": e.reloj.Ahora().Add(time.Minute).Unix(),
+		}
+		s, _ := jwt.NewWithClaims(jwt.SigningMethodHS256, mc).SignedString(e.svc.cfg.Secreto)
+		return s
+	}
+	if _, err := e.svc.ValidarAccessToken(ctx, firmado("u-otro", 1)); !errors.Is(err, ErrTokenInvalido) {
+		t.Errorf("conexión de otro sub: %v", err)
+	}
+
+	e.usuarios.modificar("u-duenio", func(u *auth.UsuarioAuth) { u.TenantID = "t-9" })
+	if _, err := e.svc.ValidarAccessToken(ctx, resp.AccessToken); !errors.Is(err, ErrTokenInvalido) {
+		t.Errorf("tenant distinto: %v", err)
 	}
 }

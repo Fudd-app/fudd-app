@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS oauth_solicitudes (
     usuario_id            UUID REFERENCES usuarios(id) ON DELETE CASCADE,
     codigo_hash           TEXT UNIQUE,
     codigo_expira_at      TIMESTAMP WITH TIME ZONE,
+    navegador_hash        TEXT NOT NULL DEFAULT '',
     expira_at             TIMESTAMP WITH TIME ZONE NOT NULL,
     created_at            TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );

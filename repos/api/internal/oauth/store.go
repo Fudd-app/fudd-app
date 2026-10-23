@@ -36,12 +36,12 @@ func NuevoStore() Store { return &pgStore{} }
 var reUUID = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 const columnasSolicitud = `id, client_id, redirect_uri, code_challenge, state, scope, resource, estado,
-	usuario_id, codigo_hash, codigo_expira_at, expira_at, created_at`
+	usuario_id, codigo_hash, codigo_expira_at, expira_at, created_at, navegador_hash`
 
 func escanearSolicitud(row pgx.Row) (*Solicitud, error) {
 	s := &Solicitud{}
 	err := row.Scan(&s.ID, &s.ClientID, &s.RedirectURI, &s.CodeChallenge, &s.State, &s.Scope, &s.Resource,
-		&s.Estado, &s.UsuarioID, &s.CodigoHash, &s.CodigoExpiraAt, &s.ExpiraAt, &s.CreatedAt)
+		&s.Estado, &s.UsuarioID, &s.CodigoHash, &s.CodigoExpiraAt, &s.ExpiraAt, &s.CreatedAt, &s.NavegadorHash)
 	return s, err
 }
 
@@ -74,9 +74,9 @@ func (s *pgStore) ObtenerCliente(ctx context.Context, clientID string) (*Cliente
 
 func (s *pgStore) CrearSolicitud(ctx context.Context, sol *Solicitud) error {
 	err := db.Pool.QueryRow(ctx,
-		`INSERT INTO oauth_solicitudes (client_id, redirect_uri, code_challenge, state, scope, resource, estado, expira_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, 'pendiente', $7) RETURNING id, created_at`,
-		sol.ClientID, sol.RedirectURI, sol.CodeChallenge, sol.State, sol.Scope, sol.Resource, sol.ExpiraAt,
+		`INSERT INTO oauth_solicitudes (client_id, redirect_uri, code_challenge, state, scope, resource, estado, expira_at, navegador_hash)
+		 VALUES ($1, $2, $3, $4, $5, $6, 'pendiente', $7, $8) RETURNING id, created_at`,
+		sol.ClientID, sol.RedirectURI, sol.CodeChallenge, sol.State, sol.Scope, sol.Resource, sol.ExpiraAt, sol.NavegadorHash,
 	).Scan(&sol.ID, &sol.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("creando solicitud oauth: %w", err)

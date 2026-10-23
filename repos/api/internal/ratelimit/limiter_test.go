@@ -40,17 +40,36 @@ func TestLimitador_ClavesIndependientes(t *testing.T) {
 	}
 }
 
-func TestLimitador_LimpiezaPerezosa(t *testing.T) {
+func TestLimitador_PurgaVencidasAlLlenarse(t *testing.T) {
 	l := Nuevo(1, time.Minute)
+	l.maxClaves = 3
 	ahora := time.Now()
 	l.ahora = func() time.Time { return ahora }
-	for i := 0; i <= maxEntradas+1; i++ {
-		l.conteos[string(rune(i))+"x"] = &ventanaConteo{inicio: ahora, conteo: 1}
+	for _, k := range []string{"a", "b", "c"} {
+		l.Permitir(k)
 	}
 	ahora = ahora.Add(2 * time.Minute)
-	l.Permitir("nueva")
+	if !l.Permitir("nueva") {
+		t.Fatal("debería purgar las vencidas y admitir la clave nueva")
+	}
 	if len(l.conteos) != 1 {
-		t.Fatalf("esperaba 1 entrada tras la limpieza, hay %d", len(l.conteos))
+		t.Fatalf("esperaba 1 entrada tras la purga, hay %d", len(l.conteos))
+	}
+}
+
+func TestLimitador_MapaLlenoRechazaClavesNuevas(t *testing.T) {
+	l := Nuevo(5, time.Minute)
+	l.maxClaves = 2
+	l.Permitir("a")
+	l.Permitir("b")
+	if l.Permitir("c") {
+		t.Fatal("con el mapa lleno de claves vigentes no debería admitir una nueva")
+	}
+	if !l.Permitir("a") {
+		t.Fatal("una clave existente debería seguir admitida")
+	}
+	if len(l.conteos) != 2 {
+		t.Fatalf("el mapa no debería crecer: %d", len(l.conteos))
 	}
 }
 
@@ -60,12 +79,29 @@ func TestIPCliente(t *testing.T) {
 	if ip := IPCliente(r); ip != "10.0.0.1" {
 		t.Fatalf("sin XFF: %q", ip)
 	}
-	r.Header.Set("X-Forwarded-For", "  203.0.113.7 , 10.1.1.1")
+	r.Header.Set("X-Forwarded-For", "  6.6.6.6 , 203.0.113.7")
 	if ip := IPCliente(r); ip != "203.0.113.7" {
-		t.Fatalf("con XFF múltiple: %q", ip)
+		t.Fatalf("con XFF múltiple debe tomar el último: %q", ip)
+	}
+	r.Header.Set("X-Forwarded-For", "203.0.113.7, ")
+	if ip := IPCliente(r); ip != "203.0.113.7" {
+		t.Fatalf("con último valor vacío: %q", ip)
 	}
 	r.Header.Set("X-Forwarded-For", "   ")
 	if ip := IPCliente(r); ip != "10.0.0.1" {
 		t.Fatalf("con XFF vacío: %q", ip)
+	}
+	r.Header.Set("X-Forwarded-For", "no-es-ip")
+	if ip := IPCliente(r); ip != "10.0.0.1" {
+		t.Fatalf("con XFF no IP: %q", ip)
+	}
+	r.Header.Set("X-Forwarded-For", "203.0.113.7")
+	r.Header.Set("CF-Connecting-IP", " 198.51.100.9 ")
+	if ip := IPCliente(r); ip != "198.51.100.9" {
+		t.Fatalf("CF-Connecting-IP debe tener prioridad: %q", ip)
+	}
+	r.Header.Set("CF-Connecting-IP", "basura")
+	if ip := IPCliente(r); ip != "203.0.113.7" {
+		t.Fatalf("CF-Connecting-IP no IP se ignora: %q", ip)
 	}
 }

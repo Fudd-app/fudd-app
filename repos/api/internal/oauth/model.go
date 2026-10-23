@@ -15,6 +15,7 @@ type Cliente struct {
 
 type Solicitud struct {
 	ID, ClientID, RedirectURI, CodeChallenge, State, Scope, Resource, Estado string
+	NavegadorHash                                                            string
 	UsuarioID                                                                *string
 	CodigoHash                                                               *string
 	CodigoExpiraAt                                                           *time.Time
@@ -42,6 +43,7 @@ type SolicitudVista struct {
 	Negocio        string    `json:"negocio"`
 	Permisos       []string  `json:"permisos"`
 	SoloLectura    bool      `json:"solo_lectura"`
+	MismoNavegador bool      `json:"mismo_navegador"`
 	ExpiraAt       time.Time `json:"expira_at"`
 }
 
@@ -65,6 +67,7 @@ var (
 	ErrClienteInvalido       = errors.New("cliente inválido")
 	ErrRedirectInvalido      = errors.New("redirect_uri inválido")
 	ErrSolicitudInvalida     = errors.New("solicitud inválida")
+	ErrOtroNavegador         = errors.New("la solicitud se inició en otro navegador")
 	ErrScopeInvalido         = errors.New("scope inválido")
 	ErrSolicitudNoEncontrada = errors.New("solicitud no encontrada")
 	ErrSoloDuenio            = errors.New("solo el dueño puede conectar asistentes de IA")

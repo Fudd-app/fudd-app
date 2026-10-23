@@ -6,23 +6,28 @@ import (
 	"html"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/ratelimit"
 )
 
+const maxBodyBytes = 16 << 10
+
 type Handlers struct {
-	svc            *Service
-	limiteRegistro *ratelimit.Limitador
-	limiteToken    *ratelimit.Limitador
+	svc             *Service
+	limiteRegistro  *ratelimit.Limitador
+	limiteToken     *ratelimit.Limitador
+	limiteAutorizar *ratelimit.Limitador
 }
 
 func NuevosHandlers(svc *Service) *Handlers {
 	return &Handlers{
-		svc:            svc,
-		limiteRegistro: ratelimit.Nuevo(10, time.Minute),
-		limiteToken:    ratelimit.Nuevo(30, time.Minute),
+		svc:             svc,
+		limiteRegistro:  ratelimit.Nuevo(10, time.Minute),
+		limiteToken:     ratelimit.Nuevo(30, time.Minute),
+		limiteAutorizar: ratelimit.Nuevo(30, time.Minute),
 	}
 }
 
@@ -59,6 +64,7 @@ func (h *Handlers) Registrar(w http.ResponseWriter, r *http.Request) {
 		rateLimited(w)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	var in struct {
 		ClientName              string   `json:"client_name"`
 		RedirectURIs            []string `json:"redirect_uris"`
@@ -94,6 +100,11 @@ func (h *Handlers) Registrar(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) Autorizar(w http.ResponseWriter, r *http.Request) {
+	if !h.limiteAutorizar.Permitir(ratelimit.IPCliente(r)) {
+		w.Header().Set("Retry-After", "60")
+		paginaError(w, http.StatusTooManyRequests, "Demasiados intentos, reintentá en un minuto.")
+		return
+	}
 	q := r.URL.Query()
 	p := ParamsAutorizacion{
 		ClientID:            q.Get("client_id"),
@@ -105,16 +116,21 @@ func (h *Handlers) Autorizar(w http.ResponseWriter, r *http.Request) {
 		Scope:               q.Get("scope"),
 		Resource:            q.Get("resource"),
 	}
-	id, err := h.svc.IniciarAutorizacion(r.Context(), p)
+	id, nonce, err := h.svc.IniciarAutorizacion(r.Context(), p)
 	switch {
 	case err == nil:
+		http.SetCookie(w, &http.Cookie{
+			Name:     cookieSolicitud + id,
+			Value:    nonce,
+			Path:     "/oauth/solicitudes/",
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+			MaxAge:   int(DuracionSolicitud.Seconds()),
+			Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+		})
 		http.Redirect(w, r, h.svc.URLConsentimiento(id), http.StatusFound)
 	case errors.Is(err, ErrClienteInvalido), errors.Is(err, ErrRedirectInvalido):
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte("<!doctype html><html lang=\"es\"><meta charset=\"utf-8\"><title>Fudd</title><body><p>" +
-			html.EscapeString("No se pudo iniciar la conexión: la aplicación no está registrada correctamente.") +
-			"</p></body></html>"))
+		paginaError(w, http.StatusBadRequest, "No se pudo iniciar la conexión: la aplicación no está registrada correctamente.")
 	case errors.Is(err, ErrSolicitudInvalida):
 		http.Redirect(w, r, h.svc.URLRetornoError(p.RedirectURI, p.State, "invalid_request"), http.StatusFound)
 	case errors.Is(err, ErrScopeInvalido):
@@ -130,7 +146,7 @@ func (h *Handlers) VerSolicitud(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "no autorizado", http.StatusUnauthorized)
 		return
 	}
-	vista, err := h.svc.VerSolicitud(r.Context(), r.PathValue("id"), claims)
+	vista, err := h.svc.VerSolicitud(r.Context(), r.PathValue("id"), nonceSolicitud(r), claims)
 	if err != nil {
 		h.errorSolicitud(w, r, err)
 		return
@@ -144,7 +160,7 @@ func (h *Handlers) Aprobar(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "no autorizado", http.StatusUnauthorized)
 		return
 	}
-	url, err := h.svc.Aprobar(r.Context(), r.PathValue("id"), claims)
+	url, err := h.svc.Aprobar(r.Context(), r.PathValue("id"), nonceSolicitud(r), claims)
 	if err != nil {
 		h.errorSolicitud(w, r, err)
 		return
@@ -170,6 +186,13 @@ func (h *Handlers) errorSolicitud(w http.ResponseWriter, r *http.Request, err er
 	switch {
 	case errors.Is(err, ErrSoloDuenio):
 		errorSoloDuenio(w)
+	case errors.Is(err, ErrOtroNavegador):
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":  "Esta solicitud se inició en otro navegador. Volvé a conectar desde tu asistente de IA.",
+			"codigo": "SOLICITUD_OTRO_NAVEGADOR",
+		})
 	case errors.Is(err, ErrSolicitudNoEncontrada):
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
@@ -189,6 +212,11 @@ func (h *Handlers) Token(w http.ResponseWriter, r *http.Request) {
 		rateLimited(w)
 		return
 	}
+	if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type"))), "application/x-www-form-urlencoded") {
+		oauthError(w, http.StatusBadRequest, "invalid_request", "Content-Type debe ser application/x-www-form-urlencoded")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	if err := r.ParseForm(); err != nil {
 		oauthError(w, http.StatusBadRequest, "invalid_request", "")
 		return
@@ -228,15 +256,19 @@ func (h *Handlers) Token(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) Revocar(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	if err := r.ParseForm(); err != nil {
 		oauthError(w, http.StatusBadRequest, "invalid_request", "")
 		return
 	}
-	if token := r.PostForm.Get("token"); token != "" {
-		if err := h.svc.Revocar(r.Context(), token); err != nil {
-			errorServidor(w, r, "error revocando token oauth", err)
-			return
-		}
+	token := r.PostForm.Get("token")
+	if token == "" {
+		oauthError(w, http.StatusBadRequest, "invalid_request", "falta token")
+		return
+	}
+	if err := h.svc.Revocar(r.Context(), token); err != nil {
+		errorServidor(w, r, "error revocando token oauth", err)
+		return
 	}
 	w.WriteHeader(http.StatusOK)
 }
@@ -281,6 +313,25 @@ func (h *Handlers) RevocarConexion(w http.ResponseWriter, r *http.Request) {
 		slog.ErrorContext(r.Context(), "error revocando conexión oauth", "error", err)
 		jsonError(w, "error interno", http.StatusInternalServerError)
 	}
+}
+
+const cookieSolicitud = "mcp_sol_"
+
+// nonceSolicitud lee la cookie que Autorizar dejó en el navegador que inició la
+// solicitud; sin cookie devuelve "" y el service lo trata como otro navegador.
+func nonceSolicitud(r *http.Request) string {
+	c, err := r.Cookie(cookieSolicitud + r.PathValue("id"))
+	if err != nil {
+		return ""
+	}
+	return c.Value
+}
+
+func paginaError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte("<!doctype html><html lang=\"es\"><meta charset=\"utf-8\"><title>Fudd</title><body><p>" +
+		html.EscapeString(msg) + "</p></body></html>"))
 }
 
 func errorSoloDuenio(w http.ResponseWriter) {
