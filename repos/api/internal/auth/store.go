@@ -226,3 +226,10 @@ func (s *pgStore) MarcarTokenUsado(ctx context.Context, tokenID string) error {
 	)
 	return err
 }
+func RegistrarLoginUsuario(ctx context.Context, usuarioID string) error {
+	if db.Pool == nil {
+		return nil
+	}
+	_, err := db.Pool.Exec(ctx, `UPDATE usuarios SET ultimo_login_at = now() WHERE id = $1`, usuarioID)
+	return err
+}

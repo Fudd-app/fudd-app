@@ -50,6 +50,14 @@ func Requerir(next http.Handler) http.Handler {
 	})
 }
 
+var onActividadUsuario func(usuarioID string)
+
+// RegistrarHookActividad permite conectar la telemetría de presencia de usuarios
+// sin acoplar el paquete de autenticación a módulos de plataforma.
+func RegistrarHookActividad(fn func(usuarioID string)) {
+	onActividadUsuario = fn
+}
+
 // RequerirSesion valida tanto la firma del JWT como el estado actual del
 // usuario en cada request. De esta forma bloquear/eliminar un miembro o cerrar
 // sesión revoca inmediatamente todos los tokens ya emitidos.
@@ -64,6 +72,10 @@ func RequerirSesion(store Store) func(http.Handler) http.Handler {
 				jsonAuthError(w, "sesión revocada", http.StatusUnauthorized)
 				return
 			}
+			if onActividadUsuario != nil {
+				onActividadUsuario(usuario.ID)
+			}
+
 			actuales := &Claims{
 				UsuarioID: usuario.ID, TenantID: usuario.TenantID, Rol: usuario.Rol,
 				SucursalID: sucursalUsuario(usuario), SessionVersion: usuario.SessionVersion,
