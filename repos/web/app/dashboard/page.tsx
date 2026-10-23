@@ -209,15 +209,17 @@ export default function DashboardPage() {
                     <p className="truncate text-13 font-semibold text-ash-graphite">{tenant ? tenant.nombre : "Administrador"}</p>
                     <p className="mt-2 truncate text-11 text-sage-green">Sesión activa</p>
                   </div>
-                  <UserMenuItem
-                    icon="account_circle"
-                    label="Perfil"
-                    onClick={() => {
-                      setConfiguracionTab("negocio");
-                      setActiveSection("configuracion");
-                      setIsUserMenuOpen(false);
-                    }}
-                  />
+                  {sesion?.rol === "admin" && (
+                    <UserMenuItem
+                      icon="account_circle"
+                      label="Perfil"
+                      onClick={() => {
+                        setConfiguracionTab("negocio");
+                        setActiveSection("configuracion");
+                        setIsUserMenuOpen(false);
+                      }}
+                    />
+                  )}
 					{sesion?.rol === 'admin' && (
                     <UserMenuItem
                       icon="credit_card"

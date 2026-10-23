@@ -323,7 +323,8 @@ function parseCartItems(value: unknown): CartItem[] {
   });
 }
 
-function pedidoApiToSession(pedido: PedidoAPI): PedidoSesion {
+function pedidoApiToSession(pedido: PedidoAPI, identidad?: ComensalIdentity | null): PedidoSesion {
+  const aliasActual = identidad?.nombre.trim();
   return {
     id: pedido.id,
     estado: pedido.estado,
@@ -335,7 +336,10 @@ function pedidoApiToSession(pedido: PedidoAPI): PedidoSesion {
       cantidad: item.cantidad,
       nota: item.notas?.trim() || "",
       comensalId: item.comensal_id,
-      comensalNombre: item.comensal_nombre?.trim() || undefined,
+      comensalNombre:
+        aliasActual && item.comensal_id === identidad?.id
+          ? aliasActual
+          : item.comensal_nombre?.trim() || undefined,
       variantes: item.variantes?.map((v) => ({
         id: v.variante_id,
         articulo_id: item.articulo_id,
@@ -451,6 +455,11 @@ export default function MesaPage() {
   const [resenaCalificadaCuenta, setResenaCalificadaCuenta] = useState<number | null>(null);
 
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
+  const comensalRef = useRef<ComensalIdentity | null>(null);
+
+  useEffect(() => {
+    comensalRef.current = comensal;
+  }, [comensal]);
 
   const resenaYaEnviada = useMemo(() => {
     if (resenaCalificadaCuenta === state.cuentaVersion) return true;
@@ -495,7 +504,7 @@ export default function MesaPage() {
       const pedidosApi = await api.listarPedidosMesa(token);
       dispatch({
         type: "SET_PEDIDOS",
-        payload: (pedidosApi ?? []).map(pedidoApiToSession),
+        payload: (pedidosApi ?? []).map((pedido) => pedidoApiToSession(pedido, comensalRef.current)),
       });
     } catch (error) {
       console.warn("No se pudo sincronizar la cuenta de la mesa:", error);
@@ -573,6 +582,7 @@ export default function MesaPage() {
       ];
       setMenu(categoriasMock);
       const stored = getComensalIdentity(DEMO_MESA.id, DEMO_MESA.cuenta_version);
+      comensalRef.current = stored;
       setComensal(stored);
       setIdentidadLista(true);
       setLoading(false);
@@ -596,6 +606,7 @@ export default function MesaPage() {
         if (mesaApi.estado === "inactiva") {
           clearComensalIdentity(mesaApi.id);
         }
+        comensalRef.current = identidad;
         setComensal(identidad);
         setEditandoComensal(false);
         setIdentidadLista(true);
@@ -661,13 +672,14 @@ export default function MesaPage() {
 
   // 4. SSE en tiempo real para salón y cocina
   const mesaId = mesa?.id;
-  const mesaEstado = mesa?.estado;
+  const mesaTenantId = mesa?.tenant_id;
+  const mesaSucursalId = mesa?.sucursal_id;
 
   useEffect(() => {
     if (!mesaId || !token || isDemo) return;
 
     const eventSource = new EventSource(
-      api.obtenerEventosMesaUrl(mesaId, mesa?.tenant_id, mesa?.sucursal_id)
+      api.obtenerEventosMesaUrl(mesaId, mesaTenantId, mesaSucursalId)
     );
     eventSource.onopen = () => {
       void sincronizarPedidosMesa();
@@ -678,7 +690,10 @@ export default function MesaPage() {
         const payload: unknown = JSON.parse(event.data);
         if (!isRecord(payload) || typeof payload.id !== "string" || !isEstadoPedido(payload.estado))
           return;
-        dispatch({ type: "UPSERT_PEDIDO", payload: pedidoApiToSession(payload as unknown as PedidoAPI) });
+        dispatch({
+          type: "UPSERT_PEDIDO",
+          payload: pedidoApiToSession(payload as unknown as PedidoAPI, comensalRef.current),
+        });
       } catch (error) {
         console.warn("Error parseando pedido_creado:", error);
       }
@@ -720,6 +735,7 @@ export default function MesaPage() {
 
         if (mesaId) {
           const identidad = getComensalIdentity(mesaId, payload.cuenta_version);
+          comensalRef.current = identidad;
           setComensal(identidad);
           setEditandoComensal(false);
           setIdentidadLista(true);
@@ -758,7 +774,7 @@ export default function MesaPage() {
     return () => {
       eventSource.close();
     };
-  }, [mesaId, isDemo, sincronizarPedidosMesa, token]);
+  }, [mesaId, mesaTenantId, mesaSucursalId, isDemo, sincronizarPedidosMesa, token]);
 
   // 5. Manejo de retorno de Mercado Pago
   useEffect(() => {
@@ -793,6 +809,7 @@ export default function MesaPage() {
       ? { ...comensal, nombre: nombreLimpio, cuentaVersion: mesa.cuenta_version }
       : createComensalIdentity(nombreLimpio, mesa.cuenta_version);
     saveComensalIdentity(identidad, mesa.id);
+    comensalRef.current = identidad;
     if (comensal) {
       dispatch({
         type: "RENOMBRAR_COMENSAL",
@@ -809,6 +826,7 @@ export default function MesaPage() {
     if (!mesa) return;
     const identidad = createComensalIdentity("", mesa.cuenta_version);
     saveComensalIdentity(identidad, mesa.id);
+    comensalRef.current = identidad;
     setComensal(identidad);
     setEditandoComensal(false);
     setIdentidadLista(true);
