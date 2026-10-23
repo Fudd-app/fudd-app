@@ -6,17 +6,22 @@ Estas reglas aplican a cualquier agente de IA (Claude, Gemini, CLI, etc.) que tr
 
 ## ANTES DE EMPEZAR
 
-1. **Leer las User Stories del sprint actual** en:
-   `docs/features/README.md` y `docs/features/sprint-XX/` (o `docs/presentations/parte-2/index.html` → slide "Backlog")
+1. **Seguir el flujo de trabajo obligatorio: [`docs/proceso/flujo-de-trabajo.md`](docs/proceso/flujo-de-trabajo.md)**.
+   Leelo completo y aplicalo paso a paso **cada vez** que:
+   - llegue un requerimiento, una idea o un bug (aunque sea por chat): primero se refina, se crea el issue `[web]`/`[api]`, se carga en el proyecto y se estima. **No se escribe código antes de eso**;
+   - se tome un issue para desarrollar (rama desde `qa`, tests, regresión, commit, PR);
+   - se abra, revise o mergee un PR (code review obligatorio antes del merge).
 
-2. **Leer el happy path correspondiente** a la tarea:
+2. **Leer el issue a desarrollar y los del sprint en curso** en el tablero de GitHub [Fudd APP](https://github.com/orgs/Fudd-app/projects/1) (`gh project item-list 1 --owner Fudd-app`). Es la única fuente de verdad del backlog: las US y bugs no se versionan en `docs/`.
+
+3. **Leer el happy path correspondiente** a la tarea:
    - `docs/flows/happy-path-admin-negocio.md` — flujo del admin de negocio
    - `docs/flows/happy-path-cliente.md` — flujo del cliente / comensal
 
-3. **Consultar el Status Report más reciente** para ver bloqueantes o decisiones pendientes:
+4. **Consultar el Status Report más reciente** para ver bloqueantes o decisiones pendientes:
    - `docs/presentations/parte-2/status-report-20261019.html`
 
-> No implementar nada que no esté cubierto por una US del sprint en curso. Si hay dudas, preguntar antes de avanzar.
+> No implementar nada que no esté cubierto por un issue refinado y estimado del sprint en curso. Si hay dudas, preguntar antes de avanzar.
 
 ---
 
@@ -158,13 +163,14 @@ Los cambios de UI inspirados en la maqueta siguen la regla general: solo dentro 
    - `git checkout qa && git pull`
    - `git checkout -b feat/US-XX-descripcion` (features)
    - `git checkout -b fix/descripcion` (correcciones de bugs)
-2. **Integración en QA**: Al finalizar, abrir PR / merge hacia **`qa`** para validación y testing.
+2. **Integración en QA**: Al finalizar, abrir PR hacia **`qa`**; se mergea solo después del code review (ver [flujo de trabajo](docs/proceso/flujo-de-trabajo.md)).
 3. **Pase a Producción**: Una vez testeado y validado en `qa`, se mergea hacia **`main`**, actualizando automáticamente ambos servicios (`mesa-click-api` y `mesa-click-web`) en Render mediante Docker.
 
 ---
 
 ## Convenciones generales
-- **Branches**: `feat/US-XX-descripcion` o `fix/descripcion` (creadas **siempre y sin excepción** a partir de `qa`). **Nunca commitear directo en `main`**.
-- **Commits**: Explicar el "por qué" en lugar del "qué".
+- **Issues y PRs**: el título lleva el repo que toca: `[web]` o `[api]` (ej. `[api] US-88: ...`, `[web] BUG: ...`). Un ítem toca un solo repo; si necesita ambos, se divide.
+- **Branches**: `feat/US-XX-descripcion` o `fix/<nro-issue>-descripcion` (creadas **siempre y sin excepción** a partir de `qa`). **Nunca commitear directo en `main`**.
+- **Commits**: Conventional Commits con scope del repo (`feat(web): ...`, `fix(api): ...`). Explicar el "por qué" en lugar del "qué".
 - **Variables de entorno (`.env`)**: Solicitar credenciales y `.env` para la API directamente a **Pablo Aguirre**.
 - **No duplicar lógica**: Si algo ya está en el backend, el frontend solo lo consume.

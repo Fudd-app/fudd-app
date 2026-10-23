@@ -3,6 +3,8 @@
 Este repositorio utiliza **AGENTS.md** como la fuente principal de verdad y reglas para cualquier asistente de IA o desarrollador.
 
 > Consultar siempre y seguir las pautas detalladas en [AGENTS.md](../AGENTS.md).
+>
+> Todo requerimiento, bug o PR sigue el [flujo de trabajo](../docs/proceso/flujo-de-trabajo.md): refinar → issue `[web]`/`[api]` en el proyecto → estimar → rama desde `qa` → tests y regresión → PR → code review → merge.
 
 ## Reglas clave indispensables:
 
