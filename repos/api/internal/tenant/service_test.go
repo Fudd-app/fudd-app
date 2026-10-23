@@ -321,3 +321,28 @@ func TestSlugDisponible_FormatoInvalido(t *testing.T) {
 		}
 	}
 }
+func TestSlugReservado_NoDisponible(t *testing.T) {
+	svc := tenant.NuevoService(&mockStore{})
+	for _, reservado := range []string{"superadmin", "ADMIN", "platform", "kds", "mesa", "dashboard", "api", "login"} {
+		disponible, err := svc.SlugDisponible(context.Background(), reservado)
+		if err != nil {
+			t.Errorf("slug reservado %q dio error: %v", reservado, err)
+		}
+		if disponible {
+			t.Errorf("slug reservado %q no debe figurar disponible", reservado)
+		}
+	}
+}
+
+func TestCrear_SlugReservado_Error(t *testing.T) {
+	svc := tenant.NuevoService(&mockStore{})
+	_, err := svc.Crear(context.Background(), tenant.OnboardingInput{
+		Nombre:     "Super Admin Bar",
+		Slug:       "superadmin",
+		EmailAdmin: "admin@bar.com",
+		Password:   "clave1234",
+	})
+	if !errors.Is(err, tenant.ErrValidation) {
+		t.Fatalf("se esperaba ErrValidation por slug reservado, obtenido: %v", err)
+	}
+}

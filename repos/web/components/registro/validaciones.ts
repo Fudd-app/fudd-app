@@ -38,6 +38,40 @@ export function limpiarSlugEscrito(valor: string) {
 
 export const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
+export const SLUGS_RESERVADOS = new Set([
+  "admin",
+  "superadmin",
+  "platform",
+  "dashboard",
+  "login",
+  "logout",
+  "auth",
+  "kds",
+  "cocina",
+  "mesa",
+  "mesas",
+  "api",
+  "public",
+  "publica",
+  "static",
+  "pedidos",
+  "pedido",
+  "carta",
+  "menu",
+  "onboarding",
+  "registro",
+  "terminos",
+  "privacidad",
+  "ayuda",
+  "status",
+  "health",
+  "configuracion",
+]);
+
+export function esSlugReservado(slug: string): boolean {
+  return SLUGS_RESERVADOS.has(slug.trim().toLowerCase());
+}
+
 // Lee nombre y correo del ID token de Google solo para precompletar el registro;
 // el backend vuelve a verificar la credencial y usa el correo verificado.
 export function leerIdentidadGoogle(credential: string): { email: string; nombre: string } {

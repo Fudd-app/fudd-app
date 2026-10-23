@@ -21,6 +21,7 @@ import (
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/notificacion"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/oauth"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/pedido"
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/platform"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/resenia"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/sucursal"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/tenant"
@@ -97,6 +98,8 @@ func registrarRutas(mux *http.ServeMux) {
 		slog.Warn("sin proveedor de email configurado: el magic link solo se escribe en el log",
 			"produccion", esProduccion)
 	}
+
+	auth.RegistrarHookActividad(platform.InstanciaTracker.RegistrarActividad)
 
 	authStore := auth.NuevoStore()
 	authSvc := auth.NuevoService(authStore, emailSender)
@@ -274,6 +277,15 @@ func registrarRutas(mux *http.ServeMux) {
 	mux.HandleFunc("POST /publica/mesas/{qr_token}/pago/mercadopago/confirmar", mpH.ConfirmarPago)
 	mux.HandleFunc("POST /publica/pago/mercadopago/webhook", mpH.Webhook)
 
+	// Superadmin / Telemetría y Control de Plataforma
+	platformStore := platform.NuevoStore()
+	platformSvc := platform.NuevoService(platformStore, platform.InstanciaTracker)
+	platformH := platform.NuevosHandlers(platformSvc)
+	requerirSuper := auth.RequerirSuperadmin(authStore)
+
+	mux.Handle("GET /api/platform/status", requerirSuper(http.HandlerFunc(platformH.Status)))
+	mux.Handle("GET /api/platform/tenants", requerirSuper(http.HandlerFunc(platformH.ListarTenants)))
+	mux.Handle("GET /api/platform/tenants/{id}/actividad", requerirSuper(http.HandlerFunc(platformH.DetalleActividad)))
 }
 
 // negociosOAuth adapta el store de tenants a oauth.Negocios.
