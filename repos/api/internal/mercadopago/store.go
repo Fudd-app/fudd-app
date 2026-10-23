@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/db"
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/evento"
 )
 
 type Store interface {
@@ -43,8 +44,14 @@ func (s *pgStore) RegistrarPagoAprobado(ctx context.Context, mesaID string, cuen
 		detallesJSON = []byte("{}")
 	}
 
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error iniciando registro de pago: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
 	var rp RegistroPago
-	err = db.Pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		INSERT INTO pagos (mesa_id, cuenta_version, proveedor, preferencia_id, pago_id, monto, moneda, estado, detalles, created_at, updated_at)
 		VALUES ($1, $2, 'mercadopago', $3, $4, $5, 'ARS', 'aprobado', $6, now(), now())
 		RETURNING id, mesa_id, cuenta_version, proveedor, COALESCE(preferencia_id, ''), COALESCE(pago_id, ''), monto, moneda, estado, created_at
@@ -56,6 +63,21 @@ func (s *pgStore) RegistrarPagoAprobado(ctx context.Context, mesaID string, cuen
 		return nil, fmt.Errorf("error registrando pago aprobado: %w", err)
 	}
 
+	var sucursalID string
+	if err := tx.QueryRow(ctx, `SELECT sucursal_id FROM mesas WHERE id = $1`, mesaID).Scan(&sucursalID); err != nil {
+		return nil, fmt.Errorf("error obteniendo sucursal del pago: %w", err)
+	}
+	if err := evento.Registrar(ctx, tx, evento.Nuevo{
+		SucursalID: sucursalID, MesaID: mesaID, CuentaVersion: cuentaVersion,
+		Tipo: evento.TipoPagoAprobado, EstadoNuevo: "aprobado", Actor: evento.MercadoPago(),
+		Detalle: map[string]any{"pago_id": pagoID, "monto": monto},
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("error confirmando registro de pago: %w", err)
+	}
 	return &rp, nil
 }
 

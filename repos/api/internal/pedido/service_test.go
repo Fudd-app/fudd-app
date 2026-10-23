@@ -6,12 +6,14 @@ import (
 	"time"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/evento"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/notificacion"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/pedido"
 )
 
 type mockStore struct {
 	crearInput             pedido.NuevoPedidoInput
+	crearCtx               context.Context
 	estadoItemRecibido     string
 	pedidoTrasCambioDeItem *pedido.Pedido
 	sucursalPertenece      bool
@@ -19,6 +21,7 @@ type mockStore struct {
 
 func (m *mockStore) Crear(ctx context.Context, input pedido.NuevoPedidoInput, sucursalID string, cuentaVersion int) (*pedido.Pedido, error) {
 	m.crearInput = input
+	m.crearCtx = ctx
 	return &pedido.Pedido{ID: "p-1", MesaID: input.MesaID, CuentaVersion: cuentaVersion, Estado: "recibido"}, nil
 }
 func (m *mockStore) ListarActivos(ctx context.Context, sucursalID, tenantID string) ([]pedido.Pedido, error) {
@@ -345,5 +348,46 @@ func TestValidarAccesoKDS_AceptaSucursalPropia(t *testing.T) {
 	svc := pedido.NuevoService(&mockStore{sucursalPertenece: true})
 	if err := svc.ValidarAccesoKDS(context.Background(), "suc-1", "tenant-1"); err != nil {
 		t.Fatalf("la sucursal del tenant debería aceptarse: %v", err)
+	}
+}
+
+func TestCrear_ActorEsComensalConNombre(t *testing.T) {
+	store := &mockStore{}
+	svc := pedido.NuevoService(store)
+
+	_, err := svc.Crear(context.Background(), pedido.NuevoPedidoInput{
+		MesaID: "mesa-1",
+		Items: []pedido.NuevoItemInput{
+			{ArticuloID: "a-1", Cantidad: 1, ComensalID: "47dc8c9e-fb98-44d7-80a1-b598addc1e8a"},
+			{ArticuloID: "a-2", Cantidad: 1, ComensalID: "5ef10747-503a-4d72-a433-94978a2447e6", ComensalNombre: " Juani "},
+		},
+	})
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+
+	actor := evento.ActorDesdeContexto(store.crearCtx, nil)
+	if actor.Tipo != evento.ActorComensal || actor.Nombre != "Juani" || actor.UsuarioID != "" {
+		t.Fatalf("actor incorrecto: %+v", actor)
+	}
+}
+
+func TestCrearAsistido_ActorEsUsuarioConRol(t *testing.T) {
+	store := &mockStore{}
+	svc := pedido.NuevoService(store)
+
+	_, err := svc.CrearAsistido(context.Background(), &auth.Claims{
+		UsuarioID: "usuario-1", TenantID: "tenant-1", Rol: auth.RolMozo, SucursalID: "suc-1",
+	}, pedido.PedidoAsistidoInput{
+		MesaID: "mesa-1",
+		Items:  []pedido.NuevoItemInput{{ArticuloID: "art-1", Cantidad: 1}},
+	})
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+
+	actor := evento.ActorDesdeContexto(store.crearCtx, nil)
+	if actor.Tipo != evento.ActorUsuario || actor.UsuarioID != "usuario-1" || actor.Rol != auth.RolMozo {
+		t.Fatalf("actor incorrecto: %+v", actor)
 	}
 }
