@@ -4,6 +4,8 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   api,
+  ApiError,
+  codigoError,
   PedidoAPI,
   Sucursal,
 } from "@/lib/api";
@@ -25,6 +27,27 @@ import {
 } from "@/components/kds/TicketTermico";
 
 const VENTANA_AGRUPACION_MS = 5 * 60 * 1000;
+
+// Cocina solo trabaja pedidos ya confirmados por recepción; "recibido" no entra.
+const ESTADOS_VISIBLES_KDS: ReadonlyArray<PedidoAPI["estado"]> = ["confirmado", "preparando", "listo"];
+
+function esVisibleEnKDS(pedido: PedidoAPI): boolean {
+  return ESTADOS_VISIBLES_KDS.includes(pedido.estado);
+}
+
+function mensajeErrorKDS(err: unknown): string {
+  const codigo = codigoError(err);
+  if (codigo === "PEDIDO_SIN_CONFIRMAR") {
+    return "Este pedido todavía no fue confirmado por recepción.";
+  }
+  if (codigo === "PEDIDO_ENTREGADO") {
+    return "Este pedido ya fue entregado.";
+  }
+  if (err instanceof ApiError && err.status === 409) {
+    return "El pedido cambió de estado. Se actualizó la vista.";
+  }
+  return "No se pudo actualizar el pedido. Reintentá.";
+}
 
 interface GrupoComandas {
   id: string;
@@ -79,6 +102,7 @@ export default function KDSPage() {
   const [conectadoSSE, setConectadoSSE] = useState<boolean>(false);
   const [cargando, setCargando] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [avisoError, setAvisoError] = useState<string | null>(null);
   const [drawerHistorialAbierto, setDrawerHistorialAbierto] = useState<boolean>(false);
 	const [loginDestino, setLoginDestino] = useState('/login');
 
@@ -160,13 +184,18 @@ export default function KDSPage() {
     inicializarKDS();
   }, [router]);
 
+  useEffect(() => {
+    if (!avisoError) return;
+    const timeoutId = window.setTimeout(() => setAvisoError(null), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [avisoError]);
+
   // 2. Cargar comandas activas al cambiar de sucursal
   const cargarPedidosSucursal = useCallback(async (sucursalId: string) => {
     if (!sucursalId) return;
     try {
       const pedidos = await api.listarPedidosActivos(sucursalId);
-      // Filtrar sólo pedidos no cerrados para el tablero activo
-      const activos = pedidos.filter((p) => p.estado !== "cerrado");
+      const activos = pedidos.filter(esVisibleEnKDS);
       setPedidosActivos(activos);
     } catch (err) {
       console.error("Error al listar pedidos activos:", err);
@@ -208,6 +237,8 @@ export default function KDSPage() {
       eventSource.addEventListener("pedido_creado", (e: MessageEvent) => {
         try {
           const nuevoPedido: PedidoAPI = JSON.parse(e.data);
+          // Un pedido "recibido" (QR) espera confirmación; solo entra cuando pasa a confirmado.
+          if (!esVisibleEnKDS(nuevoPedido)) return;
           playNewOrderSound();
           setPedidosActivos((prev) => {
             if (prev.some((p) => p.id === nuevoPedido.id)) {
@@ -251,15 +282,17 @@ export default function KDSPage() {
         try {
           const pedidoActualizado: PedidoAPI = JSON.parse(e.data);
 
-          if (pedidoActualizado.estado === "cerrado") {
-            // Remueve de activos y agrega a despachados
+          if (!esVisibleEnKDS(pedidoActualizado)) {
+            // Entregado/cerrado salen de cocina; recibido nunca debe estar en el tablero
             setPedidosActivos((prev) => prev.filter((p) => p.id !== pedidoActualizado.id));
-            setPedidosDespachados((prev) => {
-              const filtrados = prev.filter((p) => p.id !== pedidoActualizado.id);
-              return [pedidoActualizado, ...filtrados].slice(0, 30);
-            });
+            if (pedidoActualizado.estado === "entregado" || pedidoActualizado.estado === "cerrado") {
+              setPedidosDespachados((prev) => {
+                const filtrados = prev.filter((p) => p.id !== pedidoActualizado.id);
+                return [pedidoActualizado, ...filtrados].slice(0, 30);
+              });
+            }
           } else {
-            // Actualiza en activos
+            // Confirmado entra a cocina; el resto actualiza el pedido existente
             setPedidosActivos((prev) => {
               const existe = prev.some((p) => p.id === pedidoActualizado.id);
               if (existe) {
@@ -283,7 +316,7 @@ export default function KDSPage() {
         try {
           const pedidoActualizado: PedidoAPI = JSON.parse(e.data);
 
-          if (pedidoActualizado.estado === "cerrado") {
+          if (!esVisibleEnKDS(pedidoActualizado)) {
             setPedidosActivos((prev) => prev.filter((p) => p.id !== pedidoActualizado.id));
           } else {
             setPedidosActivos((prev) =>
@@ -347,6 +380,7 @@ export default function KDSPage() {
         }
       } catch (err) {
         console.error("Error al cambiar estado de ítem:", err);
+        setAvisoError(mensajeErrorKDS(err));
         // Recargar pedidos en caso de error
         if (sucursalSeleccionadaId) {
           cargarPedidosSucursal(sucursalSeleccionadaId);
@@ -380,53 +414,13 @@ export default function KDSPage() {
         );
       } catch (err) {
         console.error("Error al marcar grupo de comandas como listo:", err);
+        setAvisoError(mensajeErrorKDS(err));
         if (sucursalSeleccionadaId) {
           cargarPedidosSucursal(sucursalSeleccionadaId);
         }
       }
     },
     [sucursalSeleccionadaId, cargarPedidosSucursal]
-  );
-
-  const handleDespacharComandas = useCallback(
-    async (pedidoIds: string[]) => {
-      const pedidosIds = new Set(pedidoIds);
-      const pedidosADespachar = pedidosActivos.filter((pedido) => pedidosIds.has(pedido.id));
-
-      // Optimistic update
-      setPedidosActivos((prev) => prev.filter((pedido) => !pedidosIds.has(pedido.id)));
-      if (pedidosADespachar.length > 0) {
-        setPedidosDespachados((prev) => [
-          ...pedidosADespachar.map((pedido) => ({ ...pedido, estado: "cerrado" as const })),
-          ...prev,
-        ]);
-      }
-
-      try {
-        await Promise.all(
-          pedidoIds.map((pedidoId) => api.cambiarEstadoPedido(pedidoId, "cerrado"))
-        );
-      } catch (err) {
-        console.error("Error al despachar grupo de comandas:", err);
-        if (sucursalSeleccionadaId) {
-          cargarPedidosSucursal(sucursalSeleccionadaId);
-        }
-      }
-    },
-    [pedidosActivos, sucursalSeleccionadaId, cargarPedidosSucursal]
-  );
-
-  const handleReabrirComanda = useCallback(
-    async (pedidoId: string) => {
-      try {
-        const reabierto = await api.cambiarEstadoPedido(pedidoId, "listo");
-        setPedidosDespachados((prev) => prev.filter((p) => p.id !== pedidoId));
-        setPedidosActivos((prev) => [reabierto, ...prev]);
-      } catch (err) {
-        console.error("Error al reabrir comanda:", err);
-      }
-    },
-    []
   );
 
   // Handlers de impresión térmica (US-67)
@@ -586,7 +580,6 @@ export default function KDSPage() {
                         nombreSector={mesaInfo?.sector}
                         onCambiarEstadoItem={handleCambiarEstadoItem}
                         onComandasCompletasLista={handleComandasCompletasLista}
-                        onDespacharComandas={handleDespacharComandas}
                         onImprimirTicket={handleAbrirImpresionTicket}
                         ticketImpreso={Boolean(ticketsImpresosIds[pid])}
                         errorImpresion={Boolean(ticketsErrorIds[pid])}
@@ -634,7 +627,6 @@ export default function KDSPage() {
                         nombreSector={mesaInfo?.sector}
                         onCambiarEstadoItem={handleCambiarEstadoItem}
                         onComandasCompletasLista={handleComandasCompletasLista}
-                        onDespacharComandas={handleDespacharComandas}
                         onImprimirTicket={handleAbrirImpresionTicket}
                         ticketImpreso={Boolean(ticketsImpresosIds[pid])}
                         errorImpresion={Boolean(ticketsErrorIds[pid])}
@@ -682,7 +674,6 @@ export default function KDSPage() {
                         nombreSector={mesaInfo?.sector}
                         onCambiarEstadoItem={handleCambiarEstadoItem}
                         onComandasCompletasLista={handleComandasCompletasLista}
-                        onDespacharComandas={handleDespacharComandas}
                         onImprimirTicket={handleAbrirImpresionTicket}
                         ticketImpreso={Boolean(ticketsImpresosIds[pid])}
                         errorImpresion={Boolean(ticketsErrorIds[pid])}
@@ -696,13 +687,22 @@ export default function KDSPage() {
         )}
       </main>
 
+      {avisoError && (
+        <div
+          role="alert"
+          className="fixed bottom-24 left-1/2 z-[60] flex max-w-[90vw] -translate-x-1/2 items-center gap-8 rounded-lg bg-alert-red px-16 py-10 text-13 font-bold text-white shadow-lg"
+        >
+          <span className="material-symbols-outlined text-18">error</span>
+          <span>{avisoError}</span>
+        </div>
+      )}
+
       {/* DRAWER HISTORIAL DE DESPACHOS (US-66) */}
       <HistorialDespachoDrawer
         isOpen={drawerHistorialAbierto}
         onClose={() => setDrawerHistorialAbierto(false)}
         pedidosDespachados={pedidosDespachados}
         mesasMap={mesasMap}
-        onReabrir={handleReabrirComanda}
       />
 
       {/* MODAL Y PORTAL DE IMPRESIÓN TÉRMICA (US-67) */}
