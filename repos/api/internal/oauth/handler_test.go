@@ -144,7 +144,7 @@ func TestHandlers_Autorizar(t *testing.T) {
 		t.Fatalf("esperaba 1 cookie, hay %d", len(cookies))
 	}
 	ck := cookies[0]
-	if ck.Name != "mcp_sol_"+id || ck.Value == "" || ck.Path != "/oauth/solicitudes/" || !ck.HttpOnly ||
+	if ck.Name != "mcp_sol_"+id || ck.Value == "" || ck.Path != "/" || ck.Domain != "" || !ck.HttpOnly ||
 		ck.SameSite != http.SameSiteLaxMode || ck.MaxAge != 600 || ck.Secure {
 		t.Errorf("cookie: %+v", ck)
 	}
@@ -158,6 +158,48 @@ func TestHandlers_Autorizar(t *testing.T) {
 	h.Autorizar(rec, r)
 	if c := rec.Result().Cookies(); len(c) != 1 || !c[0].Secure {
 		t.Errorf("detrás de proxy https la cookie debe ser Secure: %+v", c)
+	}
+}
+
+func TestHandlers_Autorizar_CookieDominio(t *testing.T) {
+	autorizar := func(t *testing.T, dominio string) *http.Cookie {
+		t.Helper()
+		e, h := nuevoHandlers(t)
+		h.svc.cfg.DominioCookie = dominio
+		c := e.registrar(t)
+		p := e.paramsOK(c.ClientID)
+		q := url.Values{
+			"client_id": {p.ClientID}, "redirect_uri": {p.RedirectURI}, "response_type": {"code"},
+			"code_challenge": {p.CodeChallenge}, "code_challenge_method": {"S256"},
+			"scope": {ScopeLectura}, "resource": {p.Resource},
+		}
+		rec := httptest.NewRecorder()
+		h.Autorizar(rec, httptest.NewRequest("GET", "/oauth/authorize?"+q.Encode(), nil))
+		cookies := rec.Result().Cookies()
+		if len(cookies) != 1 {
+			t.Fatalf("esperaba 1 cookie, hay %d", len(cookies))
+		}
+		return cookies[0]
+	}
+
+	if ck := autorizar(t, "fudd.com.ar"); ck.Domain != "fudd.com.ar" || ck.Path != "/" {
+		t.Errorf("con dominio: %+v", ck)
+	}
+	if ck := autorizar(t, ""); ck.Domain != "" || ck.Path != "/" {
+		t.Errorf("sin dominio: %+v", ck)
+	}
+	t.Setenv("APP_ENV", "Production")
+	if ck := autorizar(t, ""); !ck.Secure {
+		t.Errorf("con APP_ENV=production la cookie debe ser Secure: %+v", ck)
+	}
+}
+
+func TestConfigDesdeEntorno_DominioCookie(t *testing.T) {
+	t.Setenv("JWT_SECRET", "s")
+	t.Setenv("MCP_COOKIE_DOMAIN", " .fudd.com.ar ")
+	cfg, err := ConfigDesdeEntorno()
+	if err != nil || cfg.DominioCookie != "fudd.com.ar" {
+		t.Errorf("dominio: %q %v", cfg.DominioCookie, err)
 	}
 }
 
