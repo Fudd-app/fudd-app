@@ -98,7 +98,7 @@ export default function SuperadminPage() {
         await cargarDatos();
       } catch (err: unknown) {
         if (err instanceof ApiError && err.status === 401) {
-          router.replace("/login?redirect=/superadmin");
+          router.replace("/login?returnTo=/superadmin");
         } else {
           setCargando(false);
           setAccesoDenegado(true);
