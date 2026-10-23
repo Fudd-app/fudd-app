@@ -105,10 +105,11 @@ export default function CartDrawer({
           disabled={items.length === 0 || enviando}
           className="mesa-primary-bg flex min-h-52 w-full items-center justify-center gap-8 rounded-lg px-16 py-14 text-15 font-semibold shadow-md transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <span>{enviando ? 'Enviando pedido...' : 'Enviar pedido'}</span>
+          <span>{enviando ? 'Enviando pedido...' : 'Confirmar pedido'}</span>
           <span className="text-16">→</span>
         </button>
       </div>
     </div>
   );
 }
+

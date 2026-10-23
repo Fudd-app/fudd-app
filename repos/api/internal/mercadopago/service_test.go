@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/evento"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/mercadopago"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/mesa"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/pedido"
@@ -79,7 +80,8 @@ func (m *mockMPStore) ObtenerCredencialesMesa(ctx context.Context, mesaID string
 }
 
 type mockMesaStore struct {
-	mesaPub *mesa.MesaPublica
+	mesaPub   *mesa.MesaPublica
+	cerrarCtx context.Context
 }
 
 func (m *mockMesaStore) Listar(ctx context.Context, tenantID string) ([]mesa.Mesa, error) {
@@ -95,6 +97,7 @@ func (m *mockMesaStore) HabilitarPago(ctx context.Context, id, tenantID string, 
 	return &mesa.Mesa{ID: id, SucursalID: "suc-1", Estado: "activa", PagoHabilitado: habilitado}, nil
 }
 func (m *mockMesaStore) CerrarCuenta(ctx context.Context, id, tenantID string) (*mesa.Mesa, error) {
+	m.cerrarCtx = ctx
 	return &mesa.Mesa{ID: id, SucursalID: "suc-1", Estado: "activa", CuentaVersion: 2}, nil
 }
 func (m *mockMesaStore) Eliminar(ctx context.Context, id, tenantID string) error { return nil }
@@ -121,7 +124,7 @@ func (m *mockPedidoStore) ListarActivos(ctx context.Context, sucursalID, tenantI
 func (m *mockPedidoStore) ListarCuentaActualPorQR(ctx context.Context, qrToken string) ([]pedido.Pedido, error) {
 	return m.pedidos, nil
 }
-func (m *mockPedidoStore) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado string) (*pedido.Pedido, error) {
+func (m *mockPedidoStore) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado, modoEntrega string) (*pedido.Pedido, error) {
 	return nil, nil
 }
 func (m *mockPedidoStore) CambiarEstadoItem(ctx context.Context, itemID, tenantID, sucursalAlcance, nuevoEstado string) (*pedido.Pedido, error) {
@@ -404,6 +407,9 @@ func TestProcesarWebhook_Aprobado(t *testing.T) {
 
 	if !mpStore.registrado {
 		t.Error("esperaba que el pago quede registrado tras webhook")
+	}
+	if actor := evento.ActorDesdeContexto(mesaStore.cerrarCtx, nil); actor.Tipo != evento.ActorMercadoPago {
+		t.Errorf("el cierre por webhook debe atribuirse a mercadopago: %+v", actor)
 	}
 }
 

@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { api, PedidoAPI, Sucursal, MesaAPI } from "@/lib/api";
+import { avanza } from "@/lib/estadoPedido";
+import { api, codigoError, getErrorMessage, EstadoPedidoAPI, ModoEntregaPedido, PedidoAPI, Sucursal, MesaAPI } from "@/lib/api";
 import { agruparPorComensal } from "@/lib/desgloseCuenta";
 import { EmptyState, Skeleton, useToast, useConfirm } from "@/components/ui";
 import { playOrderReadySound } from "@/components/kds/AudioAlerts";
@@ -23,7 +24,8 @@ export interface PedidoVista {
   mesaId?: string;
   sucursalId?: string;
   timestamp: string;
-  estado: 'recibido' | 'preparando' | 'listo';
+  creadoEn?: string;
+  estado: 'recibido' | 'confirmado' | 'preparando' | 'listo' | 'entregado';
   items: Array<{
     id: string;
     nombre: string;
@@ -47,19 +49,61 @@ interface MesaGrupo {
   pagoHabilitado: boolean;
 }
 
-const ESTADO_LABELS: Record<'recibido' | 'preparando' | 'listo', string> = {
-  recibido: 'Recibido',
-  preparando: 'Preparando',
-  listo: 'Listo',
+const ESTADO_LABELS: Record<PedidoVista['estado'], string> = {
+  recibido: 'Por confirmar',
+  confirmado: 'Confirmado · en cola de cocina',
+  preparando: 'En preparación',
+  listo: 'Listo para retirar',
+  entregado: 'Entregado',
 };
 
-const ESTADO_STYLES: Record<'recibido' | 'preparando' | 'listo', string> = {
-  recibido: 'bg-ghost-fog text-ash-graphite border-concrete',
+const ESTADO_STYLES: Record<PedidoVista['estado'], string> = {
+  recibido: 'border-[#F7DCA8] bg-[#FFF4DB] text-[#9A5700]',
+  confirmado: 'bg-ghost-fog text-ash-graphite border-concrete',
   preparando: 'border-[#BFDBFE] bg-[#EFF6FF] text-[#1D4ED8]',
   listo: 'bg-success/15 text-[#087645] border-success/30',
+  entregado: 'bg-ghost-fog text-sage-green border-concrete',
 };
 
-type MesaCardTone = 'account' | 'ready' | 'progress';
+// "cerrado" llega de la API solo para pedidos ya cobrados; se muestra como entregado y finalizado.
+function estadoVista(estado: EstadoPedidoAPI): Pick<PedidoVista, 'estado' | 'finalizado'> {
+  if (estado === 'cerrado') return { estado: 'entregado', finalizado: true };
+  return { estado, finalizado: false };
+}
+
+// Estado de la API equivalente al de una vista (los finalizados llegan como "cerrado").
+function estadoApiDeVista(p: Pick<PedidoVista, 'estado' | 'finalizado'>): EstadoPedidoAPI {
+  return p.finalizado ? 'cerrado' : p.estado;
+}
+
+function mensajeErrorPedido(err: unknown): string {
+  switch (codigoError(err)) {
+    case 'PEDIDO_SIN_CONFIRMAR':
+      return 'El pedido todavía no fue confirmado. Confirmalo antes de enviarlo a cocina.';
+    case 'TRANSICION_INVALIDA':
+      return 'El pedido ya cambió de estado. Revisá la vista y reintentá.';
+    case 'SIN_PERMISO':
+      return 'Tu rol no tiene permiso para realizar esta acción.';
+    case 'MODO_ENTREGA_INVALIDO':
+      return 'Indicá si se entregó en la mesa o lo retiró el cliente.';
+    default:
+      return getErrorMessage(err, 'No se pudo actualizar el pedido. Intentá nuevamente.');
+  }
+}
+
+function minutosDesde(iso: string | undefined, ahora: number): number | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  return Math.max(0, Math.floor((ahora - t) / 60000));
+}
+
+function textoAntiguedad(minutos: number | null): string {
+  if (minutos === null) return '';
+  return minutos < 1 ? 'Recién llegó' : `Hace ${minutos} min`;
+}
+
+type MesaCardTone = 'account' | 'ready' | 'progress' | 'delivered' | 'unconfirmed';
 
 const MESA_CARD_TONES: Record<MesaCardTone, {
   border: string;
@@ -89,28 +133,131 @@ const MESA_CARD_TONES: Record<MesaCardTone, {
     dot: 'bg-[#4D8EDB]',
     action: 'border-[#D6E5F8] bg-[#F7FAFF] text-[#285F9F] hover:bg-[#EDF5FF]',
   },
+  delivered: {
+    border: 'border-[#DDE6E2]',
+    accent: 'border-l-[#5F8776]',
+    badge: 'border-[#D3E0DA] bg-[#F1F6F4] text-[#345949]',
+    dot: 'bg-[#5F8776]',
+    action: 'border-[#DDE6E2] bg-[#F8FAF9] text-[#345949] hover:bg-[#EAF1EE]',
+  },
+  unconfirmed: {
+    border: 'border-[#FAD7C8]',
+    accent: 'border-l-[#FF6A3D]',
+    badge: 'border-[#FFD0BD] bg-[#FFF3EE] text-[#C4461B]',
+    dot: 'bg-[#FF6A3D]',
+    action: 'border-[#FAD7C8] bg-[#FFF8F5] text-[#C4461B] hover:bg-[#FFEBE3]',
+  },
 };
 
 function calcularEstadoMesa(pedidos: PedidoVista[]): PedidoVista['estado'] {
-  if (pedidos.length > 0 && pedidos.every(pedido => pedido.estado === 'listo')) {
-    return 'listo';
-  }
-  if (pedidos.some(pedido => pedido.estado === 'preparando')) {
-    return 'preparando';
-  }
-  return 'recibido';
+  const vigentes = pedidos.filter(pedido => pedido.estado !== 'entregado');
+  if (pedidos.length > 0 && vigentes.length === 0) return 'entregado';
+  if (vigentes.every(pedido => pedido.estado === 'listo')) return 'listo';
+  if (vigentes.some(pedido => pedido.estado === 'preparando')) return 'preparando';
+  if (vigentes.some(pedido => pedido.estado === 'recibido')) return 'recibido';
+  return 'confirmado';
+}
+
+const BTN_ENTREGA_BASE = 'flex min-h-44 flex-1 cursor-pointer items-center justify-center gap-6 rounded-lg px-12 py-8 text-center text-12 font-semibold transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-initial';
+const BTN_CONFIRMAR = 'flex min-h-44 flex-1 cursor-pointer items-center justify-center gap-6 rounded-lg bg-plain-green px-16 py-8 text-center text-12 font-bold text-canvas-white transition-all hover:bg-plain-green-muted active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-initial';
+
+function PedidoAccionCard({
+  pedido,
+  ahora,
+  ocupado,
+  onConfirmar,
+  onEntregar,
+  onVerMesa,
+}: {
+  pedido: PedidoVista;
+  ahora: number;
+  ocupado: boolean;
+  onConfirmar: (id: string) => void;
+  onEntregar: (id: string, modo: ModoEntregaPedido) => void;
+  onVerMesa: () => void;
+}) {
+  const porConfirmar = pedido.estado === 'recibido';
+  const minutos = minutosDesde(pedido.creadoEn, ahora);
+  const unidades = pedido.items.reduce((sum, item) => sum + item.cantidad, 0);
+
+  return (
+    <article
+      className={`overflow-hidden rounded-xl border border-l-[3px] bg-canvas-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${
+        porConfirmar ? 'border-[#F3D4A3] border-l-[#F2A51A]' : 'border-[#A7E4CC] border-l-[#14A77B]'
+      }`}
+    >
+      <div className="px-16 py-12">
+        <div className="flex items-start justify-between gap-12">
+          <h3 className="text-16 font-bold tracking-[-0.01em] text-ash-graphite">Mesa {pedido.mesa}</h3>
+          <span className={`shrink-0 rounded-full border px-8 py-4 text-10 font-semibold ${ESTADO_STYLES[pedido.estado]}`}>
+            {ESTADO_LABELS[pedido.estado]}
+          </span>
+        </div>
+        <p className="mt-4 text-11 text-sage-green">
+          {porConfirmar && minutos !== null && (
+            <span className={`font-semibold ${minutos >= 5 ? 'text-alert-red' : 'text-[#9A5700]'}`}>{textoAntiguedad(minutos)} · </span>
+          )}
+          {pedido.timestamp} · {unidades} {unidades === 1 ? 'producto' : 'productos'}
+        </p>
+        <ul className="mt-8 space-y-2 text-12 text-ash-graphite">
+          {pedido.items.slice(0, 4).map(item => (
+            <li key={item.id}>{item.cantidad}× {item.nombre}</li>
+          ))}
+          {pedido.items.length > 4 && <li className="text-sage-green">y {pedido.items.length - 4} más…</li>}
+        </ul>
+      </div>
+      <div className="flex flex-wrap gap-8 border-t border-ghost-fog px-10 py-8">
+        {porConfirmar ? (
+          <button type="button" onClick={() => onConfirmar(pedido.id)} disabled={ocupado} className={BTN_CONFIRMAR}>
+            <span className="material-symbols-outlined text-17" aria-hidden="true">check_circle</span>
+            <span>{ocupado ? 'Confirmando...' : 'Confirmar'}</span>
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => onEntregar(pedido.id, 'mesa')}
+              disabled={ocupado}
+              className={`${BTN_ENTREGA_BASE} bg-emerald-600 text-canvas-white hover:bg-emerald-500`}
+            >
+              <span>Entregado en mesa</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onEntregar(pedido.id, 'retiro')}
+              disabled={ocupado}
+              className={`${BTN_ENTREGA_BASE} border border-concrete bg-canvas-white text-ash-graphite hover:bg-ghost-fog`}
+            >
+              <span>Retirado por el cliente</span>
+            </button>
+          </>
+        )}
+        <button
+          type="button"
+          onClick={onVerMesa}
+          className="flex min-h-44 w-full cursor-pointer items-center justify-center gap-6 rounded-lg px-10 text-12 font-semibold text-sage-green hover:text-ash-graphite"
+        >
+          Ver detalle de la mesa
+        </button>
+      </div>
+    </article>
+  );
 }
 
 function PedidoDetalle({
   pedido,
   onAvanzar,
-  onCerrar,
+  onConfirmar,
+  onEntregar,
+  ocupado,
   onImprimirPedido,
   etiquetaPorComensal,
 }: {
   pedido: PedidoVista;
   onAvanzar: (id: string) => void;
-  onCerrar: (id: string) => void;
+  onConfirmar: (id: string) => void;
+  onEntregar: (id: string, modo: ModoEntregaPedido) => void;
+  ocupado: boolean;
   onImprimirPedido: (pedido: PedidoVista) => void;
   etiquetaPorComensal: Map<string, string>;
 }) {
@@ -163,24 +310,42 @@ function PedidoDetalle({
           <span className="material-symbols-outlined text-16">print</span>
           <span>Imprimir ticket</span>
         </button>
-        {pedido.estado !== 'listo' && !pedido.finalizado && (
+        {pedido.estado === 'recibido' && (
+          <button type="button" onClick={() => onConfirmar(pedido.id)} disabled={ocupado} className={BTN_CONFIRMAR}>
+            <span className="material-symbols-outlined text-17" aria-hidden="true">check_circle</span>
+            <span>{ocupado ? 'Confirmando...' : 'Confirmar'}</span>
+          </button>
+        )}
+        {(pedido.estado === 'confirmado' || pedido.estado === 'preparando') && (
           <button
             onClick={() => onAvanzar(pedido.id)}
-            className="flex min-h-44 flex-1 items-center justify-center rounded-lg bg-plain-green px-16 py-8 text-center text-12 font-semibold text-canvas-white transition-all hover:bg-plain-green-muted active:scale-[0.98] sm:flex-initial"
+            disabled={ocupado}
+            className="flex min-h-44 flex-1 items-center justify-center rounded-lg bg-plain-green px-16 py-8 text-center text-12 font-semibold text-canvas-white transition-all hover:bg-plain-green-muted active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 sm:flex-initial"
           >
-            {pedido.estado === 'recibido' ? '→ Preparando' : '→ Listo'}
+            {pedido.estado === 'confirmado' ? '→ Preparando' : '→ Listo'}
           </button>
         )}
-        {pedido.estado === 'listo' && !pedido.finalizado && (
-          <button
-            onClick={() => onCerrar(pedido.id)}
-            className="flex min-h-44 flex-1 items-center justify-center gap-6 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-16 py-8 text-center text-12 font-bold text-canvas-white transition-all active:scale-[0.98] sm:flex-initial shadow-xs cursor-pointer"
-          >
-            <span>✓</span>
-            <span>Marcar entregado a la mesa</span>
-          </button>
+        {pedido.estado === 'listo' && (
+          <>
+            <button
+              type="button"
+              onClick={() => onEntregar(pedido.id, 'mesa')}
+              disabled={ocupado}
+              className={`${BTN_ENTREGA_BASE} bg-emerald-600 text-canvas-white hover:bg-emerald-500`}
+            >
+              <span>Entregado en mesa</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onEntregar(pedido.id, 'retiro')}
+              disabled={ocupado}
+              className={`${BTN_ENTREGA_BASE} border border-concrete bg-canvas-white text-ash-graphite hover:bg-ghost-fog`}
+            >
+              <span>Retirado por el cliente</span>
+            </button>
+          </>
         )}
-        {pedido.finalizado && (
+        {pedido.estado === 'entregado' && (
           <span className="flex min-h-44 items-center rounded-lg border border-success/30 bg-success/15 px-12 py-8 text-12 font-semibold text-[#087645]">
             Pedido entregado
           </span>
@@ -208,12 +373,30 @@ function MesaCard({
     0,
   );
   const cuentaSolicitada = grupo.cuentaSolicitada;
-  const tienePedidosListos = grupo.pedidos.some(p => p.estado === 'listo' && !p.finalizado);
-  const tone: MesaCardTone = cuentaSolicitada ? 'account' : tienePedidosListos ? 'ready' : 'progress';
+  const tienePedidosListos = grupo.pedidos.some(p => p.estado === 'listo');
+  const tienePedidosPorConfirmar = grupo.pedidos.some(p => p.estado === 'recibido');
+  const estadoMesa = calcularEstadoMesa(grupo.pedidos);
+  const todosEntregados = estadoMesa === 'entregado';
+
+  const tone: MesaCardTone = cuentaSolicitada
+    ? 'account'
+    : tienePedidosListos
+    ? 'ready'
+    : todosEntregados
+    ? 'delivered'
+    : tienePedidosPorConfirmar
+    ? 'unconfirmed'
+    : 'progress';
   const toneStyles = MESA_CARD_TONES[tone];
   const statusLabel = cuentaSolicitada
     ? grupo.pagoHabilitado ? 'Pago habilitado' : 'Cuenta'
-    : tienePedidosListos ? 'Listo' : 'En curso';
+    : tienePedidosListos
+    ? 'Listo'
+    : todosEntregados
+    ? 'Entregado'
+    : tienePedidosPorConfirmar
+    ? 'Por confirmar'
+    : 'En preparación';
   const ultimaHora = grupo.pedidos[grupo.pedidos.length - 1]?.timestamp;
   const comensales = new Set(
     grupo.pedidos.flatMap(pedido => pedido.items.map(item => item.comensalId).filter(Boolean)),
@@ -305,6 +488,14 @@ function PedidosSectionHeader({
       icon: 'bg-[#EAF3FF] text-[#2D6FB7]',
       badge: 'bg-[#EAF3FF] text-[#285F9F]',
     },
+    delivered: {
+      icon: 'bg-[#EBF2EE] text-[#345949]',
+      badge: 'bg-[#EBF2EE] text-[#345949]',
+    },
+    unconfirmed: {
+      icon: 'bg-[#FFF3EE] text-[#C4461B]',
+      badge: 'bg-[#FFF3EE] text-[#C4461B]',
+    },
   }[tone];
 
   return (
@@ -327,7 +518,9 @@ function MesaDetalleModal({
   grupo,
   onClose,
   onAvanzar,
-  onCerrar,
+  onConfirmar,
+  onEntregar,
+  accionesEnCurso,
   onTodoListo,
   onCerrarCuenta,
   onHabilitarPago,
@@ -338,7 +531,9 @@ function MesaDetalleModal({
   grupo: MesaGrupo;
   onClose: () => void;
   onAvanzar: (id: string) => void;
-  onCerrar: (id: string) => void;
+  onConfirmar: (id: string) => void;
+  onEntregar: (id: string, modo: ModoEntregaPedido) => void;
+  accionesEnCurso: ReadonlySet<string>;
   onTodoListo: (grupo: MesaGrupo) => void;
   onCerrarCuenta: (grupo: MesaGrupo) => void;
   onHabilitarPago: (grupo: MesaGrupo, habilitar?: boolean) => void;
@@ -355,7 +550,8 @@ function MesaDetalleModal({
     0,
   );
   const estadoMesa = calcularEstadoMesa(grupo.pedidos);
-  const todosListos = estadoMesa === 'listo';
+  // "Todo listo" solo aplica a pedidos que cocina ya tiene (confirmados o en preparación).
+  const hayPendientesDeCocina = grupo.pedidos.some(p => p.estado === 'confirmado' || p.estado === 'preparando');
   const gruposComensales = useMemo(
     () => agruparPorComensal(grupo.pedidos.flatMap(pedido => pedido.items)),
     [grupo.pedidos],
@@ -430,7 +626,7 @@ function MesaDetalleModal({
           <button
             type="button"
             onClick={() => onTodoListo(grupo)}
-            disabled={todosListos || mesaAccionEnCurso !== null}
+            disabled={!hayPendientesDeCocina || mesaAccionEnCurso !== null}
             className="min-h-44 flex-1 rounded-lg bg-success px-12 py-8 text-12 font-semibold text-ash-graphite transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-initial cursor-pointer"
           >
             {mesaAccionEnCurso === 'todo-listo' ? 'Actualizando...' : 'Todo listo'}
@@ -507,7 +703,9 @@ function MesaDetalleModal({
               key={pedido.id}
               pedido={pedido}
               onAvanzar={onAvanzar}
-              onCerrar={onCerrar}
+              onConfirmar={onConfirmar}
+              onEntregar={onEntregar}
+              ocupado={accionesEnCurso.has(pedido.id)}
               onImprimirPedido={onImprimirPedido}
               etiquetaPorComensal={etiquetaPorComensal}
             />
@@ -528,6 +726,8 @@ export default function RecepcionistaSection() {
   const [loading, setLoading] = useState(true);
   const [sseConectado, setSseConectado] = useState(false);
   const [mesaAccionEnCurso, setMesaAccionEnCurso] = useState<'todo-listo' | 'cerrar-cuenta' | 'habilitar-pago' | null>(null);
+  const [accionesEnCurso, setAccionesEnCurso] = useState<ReadonlySet<string>>(new Set());
+  const [ahora, setAhora] = useState(() => Date.now());
   const [mesaDetalleKey, setMesaDetalleKey] = useState<string | null>(null);
   const [pedidoAsistidoAbierto, setPedidoAsistidoAbierto] = useState(false);
   const [anchoTicket, setAnchoTicket] = useState<AnchoTicketTermico>("80mm");
@@ -536,6 +736,14 @@ export default function RecepcionistaSection() {
   const [modalTicketAbierto, setModalTicketAbierto] = useState<boolean>(false);
   const [errorImpresionTicket, setErrorImpresionTicket] = useState<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  // Guarda síncrona contra doble click; el estado React solo deshabilita los botones.
+  const accionesEnCursoRef = useRef<Set<string>>(new Set());
+
+  // Refresca la antigüedad de los pedidos por confirmar.
+  useEffect(() => {
+    const id = window.setInterval(() => setAhora(Date.now()), 30000);
+    return () => window.clearInterval(id);
+  }, []);
 
   useEffect(() => {
     setAnchoTicket(getAnchoTicketTermico());
@@ -544,15 +752,14 @@ export default function RecepcionistaSection() {
 
   const transformarPedidoApi = useCallback((p: PedidoAPI, mesasMap: Record<string, MesaAPI>): PedidoVista => {
     const numMesa = mesasMap[p.mesa_id]?.numero || 1;
-    const est = (p.estado === 'cerrado' ? 'listo' : p.estado) as 'recibido' | 'preparando' | 'listo';
     return {
       id: p.id,
       mesa: numMesa,
       mesaId: p.mesa_id,
       sucursalId: p.sucursal_id,
       timestamp: p.created_at ? new Date(p.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      estado: est,
-      finalizado: p.estado === 'cerrado',
+      creadoEn: p.created_at || undefined,
+      ...estadoVista(p.estado),
       items: (p.items || []).map(i => ({
         id: i.id || i.articulo_id,
         nombre: i.nombre_articulo?.trim() || 'Producto sin nombre',
@@ -636,7 +843,11 @@ export default function RecepcionistaSection() {
         const data: PedidoAPI = JSON.parse(e.data);
         if (data && data.id) {
           const nuevo = transformarPedidoApi(data, mesas);
-          setPedidos(prev => [nuevo, ...prev.filter(p => p.id !== data.id)]);
+          setPedidos(prev => {
+            const existente = prev.find(p => p.id === data.id);
+            if (existente && !avanza(estadoApiDeVista(existente), data.estado)) return prev;
+            return [nuevo, ...prev.filter(p => p.id !== data.id)];
+          });
         }
       } catch (err) {
         console.warn("Error parseando pedido_creado SSE:", err);
@@ -649,6 +860,7 @@ export default function RecepcionistaSection() {
         if (data && data.id) {
           setPedidos(prev => {
             const pedidoAnterior = prev.find(p => p.id === data.id);
+            if (pedidoAnterior && !avanza(estadoApiDeVista(pedidoAnterior), data.estado)) return prev;
             const eraListo = pedidoAnterior?.estado === 'listo';
             const esAhoraListo = data.estado === 'listo';
 
@@ -758,33 +970,56 @@ export default function RecepcionistaSection() {
     const target = pedidos.find(p => p.id === pedidoId);
     if (!target) return;
 
-    const nextEstado: 'preparando' | 'listo' = target.estado === 'recibido' ? 'preparando' : 'listo';
+    // Un pedido "recibido" se confirma (no salta a preparando): la API respondería PEDIDO_SIN_CONFIRMAR.
+    if (target.estado !== 'confirmado' && target.estado !== 'preparando') return;
+    const nextEstado: 'preparando' | 'listo' = target.estado === 'confirmado' ? 'preparando' : 'listo';
 
-    try {
-      await api.cambiarEstadoPedido(pedidoId, nextEstado);
-      setPedidos(prev =>
-        prev.map(p => (p.id === pedidoId ? { ...p, estado: nextEstado } : p))
-      );
-      toast.success('Estado actualizado.');
-    } catch (err) {
-      console.error("Error al cambiar estado del pedido:", err);
-    }
+    await ejecutarAccionPedido(
+      pedidoId,
+      () => api.cambiarEstadoPedido(pedidoId, nextEstado),
+      'Estado actualizado.',
+    );
   };
 
-  const cerrarPedido = async (pedidoId: string) => {
+  const ejecutarAccionPedido = async (
+    pedidoId: string,
+    accion: () => Promise<PedidoAPI>,
+    mensajeExito: string,
+  ) => {
+    if (accionesEnCursoRef.current.has(pedidoId)) return;
+    accionesEnCursoRef.current.add(pedidoId);
+    setAccionesEnCurso(prev => new Set(prev).add(pedidoId));
     try {
-      await api.cambiarEstadoPedido(pedidoId, 'cerrado');
+      const actualizado = await accion();
       setPedidos(prev => prev.map(p => (
-        p.id === pedidoId ? { ...p, estado: 'listo', finalizado: true } : p
+        p.id === pedidoId && avanza(estadoApiDeVista(p), actualizado.estado) ? { ...p, ...estadoVista(actualizado.estado) } : p
       )));
-      toast.success('Pedido cerrado y entregado.');
+      toast.success(mensajeExito);
     } catch (err) {
-      console.error("Error al cerrar pedido:", err);
+      console.error("Error al actualizar el pedido:", err);
+      toast.error(mensajeErrorPedido(err));
+    } finally {
+      accionesEnCursoRef.current.delete(pedidoId);
+      setAccionesEnCurso(prev => {
+        const siguiente = new Set(prev);
+        siguiente.delete(pedidoId);
+        return siguiente;
+      });
     }
   };
+
+  const confirmarPedido = (pedidoId: string) =>
+    ejecutarAccionPedido(pedidoId, () => api.confirmarPedido(pedidoId), 'Pedido confirmado. Ya está en la cola de cocina.');
+
+  const entregarPedido = (pedidoId: string, modo: ModoEntregaPedido) =>
+    ejecutarAccionPedido(
+      pedidoId,
+      () => api.entregarPedido(pedidoId, modo),
+      modo === 'mesa' ? 'Pedido marcado como entregado en mesa.' : 'Pedido marcado como retirado por el cliente.',
+    );
 
   const marcarMesaTodoLista = async (grupo: MesaGrupo) => {
-    const pendientes = grupo.pedidos.filter(pedido => pedido.estado !== 'listo');
+    const pendientes = grupo.pedidos.filter(pedido => pedido.estado === 'confirmado' || pedido.estado === 'preparando');
     if (pendientes.length === 0) return;
     const ok = await confirmar({
       titulo: 'Marcar todos como listos',
@@ -803,11 +1038,12 @@ export default function RecepcionistaSection() {
         pendientes.filter((_, index) => resultados[index].status === 'fulfilled').map(pedido => pedido.id),
       );
       setPedidos(prev => prev.map(pedido =>
-        pedidosActualizados.has(pedido.id) ? { ...pedido, estado: 'listo' } : pedido,
+        pedidosActualizados.has(pedido.id) && avanza(estadoApiDeVista(pedido), 'listo') ? { ...pedido, estado: 'listo' } : pedido,
       ));
 
-      if (resultados.some(resultado => resultado.status === 'rejected')) {
-        toast.error('Algunos pedidos no pudieron actualizarse. Revisa el estado de la mesa.');
+      const rechazado = resultados.find((resultado): resultado is PromiseRejectedResult => resultado.status === 'rejected');
+      if (rechazado) {
+        toast.error(mensajeErrorPedido(rechazado.reason));
       } else {
         toast.success('Todos los pedidos marcados como listos.');
       }
@@ -996,12 +1232,18 @@ export default function RecepcionistaSection() {
   }, [mesas, pedidos]);
   const mesaDetalle = mesasAgrupadas.find(grupo => grupo.key === mesaDetalleKey);
   const conAlerta = mesasAgrupadas.filter(grupo => grupo.cuentaSolicitada);
-  const listosParaRetirar = mesasAgrupadas.filter(
-    grupo => !grupo.cuentaSolicitada && grupo.pedidos.some(p => p.estado === 'listo' && !p.finalizado)
+  const porConfirmar = useMemo(
+    () => pedidos
+      .filter(p => p.estado === 'recibido')
+      .sort((a, b) => (Date.parse(a.creadoEn ?? '') || 0) - (Date.parse(b.creadoEn ?? '') || 0)),
+    [pedidos],
   );
-  const enCurso = mesasAgrupadas.filter(
-    grupo => !grupo.cuentaSolicitada && !grupo.pedidos.some(p => p.estado === 'listo' && !p.finalizado)
+  const listosParaRetirar = pedidos.filter(p => p.estado === 'listo');
+  const mesasEnSalon = useMemo(
+    () => mesasAgrupadas.filter(grupo => !grupo.cuentaSolicitada).sort((a, b) => a.mesa - b.mesa),
+    [mesasAgrupadas],
   );
+  const abrirMesaDePedido = (pedido: PedidoVista) => setMesaDetalleKey(pedido.mesaId || `mesa-${pedido.mesa}`);
 
   return (
     <div className="h-full space-y-28 overflow-y-auto bg-[#F7F8F8] p-16 font-inter sm:p-24 md:p-32">
@@ -1054,6 +1296,34 @@ export default function RecepcionistaSection() {
         </div>
       )}
 
+      {/* 0. POR CONFIRMAR: pedidos del QR que esperan a recepción */}
+      {!loading && porConfirmar.length > 0 && (
+        <section className="space-y-12" aria-labelledby="por-confirmar-title">
+          <div id="por-confirmar-title">
+            <PedidosSectionHeader
+              tone="account"
+              icon="notification_important"
+              title="Por confirmar"
+              subtitle="Cocina no los ve hasta que los confirmes"
+              count={porConfirmar.length}
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-14 md:grid-cols-2 lg:grid-cols-3">
+            {porConfirmar.map(pedido => (
+              <PedidoAccionCard
+                key={pedido.id}
+                pedido={pedido}
+                ahora={ahora}
+                ocupado={accionesEnCurso.has(pedido.id)}
+                onConfirmar={confirmarPedido}
+                onEntregar={entregarPedido}
+                onVerMesa={() => abrirMesaDePedido(pedido)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* 1. SOLICITUDES DE CUENTA */}
       {!loading && conAlerta.length > 0 && (
         <section className="space-y-12" aria-labelledby="solicitudes-cuenta-title">
@@ -1087,37 +1357,40 @@ export default function RecepcionistaSection() {
               tone="ready"
               icon="notifications"
               title="Listos para retirar"
-              subtitle="Llevar a la mesa"
+              subtitle="Marcalos cuando se entreguen en mesa o los retire el cliente"
               count={listosParaRetirar.length}
             />
           </div>
           <div className="grid grid-cols-1 gap-14 md:grid-cols-2 lg:grid-cols-3">
-            {listosParaRetirar.map(grupo => (
-              <MesaCard
-                key={grupo.key}
-                grupo={grupo}
-                onOpen={() => setMesaDetalleKey(grupo.key)}
-                onHabilitarPago={habilitarPago}
+            {listosParaRetirar.map(pedido => (
+              <PedidoAccionCard
+                key={pedido.id}
+                pedido={pedido}
+                ahora={ahora}
+                ocupado={accionesEnCurso.has(pedido.id)}
+                onConfirmar={confirmarPedido}
+                onEntregar={entregarPedido}
+                onVerMesa={() => abrirMesaDePedido(pedido)}
               />
             ))}
           </div>
         </section>
       )}
 
-      {/* 3. PEDIDOS EN CURSO / PREPARACIÓN */}
-      {!loading && enCurso.length > 0 && (
-        <section className="space-y-12" aria-labelledby="pedidos-preparacion-title">
-          <div id="pedidos-preparacion-title">
+      {/* 3. MESAS EN SALÓN */}
+      {!loading && mesasEnSalon.length > 0 && (
+        <section className="space-y-12" aria-labelledby="mesas-salon-title">
+          <div id="mesas-salon-title">
             <PedidosSectionHeader
               tone="progress"
-              icon="schedule"
-              title="En preparación"
-              subtitle="Pedidos activos en cocina"
-              count={enCurso.length}
+              icon="table_bar"
+              title="Mesas en salón"
+              subtitle="Mesas activas con pedidos en curso o entregados"
+              count={mesasEnSalon.length}
             />
           </div>
           <div className="grid grid-cols-1 gap-14 md:grid-cols-2 lg:grid-cols-3">
-            {enCurso.map(grupo => (
+            {mesasEnSalon.map(grupo => (
               <MesaCard
                 key={grupo.key}
                 grupo={grupo}
@@ -1146,7 +1419,9 @@ export default function RecepcionistaSection() {
           grupo={mesaDetalle}
           onClose={cerrarMesaDetalle}
           onAvanzar={avanzarEstado}
-          onCerrar={cerrarPedido}
+          onConfirmar={confirmarPedido}
+          onEntregar={entregarPedido}
+          accionesEnCurso={accionesEnCurso}
           onTodoListo={marcarMesaTodoLista}
           onCerrarCuenta={cerrarCuenta}
           onHabilitarPago={habilitarPago}

@@ -11,7 +11,7 @@ export default function SuperadminLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 antialiased selection:bg-neutral-800 selection:text-white">
+    <div className="min-h-screen bg-[#f4f6f7] text-[#18272d] antialiased selection:bg-purple-100 selection:text-purple-900">
       {children}
     </div>
   );

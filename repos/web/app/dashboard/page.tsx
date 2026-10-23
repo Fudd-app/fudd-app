@@ -236,6 +236,11 @@ export default function DashboardPage() {
                       <UserMenuItem icon="skillet" label="Pantalla Cocina (KDS) ↗" asSpan />
                     </Link>
                   )}
+                  {sesion?.es_superadmin === true && (
+                    <Link href="/superadmin" onClick={() => setIsUserMenuOpen(false)}>
+                      <UserMenuItem icon="admin_panel_settings" label="Control Tower" asSpan />
+                    </Link>
+                  )}
                   <UserMenuItem
                     icon="school"
                     label="Recorrido tutorial"

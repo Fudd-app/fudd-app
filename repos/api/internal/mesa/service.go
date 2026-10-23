@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/evento"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/notificacion"
 )
 
@@ -105,6 +106,7 @@ func (svc *Service) ObtenerPorQRToken(ctx context.Context, token string) (*MesaP
 }
 
 func (svc *Service) SolicitarCuentaPorQRToken(ctx context.Context, token string) (*MesaPublica, error) {
+	ctx = evento.ContextoConActor(ctx, evento.Comensal(""))
 	mp, err := svc.store.SolicitarCuentaPorQRToken(ctx, token)
 	if err != nil {
 		return nil, err

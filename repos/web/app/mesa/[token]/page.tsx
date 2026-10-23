@@ -39,7 +39,7 @@ export type CartItem = {
   comensalNombre?: string;
 };
 
-export type EstadoPedido = "recibido" | "preparando" | "listo" | "cerrado";
+export type EstadoPedido = "recibido" | "confirmado" | "preparando" | "listo" | "entregado" | "cerrado";
 type Vista = "carta" | "seguimiento";
 
 export type PedidoSesion = {
@@ -245,7 +245,14 @@ function isVista(value: unknown): value is Vista {
 }
 
 function isEstadoPedido(value: unknown): value is EstadoPedido {
-  return value === "recibido" || value === "preparando" || value === "listo" || value === "cerrado";
+  return (
+    value === "recibido" ||
+    value === "confirmado" ||
+    value === "preparando" ||
+    value === "listo" ||
+    value === "entregado" ||
+    value === "cerrado"
+  );
 }
 
 function normalizarBusqueda(value: string) {
@@ -1082,7 +1089,7 @@ export default function MesaPage() {
             pagoError={pagoError}
             todosListos={
               state.pedidos.length > 0 &&
-              state.pedidos.every((p) => p.estado === "listo" || p.estado === "cerrado")
+              state.pedidos.every((p) => p.estado === "listo" || p.estado === "entregado" || p.estado === "cerrado")
             }
             yaCalificado={resenaYaEnviada}
             onCalificar={() => setModalResenaAbierto(true)}

@@ -215,7 +215,7 @@ func registrarRutas(mux *http.ServeMux) {
 	mux.HandleFunc("POST /pedidos", pedidoH.Crear)
 	mux.Handle("POST /pedidos/asistido", conRoles(pedidoH.CrearAsistido, auth.RolDuenio, auth.RolEncargado, auth.RolMozo))
 	mux.Handle("GET /pedidos", conRoles(pedidoH.ListarActivos, auth.RolDuenio, auth.RolEncargado, auth.RolMozo))
-	mux.Handle("PATCH /pedidos/{id}/estado", conRoles(pedidoH.CambiarEstado, auth.RolDuenio, auth.RolEncargado, auth.RolMozo))
+	mux.Handle("PATCH /pedidos/{id}/estado", conRoles(pedidoH.CambiarEstado, auth.RolDuenio, auth.RolEncargado, auth.RolMozo, auth.RolCocinero))
 	mux.Handle("PATCH /pedidos/items/{id}/estado", conRoles(pedidoH.CambiarEstadoItem, auth.RolDuenio, auth.RolEncargado, auth.RolCocinero))
 	mux.Handle("GET /kds/eventos", conRoles(pedidoH.EventosKDS, auth.RolDuenio, auth.RolEncargado, auth.RolCocinero))
 

@@ -4,11 +4,13 @@ import (
 	"context"
 	"testing"
 
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/evento"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/mesa"
 )
 
 type mockStore struct {
-	mesas []mesa.Mesa
+	mesas        []mesa.Mesa
+	solicitarCtx context.Context
 }
 
 func (m *mockStore) Listar(ctx context.Context, tenantID string) ([]mesa.Mesa, error) {
@@ -32,6 +34,7 @@ func (m *mockStore) ObtenerPorQRToken(ctx context.Context, token string) (*mesa.
 }
 
 func (m *mockStore) SolicitarCuentaPorQRToken(ctx context.Context, token string) (*mesa.MesaPublica, error) {
+	m.solicitarCtx = ctx
 	return &mesa.MesaPublica{ID: "m-1", SucursalID: "suc-1", CuentaSolicitada: true, CuentaVersion: 1}, nil
 }
 
@@ -80,5 +83,16 @@ func TestHabilitarPago_Deshabilitar(t *testing.T) {
 	}
 	if m.PagoHabilitado {
 		t.Error("esperaba PagoHabilitado en false")
+	}
+}
+
+func TestSolicitarCuenta_ActorEsComensal(t *testing.T) {
+	store := &mockStore{}
+	svc := mesa.NuevoService(store)
+	if _, err := svc.SolicitarCuentaPorQRToken(context.Background(), "token"); err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+	if actor := evento.ActorDesdeContexto(store.solicitarCtx, nil); actor.Tipo != evento.ActorComensal {
+		t.Fatalf("actor incorrecto: %+v", actor)
 	}
 }

@@ -88,6 +88,25 @@ func (svc *Service) ObtenerResumen(
 	if err != nil {
 		return nil, err
 	}
+	porCategoria, err := svc.store.ListarPorCategoria(ctx, tenantID, sucursalID, desde, hasta)
+	if err != nil {
+		return nil, err
+	}
+	mapaCalor, err := svc.store.ListarMapaCalor(ctx, tenantID, sucursalID, desde, hasta, zonaHorariaNegocio)
+	if err != nil {
+		return nil, err
+	}
+
+	var totalVentasCategorias float64
+	for _, c := range porCategoria {
+		totalVentasCategorias += c.Monto
+	}
+	if totalVentasCategorias > 0 {
+		for i := range porCategoria {
+			porcentaje := (porCategoria[i].Monto / totalVentasCategorias) * 100
+			porCategoria[i].Porcentaje = math.Round(porcentaje*10) / 10
+		}
+	}
 
 	resumen := &Resumen{
 		Periodo: Periodo{
@@ -106,9 +125,11 @@ func (svc *Service) ObtenerResumen(
 			PedidosTotales:                variacionPorcentual(float64(actual.PedidosTotales), float64(anterior.PedidosTotales)),
 			TiempoPromedioDespachoMinutos: variacionPorcentual(actual.TiempoPromedioDespachoMinutos, anterior.TiempoPromedioDespachoMinutos),
 		},
-		PorDia:    porDia,
-		PorTurno:  porTurno,
-		PorEstado: porEstado,
+		PorDia:       porDia,
+		PorTurno:     porTurno,
+		PorEstado:    porEstado,
+		PorCategoria: porCategoria,
+		MapaCalor:    mapaCalor,
 	}
 	if len(platos) > 0 {
 		resumen.PlatoMasVendido = &resumen.PlatosEstrella[0]

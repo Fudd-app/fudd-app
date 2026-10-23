@@ -432,6 +432,7 @@ export interface SesionUsuario {
   nombre: string;
   rol: 'admin' | 'encargado' | 'mozo' | 'cocina';
   sucursal_id?: string | null;
+  es_superadmin?: boolean;
 }
 
 export interface SolicitudMcp {
@@ -571,12 +572,15 @@ export interface PedidoItemAPI {
   variantes?: PedidoItemVarianteAPI[];
 }
 
+export type EstadoPedidoAPI = 'recibido' | 'confirmado' | 'preparando' | 'listo' | 'entregado' | 'cerrado';
+export type ModoEntregaPedido = 'mesa' | 'retiro';
+
 export interface PedidoAPI {
   id: string;
   mesa_id: string;
   sucursal_id: string;
   cuenta_version: number;
-  estado: 'recibido' | 'preparando' | 'listo' | 'cerrado';
+  estado: EstadoPedidoAPI;
 	origen?: 'comensal' | 'mozo';
 	creado_por_usuario_id?: string;
 	creado_por_nombre?: string;
@@ -607,8 +611,23 @@ export interface MetricaTurnoAPI {
 }
 
 export interface MetricaEstadoAPI {
-  estado: 'recibido' | 'preparando' | 'listo' | 'cerrado';
+  estado: EstadoPedidoAPI;
   cantidad: number;
+}
+
+export interface MetricaCategoriaAPI {
+  categoria_id: string;
+  nombre: string;
+  unidades: number;
+  monto: number;
+  porcentaje: number;
+}
+
+export interface CeldaCalorAPI {
+  dia_semana: number;
+  hora: number;
+  pedidos: number;
+  monto: number;
 }
 
 export interface MetricasResumenAPI {
@@ -637,6 +656,8 @@ export interface MetricasResumenAPI {
   por_dia: MetricaDiariaAPI[];
   por_turno: MetricaTurnoAPI[];
   por_estado: MetricaEstadoAPI[];
+  por_categoria?: MetricaCategoriaAPI[];
+  mapa_calor?: CeldaCalorAPI[];
 }
 
 export interface NuevoPedidoInput {
@@ -1111,11 +1132,19 @@ export const api = {
     return apiFetch<PedidoAPI[]>(`/pedidos?sucursal_id=${encodeURIComponent(sucursalId)}`);
   },
 
-  cambiarEstadoPedido: async (pedidoId: string, estado: 'recibido' | 'preparando' | 'listo' | 'cerrado') => {
+  cambiarEstadoPedido: async (pedidoId: string, estado: EstadoPedidoAPI, modoEntrega?: ModoEntregaPedido) => {
     return apiFetch<PedidoAPI>(`/pedidos/${encodeURIComponent(pedidoId)}/estado`, {
       method: 'PATCH',
-      body: JSON.stringify({ estado }),
+      body: JSON.stringify(modoEntrega ? { estado, modo_entrega: modoEntrega } : { estado }),
     });
+  },
+
+  confirmarPedido: async (pedidoId: string) => {
+    return api.cambiarEstadoPedido(pedidoId, 'confirmado');
+  },
+
+  entregarPedido: async (pedidoId: string, modoEntrega: ModoEntregaPedido) => {
+    return api.cambiarEstadoPedido(pedidoId, 'entregado', modoEntrega);
   },
 
   cambiarEstadoItem: async (itemId: string, estado: 'pendiente' | 'preparando' | 'listo') => {
@@ -1325,7 +1354,7 @@ export interface MovimientoPlatform {
   descripcion: string;
   actor: string;
   fecha: string;
-  detalle?: Record<string, any>;
+  detalle?: Record<string, unknown>;
 }
 
 export interface TenantDetalleActividadPlatform {

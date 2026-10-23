@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/db"
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/evento"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -116,23 +117,61 @@ func (s *pgStore) Actualizar(ctx context.Context, id, tenantID string, u MesaUpd
 }
 
 func (s *pgStore) HabilitarPago(ctx context.Context, id, tenantID string, habilitado bool) (*Mesa, error) {
-	m := &Mesa{}
-	err := db.Pool.QueryRow(ctx,
-		`UPDATE mesas SET pago_habilitado = $3
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	var anterior bool
+	err = tx.QueryRow(ctx,
+		`SELECT pago_habilitado FROM mesas
 		 WHERE id = $1
 		   AND sucursal_id IN (SELECT id FROM sucursales WHERE tenant_id = $2)
-		 RETURNING id, sucursal_id, COALESCE(sector_id::text,''), numero, capacidad, qr_token, estado,
-		           cuenta_solicitada, pago_habilitado, cuenta_version`,
-		id, tenantID, habilitado,
-	).Scan(&m.ID, &m.SucursalID, &m.SectorID, &m.Numero, &m.Capacidad, &m.QRToken, &m.Estado,
-		&m.CuentaSolicitada, &m.PagoHabilitado, &m.CuentaVersion)
+		 FOR NO KEY UPDATE`,
+		id, tenantID,
+	).Scan(&anterior)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
 		return nil, err
 	}
+
+	m := &Mesa{}
+	err = tx.QueryRow(ctx,
+		`UPDATE mesas SET pago_habilitado = $2
+		 WHERE id = $1
+		 RETURNING id, sucursal_id, COALESCE(sector_id::text,''), numero, capacidad, qr_token, estado,
+		           cuenta_solicitada, pago_habilitado, cuenta_version`,
+		id, habilitado,
+	).Scan(&m.ID, &m.SucursalID, &m.SectorID, &m.Numero, &m.Capacidad, &m.QRToken, &m.Estado,
+		&m.CuentaSolicitada, &m.PagoHabilitado, &m.CuentaVersion)
+	if err != nil {
+		return nil, err
+	}
+
+	if anterior != habilitado {
+		if err := evento.Registrar(ctx, tx, evento.Nuevo{
+			SucursalID: m.SucursalID, MesaID: m.ID, CuentaVersion: m.CuentaVersion,
+			Tipo: evento.TipoPagoHabilitado, EstadoAnterior: estadoPago(anterior), EstadoNuevo: estadoPago(habilitado),
+			Actor: evento.ActorDesdeContexto(ctx, nil),
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
 	return m, nil
+}
+
+func estadoPago(habilitado bool) string {
+	if habilitado {
+		return "habilitado"
+	}
+	return "deshabilitado"
 }
 
 func (s *pgStore) CerrarCuenta(ctx context.Context, id, tenantID string) (*Mesa, error) {
@@ -159,14 +198,24 @@ func (s *pgStore) CerrarCuenta(ctx context.Context, id, tenantID string) (*Mesa,
 		return nil, err
 	}
 
-	if _, err = tx.Exec(ctx,
+	cerrados, err := tx.Exec(ctx,
 		`UPDATE pedidos
 		 SET estado = 'cerrado',
 		     updated_at = now(),
 		     listo_at = COALESCE(listo_at, now())
 		 WHERE mesa_id = $1 AND estado != 'cerrado'`,
 		id,
-	); err != nil {
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// El hito pertenece a la cuenta que se cierra, no a la nueva versión.
+	if err := evento.Registrar(ctx, tx, evento.Nuevo{
+		SucursalID: m.SucursalID, MesaID: m.ID, CuentaVersion: m.CuentaVersion - 1,
+		Tipo: evento.TipoCuentaCerrada, Actor: evento.ActorDesdeContexto(ctx, nil),
+		Detalle: map[string]any{"pedidos_cerrados": cerrados.RowsAffected()},
+	}); err != nil {
 		return nil, err
 	}
 
@@ -233,19 +282,46 @@ func (s *pgStore) ObtenerPorQRToken(ctx context.Context, token string) (*MesaPub
 }
 
 func (s *pgStore) SolicitarCuentaPorQRToken(ctx context.Context, token string) (*MesaPublica, error) {
-	tag, err := db.Pool.Exec(ctx,
-		`UPDATE mesas
-		 SET cuenta_solicitada = true
-		 WHERE qr_token = $1 AND estado = 'activa'`, token)
+	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if tag.RowsAffected() == 0 {
+	defer tx.Rollback(ctx)
+
+	var mesaID, sucursalID string
+	var cuentaVersion int
+	var yaSolicitada bool
+	err = tx.QueryRow(ctx,
+		`SELECT id, sucursal_id, cuenta_version, cuenta_solicitada
+		 FROM mesas
+		 WHERE qr_token = $1 AND estado = 'activa'
+		 FOR NO KEY UPDATE`, token,
+	).Scan(&mesaID, &sucursalID, &cuentaVersion, &yaSolicitada)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return nil, err
+		}
 		_, lookupErr := s.ObtenerPorQRToken(ctx, token)
 		if lookupErr != nil {
 			return nil, lookupErr
 		}
 		return nil, ErrMesaInactiva
+	}
+
+	if _, err := tx.Exec(ctx, `UPDATE mesas SET cuenta_solicitada = true WHERE id = $1`, mesaID); err != nil {
+		return nil, err
+	}
+	if !yaSolicitada {
+		if err := evento.Registrar(ctx, tx, evento.Nuevo{
+			SucursalID: sucursalID, MesaID: mesaID, CuentaVersion: cuentaVersion,
+			Tipo: evento.TipoCuentaSolicitada, EstadoAnterior: "abierta", EstadoNuevo: "solicitada",
+			Actor: evento.ActorDesdeContexto(ctx, nil),
+		}); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
 	}
 	return s.ObtenerPorQRToken(ctx, token)
 }
