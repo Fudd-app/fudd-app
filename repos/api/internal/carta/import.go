@@ -56,10 +56,15 @@ func ParsearCSV(r io.Reader) ([]FilaImportacion, []ErrorFila) {
 	return parsearRegistros(registros)
 }
 
+// limiteDescompresionXLSX acota el tamaño descomprimido del XLSX. El handler
+// limita la subida a 5 MB comprimidos, pero un zip bomb de ese tamaño puede
+// expandirse a varios GB (el default de excelize es 16 GB).
+const limiteDescompresionXLSX = 50 << 20 // 50 MB
+
 // ParsearXLSX lee un Reader con contenido XLSX y devuelve las filas válidas.
 // Lee la primera hoja del libro.
 func ParsearXLSX(r io.Reader) ([]FilaImportacion, []ErrorFila) {
-	f, err := excelize.OpenReader(r)
+	f, err := excelize.OpenReader(r, excelize.Options{UnzipSizeLimit: limiteDescompresionXLSX})
 	if err != nil {
 		return nil, []ErrorFila{{Fila: 0, Motivo: "archivo Excel malformado: " + err.Error()}}
 	}
