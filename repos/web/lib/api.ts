@@ -431,6 +431,7 @@ export interface SesionUsuario {
   nombre: string;
   rol: 'admin' | 'encargado' | 'mozo' | 'cocina';
   sucursal_id?: string | null;
+  es_superadmin?: boolean;
 }
 
 export interface SolicitudMcp {
