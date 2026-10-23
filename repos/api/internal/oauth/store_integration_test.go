@@ -26,6 +26,10 @@ func (p pgUsuarios) ObtenerUsuarioPorID(_ context.Context, id string) (*auth.Usu
 	return &copia, nil
 }
 
+type pgAcceso struct{}
+
+func (pgAcceso) AccesoMCP(context.Context, string) (bool, error) { return true, nil }
+
 type pgNegocios struct{}
 
 func (pgNegocios) NombreNegocio(context.Context, string) (string, error) { return "Negocio Test", nil }
@@ -67,7 +71,7 @@ func prepararIntegracion(t *testing.T) (*Service, *auth.UsuarioAuth, *auth.Claim
 		AppURL:   "https://app.test",
 		Secreto:  []byte("secreto-fijo-de-test-0123456789ab"),
 	}
-	svc := NuevoService(NuevoStore(), pgUsuarios{usr}, pgNegocios{}, cfg)
+	svc := NuevoService(NuevoStore(), pgUsuarios{usr}, pgNegocios{}, pgAcceso{}, cfg)
 	claims := &auth.Claims{UsuarioID: usr.ID, TenantID: usr.TenantID, Rol: auth.RolDuenio}
 	return svc, usr, claims
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/ratelimit"
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/tenant"
 )
 
 const maxBodyBytes = 16 << 10
@@ -191,6 +192,8 @@ func (h *Handlers) errorSolicitud(w http.ResponseWriter, r *http.Request, err er
 	switch {
 	case errors.Is(err, ErrSoloDuenio):
 		errorSoloDuenio(w)
+	case errors.Is(err, ErrPlanSinMCP):
+		errorPlanSinMCP(w)
 	case errors.Is(err, ErrOtroNavegador):
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
@@ -343,6 +346,23 @@ func errorSoloDuenio(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusForbidden)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": ErrSoloDuenio.Error(), "codigo": "MCP_SOLO_DUENIO"})
+}
+
+// errorPlanSinMCP usa el mismo formato que tenant.RequerirCuota para que el
+// frontend abra el modal de upgrade.
+func errorPlanSinMCP(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
+	_ = json.NewEncoder(w).Encode(tenant.ErrorCuotaEnvelope{
+		Error:  "La conexión con asistentes de IA es exclusiva del plan Pro.",
+		Codigo: "PLAN_LIMIT_REACHED",
+		Detalle: tenant.DetalleErrorCuota{
+			Recurso: string(tenant.RecursoMCP),
+			Nombre:  tenant.NombreRecurso(tenant.RecursoMCP),
+			Plan:    tenant.PlanFree,
+			Accion:  "upgrade",
+		},
+	})
 }
 
 func rateLimited(w http.ResponseWriter) {

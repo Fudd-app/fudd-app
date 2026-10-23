@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/db"
 	"github.com/jackc/pgx/v5"
@@ -19,6 +20,7 @@ type Store interface {
 	SlugEnUso(ctx context.Context, slug string) (bool, error)
 	ObtenerEstadoCuotas(ctx context.Context, tenantID string) (*EstadoCuotas, error)
 	RegistrarSolicitudUpgrade(ctx context.Context, tenantID, nota string) (*Tenant, error)
+	FuncionalidadHabilitada(ctx context.Context, tenantID string, rec Recurso, plan string, ahora time.Time) (bool, error)
 }
 
 type pgStore struct{}
@@ -365,4 +367,22 @@ func (s *pgStore) RegistrarSolicitudUpgrade(ctx context.Context, tenantID, nota 
 		_ = json.Unmarshal(datosFiscalesBytes, &t.DatosFiscales)
 	}
 	return &t, nil
+}
+
+// FuncionalidadHabilitada: la excepción vigente del negocio manda; si no hay,
+// vale lo configurado para el plan; sin ninguna fila, la funcionalidad está apagada.
+func (s *pgStore) FuncionalidadHabilitada(ctx context.Context, tenantID string, rec Recurso, plan string, ahora time.Time) (bool, error) {
+	var habilitado bool
+	err := db.Pool.QueryRow(ctx,
+		`SELECT COALESCE(
+		    (SELECT habilitado FROM tenant_funcionalidades
+		      WHERE tenant_id = $1 AND recurso = $2 AND (vence_at IS NULL OR vence_at > $4)),
+		    (SELECT habilitado FROM plan_funcionalidades WHERE plan = $3 AND recurso = $2),
+		    false)`,
+		tenantID, string(rec), plan, ahora,
+	).Scan(&habilitado)
+	if err != nil {
+		return false, fmt.Errorf("error resolviendo funcionalidad %s: %w", rec, err)
+	}
+	return habilitado, nil
 }

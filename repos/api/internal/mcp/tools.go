@@ -21,6 +21,11 @@ const (
 	mensajeRateLimit   = "Demasiadas consultas en el último minuto. Esperá unos segundos y volvé a intentar."
 )
 
+func mensajePlanSinMCP(appURL string) string {
+	return "Tu plan actual no incluye la conexión con asistentes de IA (es exclusiva del Plan Pro). " +
+		"Podés activarlo desde Configuración → Planes en " + appURL + "/dashboard."
+}
+
 // errNegocio es un error esperable que el modelo puede leer y corregir.
 type errNegocio string
 
@@ -68,6 +73,21 @@ func ejecutar[Out any](ctx context.Context, h *herramientas, nombre string, f fu
 	if h.limitador != nil && !h.limitador.Permitir(h.claims.UsuarioID) {
 		var cero Out
 		return nil, cero, errNegocio(mensajeRateLimit)
+	}
+	if h.deps.Acceso == nil {
+		var cero Out
+		slog.ErrorContext(ctx, "mcp sin verificador de plan configurado", "tool", nombre)
+		return nil, cero, errors.New(mensajeInterno)
+	}
+	incluido, err := h.deps.Acceso.AccesoMCP(ctx, h.claims.TenantID)
+	if err != nil {
+		var cero Out
+		slog.ErrorContext(ctx, "error verificando plan para mcp", "tool", nombre, "tenant_id", h.claims.TenantID, "error", err)
+		return nil, cero, errors.New(mensajeInterno)
+	}
+	if !incluido {
+		var cero Out
+		return nil, cero, errNegocio(mensajePlanSinMCP(h.deps.AppURL))
 	}
 	salida, resumen, err := f()
 	slog.InfoContext(ctx, "mcp tool",

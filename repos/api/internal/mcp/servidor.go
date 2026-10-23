@@ -23,9 +23,17 @@ type MetricasLector interface {
 	ObtenerResumen(ctx context.Context, tenantID, sucursalID, desdeRaw, hastaRaw string) (*metrica.Resumen, error)
 }
 
+// AccesoPlan resuelve si el plan (o una excepción) del negocio incluye MCP.
+// Se consulta en cada tool: un token vigente no sobrevive a una prueba vencida.
+type AccesoPlan interface {
+	AccesoMCP(ctx context.Context, tenantID string) (bool, error)
+}
+
 type Dependencias struct {
 	Store    Store
 	Metricas MetricasLector
+	Acceso   AccesoPlan
+	AppURL   string
 	Ahora    func() time.Time
 }
 
@@ -85,5 +93,33 @@ func construirServidor(claims *auth.Claims, deps Dependencias, limitador *rateli
 	servidor := sdk.NewServer(&sdk.Implementation{Name: "fudd", Version: "1.0.0"}, &sdk.ServerOptions{Instructions: instrucciones})
 	h := &herramientas{deps: deps, claims: claims, limitador: limitador}
 	h.registrar(servidor)
+	servidor.AddReceivingMiddleware(estructurarPlanSinMCP(deps.AppURL))
 	return servidor
+}
+
+// estructurarPlanSinMCP agrega structured content al error de plan sin MCP. El wrapper
+// tipado del SDK pisa StructuredContent con la salida del handler, así que solo se
+// puede completar después, sobre el resultado de tools/call.
+func estructurarPlanSinMCP(appURL string) sdk.Middleware {
+	mensaje := mensajePlanSinMCP(appURL)
+	return func(next sdk.MethodHandler) sdk.MethodHandler {
+		return func(ctx context.Context, method string, req sdk.Request) (sdk.Result, error) {
+			res, err := next(ctx, method, req)
+			if err != nil || method != "tools/call" {
+				return res, err
+			}
+			llamada, ok := res.(*sdk.CallToolResult)
+			if !ok || !llamada.IsError || len(llamada.Content) == 0 {
+				return res, err
+			}
+			if texto, ok := llamada.Content[0].(*sdk.TextContent); ok && texto.Text == mensaje {
+				llamada.StructuredContent = map[string]string{
+					"codigo":      "PLAN_LIMIT_REACHED",
+					"recurso":     "mcp",
+					"upgrade_url": appURL + "/dashboard",
+				}
+			}
+			return res, err
+		}
+	}
 }

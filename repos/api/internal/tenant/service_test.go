@@ -37,6 +37,7 @@ type mockStore struct {
 	obtenerEstadoCuotasFn       func(ctx context.Context, tenantID string) (*tenant.EstadoCuotas, error)
 	registrarSolicitudUpgradeFn func(ctx context.Context, tenantID, nota string) (*tenant.Tenant, error)
 	slugEnUsoFn                 func(ctx context.Context, slug string) (bool, error)
+	funcionalidadHabilitadaFn   func(ctx context.Context, tenantID string, rec tenant.Recurso, plan string, ahora time.Time) (bool, error)
 }
 
 func (m *mockStore) Crear(ctx context.Context, input tenant.OnboardingInput) (*tenant.Tenant, error) {
@@ -71,6 +72,13 @@ func (m *mockStore) RegistrarSolicitudUpgrade(ctx context.Context, tenantID, not
 		return m.registrarSolicitudUpgradeFn(ctx, tenantID, nota)
 	}
 	return nil, nil
+}
+
+func (m *mockStore) FuncionalidadHabilitada(ctx context.Context, tenantID string, rec tenant.Recurso, plan string, ahora time.Time) (bool, error) {
+	if m.funcionalidadHabilitadaFn != nil {
+		return m.funcionalidadHabilitadaFn(ctx, tenantID, rec, plan, ahora)
+	}
+	return plan == tenant.PlanPro, nil
 }
 
 func TestCrear_Exitoso(t *testing.T) {

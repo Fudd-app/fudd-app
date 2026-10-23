@@ -54,6 +54,18 @@ func (s *storeFalso) ComensalesAtendidos(context.Context, string, string, time.T
 	return s.comensales, nil
 }
 
+// accesoFalso decide el acceso a MCP por tenant; por defecto lo permite.
+type accesoFalso struct {
+	denegados map[string]bool
+	err       error
+}
+
+func (a *accesoFalso) AccesoMCP(_ context.Context, tenantID string) (bool, error) {
+	return !a.denegados[tenantID], a.err
+}
+
+func permiteTodo() *accesoFalso { return &accesoFalso{} }
+
 type metricasFalsas struct{ desde, hasta string }
 
 func (m *metricasFalsas) ObtenerResumen(_ context.Context, _, _, desde, hasta string) (*metrica.Resumen, error) {
@@ -104,6 +116,7 @@ func nuevoHandlerDePrueba(t *testing.T, st *storeFalso) http.Handler {
 	return nuevoHandler(authDePrueba, Dependencias{
 		Store:    st,
 		Metricas: &metricasFalsas{},
+		Acceso:   permiteTodo(),
 		Ahora:    func() time.Time { return time.Date(2026, 10, 22, 15, 30, 0, 0, time.UTC) },
 	})
 }
@@ -176,7 +189,7 @@ func TestHandlerDeshabilitadoDevuelve404(t *testing.T) {
 
 func TestHandlerSinTokenDevuelve401(t *testing.T) {
 	t.Setenv("MCP_HABILITADO", "true")
-	svc := oauth.NuevoService(nil, nil, nil, oauth.Config{Issuer: "https://mcp.test", Resource: "https://mcp.test/mcp"})
+	svc := oauth.NuevoService(nil, nil, nil, nil, oauth.Config{Issuer: "https://mcp.test", Resource: "https://mcp.test/mcp"})
 	h := NuevoHandler(svc, Dependencias{Store: nuevoStoreFalso()})
 	r := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader("{}"))
 	rec := httptest.NewRecorder()
@@ -255,6 +268,37 @@ func TestRateLimitDeToolsEsLegibleParaElModelo(t *testing.T) {
 	}
 }
 
+func TestToolsSinAccesoAMCP(t *testing.T) {
+	t.Setenv("MCP_HABILITADO", "true")
+	acceso := &accesoFalso{denegados: map[string]bool{"t-a": true}}
+	h := nuevoHandler(authDePrueba, Dependencias{
+		Store: nuevoStoreFalso(), Metricas: &metricasFalsas{}, Acceso: acceso, AppURL: "https://app.test",
+	})
+
+	esperado := "Tu plan actual no incluye la conexión con asistentes de IA (es exclusiva del Plan Pro). " +
+		"Podés activarlo desde Configuración → Planes en https://app.test/dashboard."
+	for _, tool := range []string{"listar_sucursales", "estado_salon", "estado_cocina", "resumen_turno"} {
+		resp := llamarTool(t, h, "t-a", tool, nil)
+		if !resp.Result.IsError || len(resp.Result.Content) == 0 || resp.Result.Content[0].Text != esperado {
+			t.Errorf("%s sin acceso: %+v", tool, resp.Result)
+		}
+		var estructurado map[string]any
+		_ = json.Unmarshal(resp.Result.StructuredContent, &estructurado)
+		if estructurado["codigo"] != "PLAN_LIMIT_REACHED" || estructurado["recurso"] != "mcp" || estructurado["upgrade_url"] != "https://app.test/dashboard" {
+			t.Errorf("%s sin acceso, structuredContent: %+v", tool, resp.Result.StructuredContent)
+		}
+	}
+	if resp := llamarTool(t, h, "t-b", "listar_sucursales", nil); resp.Result.IsError {
+		t.Errorf("otro tenant con acceso: %+v", resp.Result)
+	}
+
+	acceso.err = errors.New("db caída")
+	resp := llamarTool(t, h, "t-b", "listar_sucursales", nil)
+	if !resp.Result.IsError || len(resp.Result.Content) == 0 || resp.Result.Content[0].Text != mensajeInterno {
+		t.Errorf("error de DB debe ser interno, no sin acceso: %+v", resp.Result)
+	}
+}
+
 func TestResolverSucursal(t *testing.T) {
 	h := &herramientas{deps: Dependencias{Store: nuevoStoreFalso()}}
 	ctx := context.Background()
@@ -284,7 +328,7 @@ func TestToolsCallConDatos(t *testing.T) {
 	metricas := &metricasFalsas{}
 	t.Setenv("MCP_HABILITADO", "true")
 	h := nuevoHandler(authDePrueba, Dependencias{
-		Store: st, Metricas: metricas,
+		Store: st, Metricas: metricas, Acceso: permiteTodo(),
 		Ahora: func() time.Time { return time.Date(2026, 10, 22, 15, 30, 0, 0, time.UTC) },
 	})
 

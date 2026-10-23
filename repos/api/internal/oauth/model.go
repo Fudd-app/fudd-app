@@ -71,6 +71,7 @@ var (
 	ErrScopeInvalido         = errors.New("scope inválido")
 	ErrSolicitudNoEncontrada = errors.New("solicitud no encontrada")
 	ErrSoloDuenio            = errors.New("solo el dueño puede conectar asistentes de IA")
+	ErrPlanSinMCP            = errors.New("la conexión con asistentes de IA no está incluida en el plan")
 	ErrGrantInvalido         = errors.New("invalid_grant")
 	ErrConexionNoEncontrada  = errors.New("conexión no encontrada")
 	ErrTokenInvalido         = errors.New("token inválido")

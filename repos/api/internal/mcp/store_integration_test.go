@@ -262,6 +262,7 @@ func TestIntegration_ToolsAisladasPorTenant(t *testing.T) {
 	h := nuevoHandler(authDePrueba, Dependencias{
 		Store:    NuevoStore(),
 		Metricas: metrica.NuevoService(metrica.NuevoStore()),
+		Acceso:   permiteTodo(),
 		Ahora:    func() time.Time { return f.Ahora },
 	})
 
