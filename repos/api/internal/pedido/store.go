@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/db"
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/evento"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -52,6 +53,11 @@ func (s *pgStore) Crear(ctx context.Context, input NuevoPedidoInput, sucursalID 
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
+
+	// Serializa los pedidos de una misma mesa para que "cuenta_abierta" se registre una sola vez.
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM mesas WHERE id = $1 FOR NO KEY UPDATE`, input.MesaID); err != nil {
+		return nil, fmt.Errorf("error bloqueando mesa: %w", err)
+	}
 
 	p := &Pedido{}
 	err = tx.QueryRow(ctx,
@@ -170,6 +176,31 @@ func (s *pgStore) Crear(ctx context.Context, input NuevoPedidoInput, sucursalID 
 			Estado:         "pendiente",
 			Variantes:      itemVariantes,
 		})
+	}
+
+	var hayPedidosPrevios bool
+	err = tx.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM pedidos WHERE mesa_id = $1 AND cuenta_version = $2 AND id <> $3)`,
+		p.MesaID, p.CuentaVersion, p.ID,
+	).Scan(&hayPedidosPrevios)
+	if err != nil {
+		return nil, fmt.Errorf("error verificando pedidos previos de la cuenta: %w", err)
+	}
+
+	hito := evento.Nuevo{
+		SucursalID: p.SucursalID, MesaID: p.MesaID, CuentaVersion: p.CuentaVersion,
+		PedidoID: p.ID, EstadoNuevo: p.Estado, Actor: evento.ActorDesdeContexto(ctx, nil),
+		Detalle: map[string]any{"origen": p.Origen, "items": len(p.Items)},
+	}
+	if !hayPedidosPrevios {
+		hito.Tipo = evento.TipoCuentaAbierta
+		if err := evento.Registrar(ctx, tx, hito); err != nil {
+			return nil, err
+		}
+	}
+	hito.Tipo = evento.TipoPedidoCreado
+	if err := evento.Registrar(ctx, tx, hito); err != nil {
+		return nil, err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -328,8 +359,30 @@ func (s *pgStore) cargarItemsDePedidos(ctx context.Context, pedidos []Pedido) er
 }
 
 func (s *pgStore) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado string) (*Pedido, error) {
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error iniciando cambio de estado: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var estadoAnterior string
+	err = tx.QueryRow(ctx,
+		`SELECT estado FROM pedidos
+		 WHERE id = $1
+		   AND sucursal_id IN (SELECT id FROM sucursales WHERE tenant_id = $2)
+		   AND ($3 = '' OR sucursal_id = $3::uuid)
+		 FOR NO KEY UPDATE`,
+		id, tenantID, sucursalAlcance,
+	).Scan(&estadoAnterior)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("error obteniendo estado del pedido: %w", err)
+	}
+
 	p := &Pedido{}
-	err := db.Pool.QueryRow(ctx,
+	err = tx.QueryRow(ctx,
 		`UPDATE pedidos
 		 SET estado = $1,
 		     updated_at = now(),
@@ -339,16 +392,25 @@ func (s *pgStore) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcan
 		       ELSE listo_at
 		     END
 		 WHERE id = $2
-		   AND sucursal_id IN (SELECT id FROM sucursales WHERE tenant_id = $3)
-		   AND ($4 = '' OR sucursal_id = $4::uuid)
 		 RETURNING id, mesa_id, sucursal_id, cuenta_version, estado, origen, creado_por_usuario_id, creado_por_nombre, created_at, updated_at`,
-		nuevoEstado, id, tenantID, sucursalAlcance,
+		nuevoEstado, id,
 	).Scan(&p.ID, &p.MesaID, &p.SucursalID, &p.CuentaVersion, &p.Estado, &p.Origen, &p.CreadoPorUsuarioID, &p.CreadoPorNombre, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
-		}
 		return nil, fmt.Errorf("error cambiando estado del pedido: %w", err)
+	}
+
+	if estadoAnterior != nuevoEstado {
+		if err := evento.Registrar(ctx, tx, evento.Nuevo{
+			SucursalID: p.SucursalID, MesaID: p.MesaID, CuentaVersion: p.CuentaVersion, PedidoID: p.ID,
+			Tipo: evento.TipoPedidoEstado, EstadoAnterior: estadoAnterior, EstadoNuevo: nuevoEstado,
+			Actor: evento.ActorDesdeContexto(ctx, nil),
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("error confirmando cambio de estado: %w", err)
 	}
 	return p, nil
 }
@@ -360,16 +422,17 @@ func (s *pgStore) CambiarEstadoItem(ctx context.Context, itemID, tenantID, sucur
 	}
 	defer tx.Rollback(ctx)
 
-	var pedidoID, estadoPedido string
+	var pedidoID, estadoPedido, estadoItemAnterior, sucursalID, mesaID string
+	var cuentaVersion int
 	err = tx.QueryRow(ctx,
-		`SELECT p.id, p.estado
+		`SELECT p.id, p.estado, pi.estado, p.sucursal_id, p.mesa_id, p.cuenta_version
 		 FROM pedido_items pi
 		 JOIN pedidos p ON p.id = pi.pedido_id
 		 JOIN sucursales su ON su.id = p.sucursal_id
 		 WHERE pi.id = $1 AND su.tenant_id = $2 AND ($3 = '' OR p.sucursal_id = $3::uuid)
-		 FOR UPDATE OF p`,
+		 FOR NO KEY UPDATE OF p`,
 		itemID, tenantID, sucursalAlcance,
-	).Scan(&pedidoID, &estadoPedido)
+	).Scan(&pedidoID, &estadoPedido, &estadoItemAnterior, &sucursalID, &mesaID, &cuentaVersion)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -404,6 +467,17 @@ func (s *pgStore) CambiarEstadoItem(ctx context.Context, itemID, tenantID, sucur
 		return nil, fmt.Errorf("error calculando estado agregado del pedido: %w", err)
 	}
 
+	actor := evento.ActorDesdeContexto(ctx, nil)
+	if estadoItemAnterior != nuevoEstado {
+		if err := evento.Registrar(ctx, tx, evento.Nuevo{
+			SucursalID: sucursalID, MesaID: mesaID, CuentaVersion: cuentaVersion,
+			PedidoID: pedidoID, PedidoItemID: itemID,
+			Tipo: evento.TipoItemEstado, EstadoAnterior: estadoItemAnterior, EstadoNuevo: nuevoEstado, Actor: actor,
+		}); err != nil {
+			return nil, err
+		}
+	}
+
 	estadoAgregado := resolverEstadoPedido(total, listos, iniciados)
 	_, err = tx.Exec(ctx,
 		`UPDATE pedidos
@@ -418,6 +492,16 @@ func (s *pgStore) CambiarEstadoItem(ctx context.Context, itemID, tenantID, sucur
 	)
 	if err != nil {
 		return nil, fmt.Errorf("error actualizando estado agregado del pedido: %w", err)
+	}
+
+	if estadoPedido != estadoAgregado {
+		if err := evento.Registrar(ctx, tx, evento.Nuevo{
+			SucursalID: sucursalID, MesaID: mesaID, CuentaVersion: cuentaVersion, PedidoID: pedidoID,
+			Tipo: evento.TipoPedidoEstado, EstadoAnterior: estadoPedido, EstadoNuevo: estadoAgregado, Actor: actor,
+			Detalle: map[string]any{"origen": "item", "pedido_item_id": itemID},
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {

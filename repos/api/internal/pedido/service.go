@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/evento"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/notificacion"
 )
 
@@ -23,6 +24,7 @@ func (svc *Service) Crear(ctx context.Context, input NuevoPedidoInput) (*Pedido,
 	input.Origen = "comensal"
 	input.CreadoPorUsuarioID = ""
 	input.CreadoPorNombre = ""
+	ctx = evento.ContextoConActor(ctx, evento.Comensal(primerNombreComensal(input.Items)))
 	return svc.crear(ctx, input)
 }
 
@@ -50,10 +52,20 @@ func (svc *Service) CrearAsistido(ctx context.Context, actor *auth.Claims, input
 			input.Items[i].ComensalNombre = alias
 		}
 	}
+	ctx = evento.ContextoConActor(ctx, evento.Actor{Tipo: evento.ActorUsuario, UsuarioID: actor.UsuarioID, Rol: actor.Rol})
 	return svc.crear(ctx, NuevoPedidoInput{
 		MesaID: input.MesaID, Items: input.Items, Origen: "mozo",
 		CreadoPorUsuarioID: actor.UsuarioID, CreadoPorNombre: aliasCreador(actor),
 	})
+}
+
+func primerNombreComensal(items []NuevoItemInput) string {
+	for _, it := range items {
+		if nombre := strings.TrimSpace(it.ComensalNombre); nombre != "" {
+			return nombre
+		}
+	}
+	return ""
 }
 
 func aliasCreador(actor *auth.Claims) string {
