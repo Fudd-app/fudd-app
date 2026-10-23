@@ -2,6 +2,7 @@ package oauth
 
 import (
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -76,3 +77,13 @@ var (
 	ErrConexionNoEncontrada  = errors.New("conexión no encontrada")
 	ErrTokenInvalido         = errors.New("token inválido")
 )
+
+// grantInvalido y tokenInvalido envuelven el error base con el motivo concreto:
+// errors.Is sigue funcionando y el log recibe el detalle. El cliente nunca lo ve.
+func grantInvalido(motivo string) error {
+	return fmt.Errorf("%w: %s", ErrGrantInvalido, motivo)
+}
+
+func tokenInvalido(motivo string) error {
+	return fmt.Errorf("%w: %s", ErrTokenInvalido, motivo)
+}

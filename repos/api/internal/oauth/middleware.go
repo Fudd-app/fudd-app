@@ -23,6 +23,14 @@ func RequerirTokenMCP(svc *Service) func(http.Handler) http.Handler {
 				token = strings.TrimSpace(token)
 			}
 			if token == "" {
+				switch {
+				case cabecera == "":
+					logRechazo(r, "mcp", "falta el header Authorization")
+				case len(cabecera) < 7 || !strings.EqualFold(cabecera[:7], "bearer "):
+					logRechazo(r, "mcp", "esquema de Authorization distinto de Bearer")
+				default:
+					logRechazo(r, "mcp", "token Bearer vacío")
+				}
 				w.Header().Set("WWW-Authenticate", desafio)
 				jsonError(w, "invalid_token", http.StatusUnauthorized)
 				return
@@ -35,6 +43,7 @@ func RequerirTokenMCP(svc *Service) func(http.Handler) http.Handler {
 					jsonError(w, "server_error", http.StatusInternalServerError)
 					return
 				}
+				logRechazo(r, "mcp", err.Error())
 				w.Header().Set("WWW-Authenticate", desafio+`, error="invalid_token"`)
 				jsonError(w, "invalid_token", http.StatusUnauthorized)
 				return

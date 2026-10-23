@@ -139,7 +139,7 @@ func (m *memStore) CanjearCodigo(_ context.Context, codigoHash string) (*Solicit
 			return &cp, nil
 		}
 	}
-	return nil, ErrGrantInvalido
+	return nil, grantInvalido("código inexistente, vencido o ya usado")
 }
 
 func (m *memStore) CrearConexion(_ context.Context, c *Conexion, r RefreshToken) error {
@@ -179,18 +179,18 @@ func (m *memStore) RotarRefresh(_ context.Context, viejoHash string, nuevo Refre
 	defer m.mu.Unlock()
 	r, ok := m.refresh[viejoHash]
 	if !ok {
-		return nil, ErrGrantInvalido
+		return nil, grantInvalido("refresh token inexistente")
 	}
 	if r.UsadoAt != nil {
 		m.revocar(r.ConexionID)
-		return nil, ErrGrantInvalido
+		return nil, grantInvalido("refresh token ya usado: reuso detectado, conexión revocada")
 	}
 	if !r.ExpiraAt.After(m.reloj.Ahora()) {
-		return nil, ErrGrantInvalido
+		return nil, grantInvalido("refresh token vencido")
 	}
 	c := m.conexiones[r.ConexionID]
 	if c.RevocadaAt != nil {
-		return nil, ErrGrantInvalido
+		return nil, grantInvalido("la conexión del refresh token está revocada")
 	}
 	ahora := m.reloj.Ahora()
 	r.UsadoAt = &ahora
@@ -365,6 +365,17 @@ func (e *entorno) aprobada(t *testing.T, clientID string) string {
 	}
 	u, _ := url.Parse(redir)
 	return u.Query().Get("code")
+}
+
+// canjear aprueba y canjea una solicitud para el cliente dado.
+func (e *entorno) canjear(t *testing.T, c *Cliente) *TokenRespuesta {
+	t.Helper()
+	code := e.aprobada(t, c.ClientID)
+	resp, err := e.svc.CanjearCodigo(context.Background(), code, verifierTest, c.ClientID, redirectTest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
 }
 
 func (e *entorno) conectar(t *testing.T) (*TokenRespuesta, string) {

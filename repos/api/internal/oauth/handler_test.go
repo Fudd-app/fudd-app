@@ -1,13 +1,16 @@
 package oauth
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
 )
@@ -271,6 +274,247 @@ func TestHandlers_Token(t *testing.T) {
 	rec = post(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {m["refresh_token"].(string)}, "client_id": {c.ClientID}})
 	if rec.Code != 200 {
 		t.Errorf("refresh: %d %s", rec.Code, rec.Body)
+	}
+}
+
+// capturarLogs redirige slog.Default a un buffer durante el test.
+func capturarLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	buf := &bytes.Buffer{}
+	previo := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(previo) })
+	return buf
+}
+
+func TestHandlers_Token_LogueaMotivoDeInvalidGrant(t *testing.T) {
+	canje := func(code, verifier, clientID, redirect string) url.Values {
+		return url.Values{"grant_type": {"authorization_code"}, "code": {code}, "code_verifier": {verifier}, "client_id": {clientID}, "redirect_uri": {redirect}}
+	}
+	// Cada caso devuelve el form a enviar y los secretos que no pueden aparecer en el log.
+	casos := []struct {
+		nombre string
+		motivo string
+		f      func(t *testing.T, e *entorno, cl *Cliente) (url.Values, []string)
+	}{
+		{"código inexistente", "código inexistente, vencido o ya usado", func(t *testing.T, e *entorno, cl *Cliente) (url.Values, []string) {
+			return canje("codigo-que-no-existe", verifierTest, cl.ClientID, redirectTest), []string{"codigo-que-no-existe"}
+		}},
+		{"código vencido", "código inexistente, vencido o ya usado", func(t *testing.T, e *entorno, cl *Cliente) (url.Values, []string) {
+			code := e.aprobada(t, cl.ClientID)
+			e.reloj.Avanzar(61 * time.Second)
+			return canje(code, verifierTest, cl.ClientID, redirectTest), []string{code}
+		}},
+		{"código ya usado", "código inexistente, vencido o ya usado", func(t *testing.T, e *entorno, cl *Cliente) (url.Values, []string) {
+			code := e.aprobada(t, cl.ClientID)
+			if _, err := e.svc.CanjearCodigo(context.Background(), code, verifierTest, cl.ClientID, redirectTest); err != nil {
+				t.Fatal(err)
+			}
+			return canje(code, verifierTest, cl.ClientID, redirectTest), []string{code}
+		}},
+		{"client_id distinto", "client_id distinto del que inició la solicitud", func(t *testing.T, e *entorno, cl *Cliente) (url.Values, []string) {
+			code := e.aprobada(t, cl.ClientID)
+			return canje(code, verifierTest, "mcp_otro", redirectTest), []string{code}
+		}},
+		{"redirect_uri distinto", "redirect_uri distinto del de la solicitud", func(t *testing.T, e *entorno, cl *Cliente) (url.Values, []string) {
+			code := e.aprobada(t, cl.ClientID)
+			return canje(code, verifierTest, cl.ClientID, "https://otro.com/cb"), []string{code}
+		}},
+		{"PKCE no coincide", "PKCE: el code_verifier no coincide con el code_challenge", func(t *testing.T, e *entorno, cl *Cliente) (url.Values, []string) {
+			code := e.aprobada(t, cl.ClientID)
+			malo := strings.Repeat("x", 50)
+			return canje(code, malo, cl.ClientID, redirectTest), []string{code, malo, desafioTest()}
+		}},
+		{"usuario inactivo", "usuario inactivo o no dueño", func(t *testing.T, e *entorno, cl *Cliente) (url.Values, []string) {
+			code := e.aprobada(t, cl.ClientID)
+			e.usuarios.modificar("u-duenio", func(u *auth.UsuarioAuth) { u.Estado = "bloqueado" })
+			return canje(code, verifierTest, cl.ClientID, redirectTest), []string{code}
+		}},
+		{"refresh inexistente", "refresh token inexistente", func(t *testing.T, e *entorno, cl *Cliente) (url.Values, []string) {
+			return url.Values{"grant_type": {"refresh_token"}, "refresh_token": {"refresh-que-no-existe"}, "client_id": {cl.ClientID}}, []string{"refresh-que-no-existe"}
+		}},
+		{"refresh vencido", "refresh token vencido", func(t *testing.T, e *entorno, cl *Cliente) (url.Values, []string) {
+			resp := e.canjear(t, cl)
+			e.reloj.Avanzar(DuracionRefresh + time.Second)
+			return url.Values{"grant_type": {"refresh_token"}, "refresh_token": {resp.RefreshToken}, "client_id": {cl.ClientID}}, []string{resp.RefreshToken, resp.AccessToken}
+		}},
+		{"refresh reusado", "reuso detectado, conexión revocada", func(t *testing.T, e *entorno, cl *Cliente) (url.Values, []string) {
+			resp := e.canjear(t, cl)
+			if _, err := e.svc.Refrescar(context.Background(), resp.RefreshToken, cl.ClientID); err != nil {
+				t.Fatal(err)
+			}
+			return url.Values{"grant_type": {"refresh_token"}, "refresh_token": {resp.RefreshToken}, "client_id": {cl.ClientID}}, []string{resp.RefreshToken, resp.AccessToken}
+		}},
+		{"refresh con client_id distinto", "client_id distinto del de la conexión", func(t *testing.T, e *entorno, cl *Cliente) (url.Values, []string) {
+			resp := e.canjear(t, cl)
+			return url.Values{"grant_type": {"refresh_token"}, "refresh_token": {resp.RefreshToken}, "client_id": {"mcp_otro"}}, []string{resp.RefreshToken}
+		}},
+		{"session_version cambiada", "session_version cambió", func(t *testing.T, e *entorno, cl *Cliente) (url.Values, []string) {
+			resp := e.canjear(t, cl)
+			e.usuarios.modificar("u-duenio", func(u *auth.UsuarioAuth) { u.SessionVersion++ })
+			return url.Values{"grant_type": {"refresh_token"}, "refresh_token": {resp.RefreshToken}, "client_id": {cl.ClientID}}, []string{resp.RefreshToken, resp.AccessToken}
+		}},
+	}
+	for _, c := range casos {
+		t.Run(c.nombre, func(t *testing.T) {
+			e, h := nuevoHandlers(t)
+			cl := e.registrar(t)
+			form, secretos := c.f(t, e, cl)
+			logs := capturarLogs(t)
+
+			rec := httptest.NewRecorder()
+			h.Token(rec, peticionForm("POST", "/oauth/token", form))
+			if rec.Code != 400 || strings.TrimSpace(rec.Body.String()) != `{"error":"invalid_grant"}` {
+				t.Fatalf("respuesta: %d %s", rec.Code, rec.Body)
+			}
+			out := logs.String()
+			if !strings.Contains(out, "oauth rechazo") || !strings.Contains(out, "endpoint=token") || !strings.Contains(out, c.motivo) {
+				t.Errorf("falta el motivo %q en el log: %s", c.motivo, out)
+			}
+			for _, s := range append(secretos, verifierTest, desafioTest()) {
+				if strings.Contains(out, s) {
+					t.Errorf("el log contiene un secreto (%.12s...): %s", s, out)
+				}
+			}
+		})
+	}
+}
+
+func TestHandlers_Token_LogueaEmisionSinSecretos(t *testing.T) {
+	e, h := nuevoHandlers(t)
+	cl := e.registrar(t)
+	code := e.aprobada(t, cl.ClientID)
+	logs := capturarLogs(t)
+
+	rec := httptest.NewRecorder()
+	h.Token(rec, peticionForm("POST", "/oauth/token", url.Values{"grant_type": {"authorization_code"}, "code": {code},
+		"code_verifier": {verifierTest}, "client_id": {cl.ClientID}, "redirect_uri": {redirectTest}}))
+	if rec.Code != 200 {
+		t.Fatalf("canje: %d %s", rec.Code, rec.Body)
+	}
+	m := decodificar(t, rec)
+	out := logs.String()
+	if !strings.Contains(out, "oauth token") || !strings.Contains(out, "grant_type=authorization_code") || !strings.Contains(out, "client_name=Claude") {
+		t.Errorf("falta el log de emisión: %s", out)
+	}
+	for _, s := range []string{code, verifierTest, desafioTest(), m["access_token"].(string), m["refresh_token"].(string)} {
+		if strings.Contains(out, s) {
+			t.Errorf("el log contiene un secreto (%.12s...): %s", s, out)
+		}
+	}
+}
+
+func TestHandlers_Token_ClientIDPorBasicAuth(t *testing.T) {
+	e, h := nuevoHandlers(t)
+	cl := e.registrar(t)
+	code := e.aprobada(t, cl.ClientID)
+
+	form := url.Values{"grant_type": {"authorization_code"}, "code": {code}, "code_verifier": {verifierTest}, "redirect_uri": {redirectTest}}
+	r := peticionForm("POST", "/oauth/token", form)
+	r.SetBasicAuth(url.QueryEscape(cl.ClientID), "ignorada")
+	rec := httptest.NewRecorder()
+	h.Token(rec, r)
+	if rec.Code != 200 {
+		t.Fatalf("client_id por Basic: %d %s", rec.Code, rec.Body)
+	}
+
+	// Refresh con Basic cuyo usuario viene codificado (RFC 6749 §2.3.1).
+	refresh := decodificar(t, rec)["refresh_token"].(string)
+	r = peticionForm("POST", "/oauth/token", url.Values{"grant_type": {"refresh_token"}, "refresh_token": {refresh}})
+	r.SetBasicAuth(strings.ReplaceAll(cl.ClientID, "_", "%5F"), "")
+	rec = httptest.NewRecorder()
+	h.Token(rec, r)
+	if rec.Code != 200 {
+		t.Errorf("refresh con client_id codificado: %d %s", rec.Code, rec.Body)
+	}
+}
+
+func TestHandlers_Token_BasicYFormDistintosEsInvalidRequest(t *testing.T) {
+	e, h := nuevoHandlers(t)
+	cl := e.registrar(t)
+	logs := capturarLogs(t)
+
+	form := url.Values{"grant_type": {"refresh_token"}, "refresh_token": {"x"}, "client_id": {cl.ClientID}}
+	r := peticionForm("POST", "/oauth/token", form)
+	r.SetBasicAuth("mcp_otro", "")
+	rec := httptest.NewRecorder()
+	h.Token(rec, r)
+	if rec.Code != 400 || decodificar(t, rec)["error"] != "invalid_request" {
+		t.Errorf("token: %d %s", rec.Code, rec.Body)
+	}
+	if out := logs.String(); !strings.Contains(out, "distinto del de Authorization Basic") || strings.Contains(out, "refresh_token=x") {
+		t.Errorf("log: %s", out)
+	}
+
+	// Mismo valor en ambos lados no es conflicto.
+	r = peticionForm("POST", "/oauth/revoke", url.Values{"token": {"x"}, "client_id": {cl.ClientID}})
+	r.SetBasicAuth(cl.ClientID, "")
+	rec = httptest.NewRecorder()
+	h.Revocar(rec, r)
+	if rec.Code != 200 {
+		t.Errorf("revoke con Basic y form iguales: %d %s", rec.Code, rec.Body)
+	}
+	r = peticionForm("POST", "/oauth/revoke", url.Values{"token": {"x"}, "client_id": {cl.ClientID}})
+	r.SetBasicAuth("mcp_otro", "")
+	rec = httptest.NewRecorder()
+	h.Revocar(rec, r)
+	if rec.Code != 400 || decodificar(t, rec)["error"] != "invalid_request" {
+		t.Errorf("revoke con Basic y form distintos: %d %s", rec.Code, rec.Body)
+	}
+	if !strings.Contains(logs.String(), "endpoint=revoke") {
+		t.Errorf("falta el log de revoke: %s", logs)
+	}
+}
+
+func TestHandlers_LogueaRechazos(t *testing.T) {
+	e, h := nuevoHandlers(t)
+	cl := e.registrar(t)
+	logs := capturarLogs(t)
+
+	autorizar := func(mod func(*url.Values)) {
+		q := url.Values{"client_id": {cl.ClientID}, "redirect_uri": {redirectTest}, "response_type": {"code"},
+			"code_challenge": {desafioTest()}, "code_challenge_method": {"S256"}, "state": {"xyz"}, "scope": {ScopeLectura}}
+		mod(&q)
+		h.Autorizar(httptest.NewRecorder(), httptest.NewRequest("GET", "/oauth/authorize?"+q.Encode(), nil))
+	}
+	casos := []struct {
+		nombre string
+		mod    func(*url.Values)
+		motivo string
+	}{
+		{"cliente inexistente", func(q *url.Values) { q.Set("client_id", "mcp_nope") }, "client_id no registrado"},
+		{"redirect no registrado", func(q *url.Values) { q.Set("redirect_uri", "https://malo.example/cb") }, "malo.example"},
+		{"response_type", func(q *url.Values) { q.Set("response_type", "token") }, "response_type"},
+		{"sin PKCE", func(q *url.Values) { q.Del("code_challenge") }, "falta PKCE"},
+		{"método plain", func(q *url.Values) { q.Set("code_challenge_method", "plain") }, "distinto de S256"},
+		{"resource distinto", func(q *url.Values) { q.Set("resource", "https://otro.example/mcp") }, "https://otro.example/mcp"},
+		{"scope inválido", func(q *url.Values) { q.Set("scope", "escritura") }, "escritura"},
+	}
+	for _, c := range casos {
+		logs.Reset()
+		autorizar(c.mod)
+		out := logs.String()
+		if !strings.Contains(out, "oauth rechazo") || !strings.Contains(out, "endpoint=authorize") || !strings.Contains(out, c.motivo) {
+			t.Errorf("%s: log sin motivo %q: %s", c.nombre, c.motivo, out)
+		}
+		if strings.Contains(out, desafioTest()) {
+			t.Errorf("%s: el log contiene el code_challenge: %s", c.nombre, out)
+		}
+	}
+
+	logs.Reset()
+	autorizar(func(q *url.Values) { q.Set("resource", e.svc.cfg.Resource) })
+	if out := logs.String(); !strings.Contains(out, "oauth authorize") || !strings.Contains(out, "client_name=Claude") ||
+		!strings.Contains(out, "redirect_host=claude.ai") || !strings.Contains(out, "con_resource=true") {
+		t.Errorf("log del authorize OK: %s", out)
+	}
+
+	logs.Reset()
+	body := `{"client_name":"Claude","redirect_uris":["http://ejemplo.com/cb"]}`
+	r := httptest.NewRequest("POST", "/oauth/register", strings.NewReader(body))
+	h.Registrar(httptest.NewRecorder(), r)
+	if out := logs.String(); !strings.Contains(out, "endpoint=register") || !strings.Contains(out, "redirect_uris inválidas") {
+		t.Errorf("log de register: %s", out)
 	}
 }
 
