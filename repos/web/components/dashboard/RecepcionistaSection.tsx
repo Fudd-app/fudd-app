@@ -103,7 +103,7 @@ function textoAntiguedad(minutos: number | null): string {
   return minutos < 1 ? 'Recién llegó' : `Hace ${minutos} min`;
 }
 
-type MesaCardTone = 'account' | 'ready' | 'progress';
+type MesaCardTone = 'account' | 'ready' | 'progress' | 'delivered' | 'unconfirmed';
 
 const MESA_CARD_TONES: Record<MesaCardTone, {
   border: string;
@@ -132,6 +132,20 @@ const MESA_CARD_TONES: Record<MesaCardTone, {
     badge: 'border-[#CFE1FA] bg-[#EFF6FF] text-[#285F9F]',
     dot: 'bg-[#4D8EDB]',
     action: 'border-[#D6E5F8] bg-[#F7FAFF] text-[#285F9F] hover:bg-[#EDF5FF]',
+  },
+  delivered: {
+    border: 'border-[#DDE6E2]',
+    accent: 'border-l-[#5F8776]',
+    badge: 'border-[#D3E0DA] bg-[#F1F6F4] text-[#345949]',
+    dot: 'bg-[#5F8776]',
+    action: 'border-[#DDE6E2] bg-[#F8FAF9] text-[#345949] hover:bg-[#EAF1EE]',
+  },
+  unconfirmed: {
+    border: 'border-[#FAD7C8]',
+    accent: 'border-l-[#FF6A3D]',
+    badge: 'border-[#FFD0BD] bg-[#FFF3EE] text-[#C4461B]',
+    dot: 'bg-[#FF6A3D]',
+    action: 'border-[#FAD7C8] bg-[#FFF8F5] text-[#C4461B] hover:bg-[#FFEBE3]',
   },
 };
 
@@ -360,11 +374,29 @@ function MesaCard({
   );
   const cuentaSolicitada = grupo.cuentaSolicitada;
   const tienePedidosListos = grupo.pedidos.some(p => p.estado === 'listo');
-  const tone: MesaCardTone = cuentaSolicitada ? 'account' : tienePedidosListos ? 'ready' : 'progress';
+  const tienePedidosPorConfirmar = grupo.pedidos.some(p => p.estado === 'recibido');
+  const estadoMesa = calcularEstadoMesa(grupo.pedidos);
+  const todosEntregados = estadoMesa === 'entregado';
+
+  const tone: MesaCardTone = cuentaSolicitada
+    ? 'account'
+    : tienePedidosListos
+    ? 'ready'
+    : todosEntregados
+    ? 'delivered'
+    : tienePedidosPorConfirmar
+    ? 'unconfirmed'
+    : 'progress';
   const toneStyles = MESA_CARD_TONES[tone];
   const statusLabel = cuentaSolicitada
     ? grupo.pagoHabilitado ? 'Pago habilitado' : 'Cuenta'
-    : tienePedidosListos ? 'Listo' : 'En curso';
+    : tienePedidosListos
+    ? 'Listo'
+    : todosEntregados
+    ? 'Entregado'
+    : tienePedidosPorConfirmar
+    ? 'Por confirmar'
+    : 'En preparación';
   const ultimaHora = grupo.pedidos[grupo.pedidos.length - 1]?.timestamp;
   const comensales = new Set(
     grupo.pedidos.flatMap(pedido => pedido.items.map(item => item.comensalId).filter(Boolean)),
@@ -455,6 +487,14 @@ function PedidosSectionHeader({
     progress: {
       icon: 'bg-[#EAF3FF] text-[#2D6FB7]',
       badge: 'bg-[#EAF3FF] text-[#285F9F]',
+    },
+    delivered: {
+      icon: 'bg-[#EBF2EE] text-[#345949]',
+      badge: 'bg-[#EBF2EE] text-[#345949]',
+    },
+    unconfirmed: {
+      icon: 'bg-[#FFF3EE] text-[#C4461B]',
+      badge: 'bg-[#FFF3EE] text-[#C4461B]',
     },
   }[tone];
 
@@ -1199,8 +1239,9 @@ export default function RecepcionistaSection() {
     [pedidos],
   );
   const listosParaRetirar = pedidos.filter(p => p.estado === 'listo');
-  const enCurso = mesasAgrupadas.filter(
-    grupo => !grupo.cuentaSolicitada && grupo.pedidos.some(p => p.estado === 'confirmado' || p.estado === 'preparando')
+  const mesasEnSalon = useMemo(
+    () => mesasAgrupadas.filter(grupo => !grupo.cuentaSolicitada).sort((a, b) => a.mesa - b.mesa),
+    [mesasAgrupadas],
   );
   const abrirMesaDePedido = (pedido: PedidoVista) => setMesaDetalleKey(pedido.mesaId || `mesa-${pedido.mesa}`);
 
@@ -1336,20 +1377,20 @@ export default function RecepcionistaSection() {
         </section>
       )}
 
-      {/* 3. PEDIDOS EN CURSO / PREPARACIÓN */}
-      {!loading && enCurso.length > 0 && (
-        <section className="space-y-12" aria-labelledby="pedidos-preparacion-title">
-          <div id="pedidos-preparacion-title">
+      {/* 3. MESAS EN SALÓN */}
+      {!loading && mesasEnSalon.length > 0 && (
+        <section className="space-y-12" aria-labelledby="mesas-salon-title">
+          <div id="mesas-salon-title">
             <PedidosSectionHeader
               tone="progress"
-              icon="schedule"
-              title="En preparación"
-              subtitle="Pedidos activos en cocina"
-              count={enCurso.length}
+              icon="table_bar"
+              title="Mesas en salón"
+              subtitle="Mesas activas con pedidos en curso o entregados"
+              count={mesasEnSalon.length}
             />
           </div>
           <div className="grid grid-cols-1 gap-14 md:grid-cols-2 lg:grid-cols-3">
-            {enCurso.map(grupo => (
+            {mesasEnSalon.map(grupo => (
               <MesaCard
                 key={grupo.key}
                 grupo={grupo}
