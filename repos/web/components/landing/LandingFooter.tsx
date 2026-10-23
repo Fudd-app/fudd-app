@@ -9,7 +9,7 @@ export default function LandingFooter() {
         <LandingBrand />
         <p>Tecnología simple para restaurantes que quieren brindar un mejor servicio.</p>
       </div>
-      <div><strong>Producto</strong><a href="#como-funciona">Cómo funciona</a><a href="#beneficios">Beneficios</a><a href="#planes">Planes</a><a href="#faq">Preguntas frecuentes</a></div>
+      <div><strong>Producto</strong><Link href="/#como-funciona">Cómo funciona</Link><Link href="/#beneficios">Beneficios</Link><Link href="/#planes">Planes</Link><Link href="/#faq">Preguntas frecuentes</Link><Link href="/ia">Asistentes de IA</Link></div>
       <div><strong>Compañía</strong><a href="mailto:supportmesaclick@gmail.com">Contacto</a><Link href="/terminos">Términos</Link><Link href="/privacidad">Privacidad</Link></div>
       <div className="footer-status"><span><i /> Todos los sistemas operativos</span><small>© 2026 fudd · IRESM</small></div>
     </footer>
