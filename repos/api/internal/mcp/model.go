@@ -312,6 +312,7 @@ type SalidaSalon struct {
 
 type ColaCocina struct {
 	Recibido   int `json:"recibido"`
+	Confirmado int `json:"confirmado"`
 	Preparando int `json:"preparando"`
 	Listo      int `json:"listo"`
 }

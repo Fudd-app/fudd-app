@@ -91,9 +91,9 @@ func (s *pgStore) EstadoSalon(ctx context.Context, tenantID, sucursalID string, 
 			       COUNT(*) FILTER (WHERE p.estado <> 'cerrado') AS activos,
 			       MIN(p.created_at) AS primero,
 			       MAX(p.created_at) AS ultimo,
-			       COUNT(*) FILTER (WHERE p.estado IN ('recibido', 'preparando')) AS en_cocina,
+			       COUNT(*) FILTER (WHERE p.estado IN ('recibido', 'confirmado', 'preparando')) AS en_cocina,
 			       COUNT(*) FILTER (WHERE p.estado = 'listo') AS listos,
-			       MIN(p.created_at) FILTER (WHERE p.estado IN ('recibido', 'preparando')) AS cocina_desde,
+			       MIN(p.created_at) FILTER (WHERE p.estado IN ('recibido', 'confirmado', 'preparando')) AS cocina_desde,
 			       MIN(p.listo_at) FILTER (WHERE p.estado = 'listo') AS listo_desde,
 			       ARRAY_AGG(DISTINCT CASE WHEN p.origen = 'mozo'
 			                               THEN COALESCE(NULLIF(p.creado_por_nombre, ''), 'Mozo')
@@ -167,7 +167,7 @@ func (s *pgStore) PedidosCocina(ctx context.Context, tenantID, sucursalID string
 		JOIN mesas m ON m.id = p.mesa_id AND p.cuenta_version = m.cuenta_version
 		LEFT JOIN pedido_items pi ON pi.pedido_id = p.id
 		WHERE su.tenant_id = $1 AND p.sucursal_id = $2
-		  AND p.estado IN ('recibido', 'preparando', 'listo')
+		  AND p.estado IN ('recibido', 'confirmado', 'preparando', 'listo')
 		GROUP BY p.id, m.numero, p.estado, p.created_at
 		ORDER BY p.created_at, p.id`, tenantID, sucursalID, ahora)
 	if err != nil {

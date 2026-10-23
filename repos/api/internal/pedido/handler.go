@@ -107,18 +107,25 @@ func (h *Handlers) CambiarEstado(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "body inválido", http.StatusBadRequest)
 		return
 	}
-	p, err := h.svc.CambiarEstado(r.Context(), id, claims.TenantID, claims.SucursalID, input.Estado)
+	p, err := h.svc.CambiarEstado(r.Context(), claims, id, input)
 	if err != nil {
-		if errors.Is(err, ErrValidation) {
+		switch {
+		case errors.Is(err, ErrValidation):
 			jsonError(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if errors.Is(err, ErrNotFound) {
+		case errors.Is(err, ErrModoEntregaInvalido):
+			jsonErrorCodigo(w, err.Error(), CodigoModoEntregaInvalido, http.StatusBadRequest)
+		case errors.Is(err, ErrSinPermiso):
+			jsonErrorCodigo(w, err.Error(), CodigoSinPermiso, http.StatusForbidden)
+		case errors.Is(err, ErrNotFound):
 			jsonError(w, "pedido no encontrado", http.StatusNotFound)
-			return
+		case errors.Is(err, ErrPedidoSinConfirmar):
+			jsonErrorCodigo(w, err.Error(), CodigoPedidoSinConfirmar, http.StatusConflict)
+		case errors.Is(err, ErrTransicionInvalida):
+			jsonErrorCodigo(w, err.Error(), CodigoTransicionInvalida, http.StatusConflict)
+		default:
+			slog.ErrorContext(r.Context(), "error cambiando estado", "error", err)
+			jsonError(w, "error interno", http.StatusInternalServerError)
 		}
-		slog.ErrorContext(r.Context(), "error cambiando estado", "error", err)
-		jsonError(w, "error interno", http.StatusInternalServerError)
 		return
 	}
 	jsonOK(w, p)
@@ -145,6 +152,10 @@ func (h *Handlers) CambiarEstadoItem(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, err.Error(), http.StatusBadRequest)
 		case errors.Is(err, ErrPedidoCerrado):
 			jsonError(w, "el pedido ya está cerrado", http.StatusConflict)
+		case errors.Is(err, ErrPedidoEntregado):
+			jsonErrorCodigo(w, "el pedido ya fue entregado", CodigoPedidoEntregado, http.StatusConflict)
+		case errors.Is(err, ErrPedidoSinConfirmar):
+			jsonErrorCodigo(w, "el pedido todavía no fue confirmado por recepción", CodigoPedidoSinConfirmar, http.StatusConflict)
 		case errors.Is(err, ErrNotFound):
 			jsonError(w, "item de pedido no encontrado", http.StatusNotFound)
 		default:
@@ -231,6 +242,12 @@ func jsonCreado(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(v)
+}
+
+func jsonErrorCodigo(w http.ResponseWriter, msg, codigo string, status int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]string{"error": msg, "codigo": codigo})
 }
 
 func jsonError(w http.ResponseWriter, msg string, status int) {

@@ -27,10 +27,12 @@ type negocioPrueba struct {
 	ArticuloID string
 }
 
+func (n negocioPrueba) claims() *auth.Claims {
+	return &auth.Claims{UsuarioID: n.AdminID, TenantID: n.TenantID, Rol: auth.RolDuenio}
+}
+
 func (n negocioPrueba) ctxAdmin() context.Context {
-	return auth.ContextConClaims(context.Background(), &auth.Claims{
-		UsuarioID: n.AdminID, TenantID: n.TenantID, Rol: auth.RolDuenio,
-	})
+	return auth.ContextConClaims(context.Background(), n.claims())
 }
 
 func crearNegocio(t *testing.T, etiqueta string) negocioPrueba {
@@ -134,11 +136,14 @@ func TestIntegration_RegistroDeHitosDeUnaCuentaCompleta(t *testing.T) {
 	}
 
 	// Cambio de estado del pedido y cocina por ítem, con el admin autenticado.
-	if _, err := pedidoSvc.CambiarEstado(admin, p1.ID, a.TenantID, "", "preparando"); err != nil {
+	if _, err := pedidoSvc.CambiarEstado(admin, a.claims(), p1.ID, pedido.CambiarEstadoInput{Estado: "confirmado"}); err != nil {
+		t.Fatalf("confirmar: %v", err)
+	}
+	if _, err := pedidoSvc.CambiarEstado(admin, a.claims(), p1.ID, pedido.CambiarEstadoInput{Estado: "preparando"}); err != nil {
 		t.Fatalf("cambiar estado: %v", err)
 	}
 	// Repetir el mismo estado no es una transición: no debe generar hito.
-	if _, err := pedidoSvc.CambiarEstado(admin, p1.ID, a.TenantID, "", "preparando"); err != nil {
+	if _, err := pedidoSvc.CambiarEstado(admin, a.claims(), p1.ID, pedido.CambiarEstadoInput{Estado: "preparando"}); err != nil {
 		t.Fatalf("cambiar estado repetido: %v", err)
 	}
 	for _, estado := range []struct{ item, estado string }{
@@ -172,7 +177,8 @@ func TestIntegration_RegistroDeHitosDeUnaCuentaCompleta(t *testing.T) {
 		{"cuenta_abierta", "", "recibido", "comensal", "Mateo", "", 1},
 		{"pedido_creado", "", "recibido", "comensal", "Mateo", "", 1},
 		{"pedido_creado", "", "recibido", "comensal", "", "", 1},
-		{"pedido_estado", "recibido", "preparando", "usuario", nombreAdmin, auth.RolDuenio, 1},
+		{"pedido_estado", "recibido", "confirmado", "usuario", nombreAdmin, auth.RolDuenio, 1},
+		{"pedido_estado", "confirmado", "preparando", "usuario", nombreAdmin, auth.RolDuenio, 1},
 		{"item_estado", "pendiente", "preparando", "usuario", nombreAdmin, auth.RolDuenio, 1},
 		{"item_estado", "preparando", "listo", "usuario", nombreAdmin, auth.RolDuenio, 1},
 		{"item_estado", "pendiente", "listo", "usuario", nombreAdmin, auth.RolDuenio, 1},
@@ -210,8 +216,8 @@ func TestIntegration_RegistroDeHitosDeUnaCuentaCompleta(t *testing.T) {
 			t.Errorf("evento %d: ts fuera de orden", i)
 		}
 	}
-	if eventos[4].PedidoItemID == nil || *eventos[4].PedidoItemID != p1.Items[0].ID {
-		t.Errorf("el hito de ítem debe referenciar el ítem: %v", eventos[4].PedidoItemID)
+	if eventos[5].PedidoItemID == nil || *eventos[5].PedidoItemID != p1.Items[0].ID {
+		t.Errorf("el hito de ítem debe referenciar el ítem: %v", eventos[5].PedidoItemID)
 	}
 
 	// Lectura por sucursal y ventana temporal.
@@ -249,7 +255,7 @@ func TestIntegration_FalloDelEventoRevierteLaOperacion(t *testing.T) {
 
 	// Un actor_tipo inválido hace fallar el insert del evento (CHECK de la tabla).
 	roto := evento.ContextoConActor(ctx, evento.Actor{Tipo: "inexistente"})
-	if _, err := pedidoSvc.CambiarEstado(roto, p.ID, a.TenantID, "", "preparando"); err == nil {
+	if _, err := pedidoSvc.CambiarEstado(roto, a.claims(), p.ID, pedido.CambiarEstadoInput{Estado: "confirmado"}); err == nil {
 		t.Fatal("se esperaba error: el evento no pudo registrarse")
 	}
 	var estado string

@@ -56,6 +56,8 @@ func (svc *Service) CrearAsistido(ctx context.Context, actor *auth.Claims, input
 	return svc.crear(ctx, NuevoPedidoInput{
 		MesaID: input.MesaID, Items: input.Items, Origen: "mozo",
 		CreadoPorUsuarioID: actor.UsuarioID, CreadoPorNombre: aliasCreador(actor),
+		// Lo carga personal que podría confirmarlo, así que nace confirmado.
+		EstadoInicial: "confirmado",
 	})
 }
 
@@ -120,7 +122,10 @@ func (svc *Service) crear(ctx context.Context, input NuevoPedidoInput) (*Pedido,
 	// Notificar en tiempo real al recepcionista de la sucursal
 	notificacion.Instancia.Publicar(fmt.Sprintf("sucursal:%s", p.SucursalID), "pedido_creado", p)
 	notificacion.Instancia.Publicar(fmt.Sprintf("mesa:%s", p.MesaID), "pedido_creado", p)
-	notificacion.Instancia.Publicar(fmt.Sprintf("kds:%s", p.SucursalID), "pedido_creado", p)
+	// Cocina solo ve pedidos confirmados; si nace "recibido" se entera por pedido_actualizado al confirmarse.
+	if p.Estado == "confirmado" {
+		notificacion.Instancia.Publicar(fmt.Sprintf("kds:%s", p.SucursalID), "pedido_creado", p)
+	}
 
 	return p, nil
 }
@@ -136,13 +141,69 @@ func (svc *Service) ListarCuentaActualPorQR(ctx context.Context, qrToken string)
 	return svc.store.ListarCuentaActualPorQR(ctx, qrToken)
 }
 
-func (svc *Service) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado string) (*Pedido, error) {
-	if !estadoValido(nuevoEstado) {
-		return nil, fmt.Errorf("estado inválido: %q (válidos: recibido, preparando, listo, cerrado): %w", nuevoEstado, ErrValidation)
+// rangoEstado ordena el flujo del pedido; solo se puede avanzar.
+var rangoEstado = map[string]int{"recibido": 0, "confirmado": 1, "preparando": 2, "listo": 3, "entregado": 4, "cerrado": 5}
+
+// puedeLlegarA indica qué roles pueden llevar un pedido al estado destino.
+// El mozo conserva preparando/listo para no romper a los clientes anteriores al flujo de confirmación.
+func puedeLlegarA(rol, destino string) bool {
+	switch destino {
+	case "confirmado", "entregado", "cerrado":
+		return rol == auth.RolDuenio || rol == auth.RolEncargado || rol == auth.RolMozo
+	case "preparando", "listo":
+		return rol == auth.RolDuenio || rol == auth.RolEncargado || rol == auth.RolMozo || rol == auth.RolCocinero
 	}
-	p, err := svc.store.CambiarEstado(ctx, id, tenantID, sucursalAlcance, nuevoEstado)
+	return false
+}
+
+// ValidarTransicion verifica que pasar de anterior a nuevo sea un avance válido del flujo.
+// Repetir el mismo estado no es una transición y se acepta sin efecto.
+func ValidarTransicion(anterior, nuevo string) error {
+	if anterior == nuevo {
+		return nil
+	}
+	if anterior == "cerrado" || nuevo == "recibido" {
+		return fmt.Errorf("no se puede pasar de %q a %q: %w", anterior, nuevo, ErrTransicionInvalida)
+	}
+	if nuevo == "cerrado" {
+		return nil
+	}
+	if rangoEstado[nuevo] <= rangoEstado[anterior] {
+		return fmt.Errorf("no se puede pasar de %q a %q: %w", anterior, nuevo, ErrTransicionInvalida)
+	}
+	if nuevo == "entregado" && anterior != "listo" {
+		return fmt.Errorf("solo un pedido listo puede pasar a entregado (estado actual %q): %w", anterior, ErrTransicionInvalida)
+	}
+	if anterior == "recibido" && (nuevo == "preparando" || nuevo == "listo") {
+		return fmt.Errorf("el pedido debe confirmarse antes de pasar a %q: %w", nuevo, ErrPedidoSinConfirmar)
+	}
+	return nil
+}
+
+func (svc *Service) CambiarEstado(ctx context.Context, actor *auth.Claims, id string, input CambiarEstadoInput) (*Pedido, error) {
+	nuevoEstado := input.Estado
+	if !estadoValido(nuevoEstado) {
+		return nil, fmt.Errorf("estado inválido: %q (válidos: %s): %w", nuevoEstado, strings.Join(EstadosValidos, ", "), ErrValidation)
+	}
+	modoEntrega := ""
+	if nuevoEstado != "entregado" && strings.TrimSpace(input.ModoEntrega) != "" {
+		return nil, fmt.Errorf("modo_entrega solo aplica al pasar a %q: %w", "entregado", ErrModoEntregaInvalido)
+	}
+	if nuevoEstado == "entregado" {
+		modoEntrega = strings.TrimSpace(input.ModoEntrega)
+		if modoEntrega != ModoEntregaMesa && modoEntrega != ModoEntregaRetiro {
+			return nil, fmt.Errorf("modo_entrega es obligatorio y debe ser %q o %q: %w", ModoEntregaMesa, ModoEntregaRetiro, ErrModoEntregaInvalido)
+		}
+	}
+	if nuevoEstado == "recibido" {
+		return nil, fmt.Errorf("un pedido no puede volver a %q: %w", nuevoEstado, ErrTransicionInvalida)
+	}
+	if actor == nil || !puedeLlegarA(actor.Rol, nuevoEstado) {
+		return nil, fmt.Errorf("el rol no puede pasar pedidos a %q: %w", nuevoEstado, ErrSinPermiso)
+	}
+	p, err := svc.store.CambiarEstado(ctx, id, actor.TenantID, actor.SucursalID, nuevoEstado, modoEntrega)
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
+		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrTransicionInvalida) || errors.Is(err, ErrPedidoSinConfirmar) {
 			return nil, err
 		}
 		return nil, fmt.Errorf("error cambiando estado: %w", err)
@@ -169,7 +230,8 @@ func (svc *Service) CambiarEstadoItem(ctx context.Context, itemID, tenantID, suc
 
 	p, err := svc.store.CambiarEstadoItem(ctx, itemID, tenantID, sucursalAlcance, nuevoEstado)
 	if err != nil {
-		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrPedidoCerrado) {
+		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrPedidoCerrado) ||
+			errors.Is(err, ErrPedidoEntregado) || errors.Is(err, ErrPedidoSinConfirmar) {
 			return nil, err
 		}
 		return nil, fmt.Errorf("error cambiando estado del item: %w", err)

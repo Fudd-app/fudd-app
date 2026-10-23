@@ -251,10 +251,12 @@ func (s *pgStore) ListarPorEstado(
 		GROUP BY p.estado
 		ORDER BY CASE p.estado
 			WHEN 'recibido' THEN 1
-			WHEN 'preparando' THEN 2
-			WHEN 'listo' THEN 3
-			WHEN 'cerrado' THEN 4
-			ELSE 5
+			WHEN 'confirmado' THEN 2
+			WHEN 'preparando' THEN 3
+			WHEN 'listo' THEN 4
+			WHEN 'entregado' THEN 5
+			WHEN 'cerrado' THEN 6
+			ELSE 7
 		END`
 
 	rows, err := db.Pool.Query(ctx, query, tenantID, sucursalID, desde, hasta)

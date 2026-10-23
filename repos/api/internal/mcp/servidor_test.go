@@ -629,6 +629,8 @@ func TestDerivarEspera(t *testing.T) {
 		{"entrega", MesaOcupada, 0, 1, nil, ptr(3), EsperaEntrega, ptr(3)},
 		{"entrega sin listo_at", MesaOcupada, 0, 1, nil, nil, EsperaEntrega, nil},
 		{"cobro gana a comida", MesaCuentaSolicitada, 1, 0, ptr(9), nil, EsperaCobro, nil},
+		{"todo entregado no espera", MesaOcupada, 0, 0, nil, nil, "", nil},
+		{"entregado con cobro", MesaCuentaSolicitada, 0, 0, nil, nil, EsperaCobro, nil},
 		{"pago habilitado", MesaPagoHabilitado, 0, 0, nil, nil, EsperaCobro, nil},
 	}
 	for _, c := range casos {

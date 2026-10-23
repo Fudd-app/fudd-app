@@ -2,6 +2,8 @@ package pedido_test
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,12 +19,22 @@ type mockStore struct {
 	estadoItemRecibido     string
 	pedidoTrasCambioDeItem *pedido.Pedido
 	sucursalPertenece      bool
+	// estadoActual simula el estado persistido del pedido (por defecto "recibido").
+	estadoActual    string
+	estadoPedido    string
+	modoEntrega     string
+	cambiosDeEstado int
+	errItem         error
 }
 
 func (m *mockStore) Crear(ctx context.Context, input pedido.NuevoPedidoInput, sucursalID string, cuentaVersion int) (*pedido.Pedido, error) {
 	m.crearInput = input
 	m.crearCtx = ctx
-	return &pedido.Pedido{ID: "p-1", MesaID: input.MesaID, CuentaVersion: cuentaVersion, Estado: "recibido"}, nil
+	estado := input.EstadoInicial
+	if estado == "" {
+		estado = "recibido"
+	}
+	return &pedido.Pedido{ID: "p-1", MesaID: input.MesaID, SucursalID: sucursalID, CuentaVersion: cuentaVersion, Estado: estado}, nil
 }
 func (m *mockStore) ListarActivos(ctx context.Context, sucursalID, tenantID string) ([]pedido.Pedido, error) {
 	return []pedido.Pedido{}, nil
@@ -30,10 +42,22 @@ func (m *mockStore) ListarActivos(ctx context.Context, sucursalID, tenantID stri
 func (m *mockStore) ListarCuentaActualPorQR(ctx context.Context, qrToken string) ([]pedido.Pedido, error) {
 	return []pedido.Pedido{}, nil
 }
-func (m *mockStore) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado string) (*pedido.Pedido, error) {
-	return &pedido.Pedido{ID: id, Estado: nuevoEstado}, nil
+func (m *mockStore) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado, modoEntrega string) (*pedido.Pedido, error) {
+	anterior := m.estadoActual
+	if anterior == "" {
+		anterior = "recibido"
+	}
+	if err := pedido.ValidarTransicion(anterior, nuevoEstado); err != nil {
+		return nil, err
+	}
+	m.cambiosDeEstado++
+	m.estadoPedido, m.modoEntrega = nuevoEstado, modoEntrega
+	return &pedido.Pedido{ID: id, MesaID: "mesa-1", SucursalID: "suc-1", Estado: nuevoEstado}, nil
 }
 func (m *mockStore) CambiarEstadoItem(ctx context.Context, itemID, tenantID, sucursalAlcance, nuevoEstado string) (*pedido.Pedido, error) {
+	if m.errItem != nil {
+		return nil, m.errItem
+	}
 	m.estadoItemRecibido = nuevoEstado
 	if m.pedidoTrasCambioDeItem != nil {
 		return m.pedidoTrasCambioDeItem, nil
@@ -155,21 +179,267 @@ func TestCrear_DosComensalesMismoNombre_ConservaIDsDistintos(t *testing.T) {
 	}
 }
 
+func actorRol(rol string) *auth.Claims {
+	return &auth.Claims{UsuarioID: "u-1", TenantID: "tenant-1", Rol: rol, SucursalID: "suc-1"}
+}
+
+// modoPara devuelve el modo_entrega que corresponde enviar para el estado destino.
+func modoPara(estado string) string {
+	if estado == "entregado" {
+		return "mesa"
+	}
+	return ""
+}
+
 func TestCambiarEstado_EstadoInvalido(t *testing.T) {
 	svc := pedido.NuevoService(&mockStore{})
-	_, err := svc.CambiarEstado(context.Background(), "p-1", "tenant-1", "", "invalido")
-	if err == nil {
-		t.Fatal("esperaba error por estado inválido")
+	_, err := svc.CambiarEstado(context.Background(), actorRol(auth.RolDuenio), "p-1", pedido.CambiarEstadoInput{Estado: "invalido"})
+	if !errors.Is(err, pedido.ErrValidation) {
+		t.Fatalf("esperaba ErrValidation por estado inválido, got %v", err)
 	}
 }
 
 func TestCambiarEstado_EstadosValidos(t *testing.T) {
-	svc := pedido.NuevoService(&mockStore{})
 	for _, estado := range pedido.EstadosValidos {
-		_, err := svc.CambiarEstado(context.Background(), "p-1", "tenant-1", "", estado)
+		if estado == "recibido" {
+			continue // no se puede volver a recibido
+		}
+		svc := pedido.NuevoService(&mockStore{estadoActual: "listo"})
+		_, err := svc.CambiarEstado(context.Background(), actorRol(auth.RolDuenio), "p-1",
+			pedido.CambiarEstadoInput{Estado: estado, ModoEntrega: modoPara(estado)})
+		if estado == "listo" {
+			// Repetir el estado actual es un no-op válido.
+			if err != nil {
+				t.Errorf("repetir %q debería aceptarse: %v", estado, err)
+			}
+			continue
+		}
+		if estado == "confirmado" || estado == "preparando" {
+			if !errors.Is(err, pedido.ErrTransicionInvalida) {
+				t.Errorf("retroceder de listo a %q debería ser inválido, got %v", estado, err)
+			}
+			continue
+		}
 		if err != nil {
 			t.Errorf("estado %q debería ser válido pero dio error: %v", estado, err)
 		}
+	}
+}
+
+func TestValidarTransicion_Matriz(t *testing.T) {
+	flujo := []string{"recibido", "confirmado", "preparando", "listo", "entregado", "cerrado"}
+	for i, desde := range flujo {
+		for j, hasta := range flujo {
+			err := pedido.ValidarTransicion(desde, hasta)
+			var esperado error
+			switch {
+			case i == j:
+				esperado = nil
+			case desde == "cerrado" || hasta == "recibido":
+				esperado = pedido.ErrTransicionInvalida
+			case hasta == "cerrado":
+				esperado = nil
+			case j < i:
+				esperado = pedido.ErrTransicionInvalida
+			case hasta == "entregado" && desde != "listo":
+				esperado = pedido.ErrTransicionInvalida
+			case desde == "recibido" && (hasta == "preparando" || hasta == "listo"):
+				esperado = pedido.ErrPedidoSinConfirmar
+			}
+			if esperado == nil && err != nil || esperado != nil && !errors.Is(err, esperado) {
+				t.Errorf("%s -> %s: got %v, want %v", desde, hasta, err, esperado)
+			}
+		}
+	}
+}
+
+func TestCambiarEstado_PermisosPorRol(t *testing.T) {
+	tests := []struct {
+		rol, desde, hasta string
+		permitido         bool
+	}{
+		{auth.RolMozo, "recibido", "confirmado", true},
+		{auth.RolEncargado, "recibido", "confirmado", true},
+		{auth.RolDuenio, "recibido", "confirmado", true},
+		{auth.RolCocinero, "recibido", "confirmado", false},
+		{auth.RolCocinero, "confirmado", "preparando", true},
+		{auth.RolCocinero, "preparando", "listo", true},
+		{auth.RolEncargado, "confirmado", "preparando", true},
+		{auth.RolDuenio, "preparando", "listo", true},
+		// Compatibilidad: el mozo ya podía setear preparando y listo.
+		{auth.RolMozo, "confirmado", "preparando", true},
+		{auth.RolMozo, "preparando", "listo", true},
+		{auth.RolMozo, "listo", "entregado", true},
+		{auth.RolEncargado, "listo", "entregado", true},
+		{auth.RolDuenio, "listo", "entregado", true},
+		{auth.RolCocinero, "listo", "entregado", false},
+		{auth.RolCocinero, "listo", "cerrado", false},
+		{auth.RolMozo, "listo", "cerrado", true},
+		{"", "recibido", "confirmado", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.rol+"/"+tt.desde+"->"+tt.hasta, func(t *testing.T) {
+			store := &mockStore{estadoActual: tt.desde}
+			svc := pedido.NuevoService(store)
+			_, err := svc.CambiarEstado(context.Background(), actorRol(tt.rol), "p-1",
+				pedido.CambiarEstadoInput{Estado: tt.hasta, ModoEntrega: modoPara(tt.hasta)})
+			if tt.permitido && err != nil {
+				t.Fatalf("debería permitirse: %v", err)
+			}
+			if !tt.permitido {
+				if !errors.Is(err, pedido.ErrSinPermiso) {
+					t.Fatalf("esperaba ErrSinPermiso, got %v", err)
+				}
+				if store.cambiosDeEstado != 0 {
+					t.Fatal("un rol sin permiso no debe llegar a persistencia")
+				}
+			}
+		})
+	}
+}
+
+func TestCambiarEstado_SinActorEsRechazado(t *testing.T) {
+	svc := pedido.NuevoService(&mockStore{})
+	_, err := svc.CambiarEstado(context.Background(), nil, "p-1", pedido.CambiarEstadoInput{Estado: "confirmado"})
+	if !errors.Is(err, pedido.ErrSinPermiso) {
+		t.Fatalf("esperaba ErrSinPermiso, got %v", err)
+	}
+}
+
+func TestCambiarEstado_EntregadoExigeModoEntrega(t *testing.T) {
+	for _, modo := range []string{"", "  ", "domicilio", "MESA"} {
+		store := &mockStore{estadoActual: "listo"}
+		svc := pedido.NuevoService(store)
+		_, err := svc.CambiarEstado(context.Background(), actorRol(auth.RolMozo), "p-1",
+			pedido.CambiarEstadoInput{Estado: "entregado", ModoEntrega: modo})
+		if !errors.Is(err, pedido.ErrModoEntregaInvalido) {
+			t.Errorf("modo %q: esperaba ErrModoEntregaInvalido, got %v", modo, err)
+		}
+		if store.cambiosDeEstado != 0 {
+			t.Errorf("modo %q: no debe persistirse", modo)
+		}
+	}
+	for _, modo := range []string{"mesa", "retiro"} {
+		store := &mockStore{estadoActual: "listo"}
+		svc := pedido.NuevoService(store)
+		p, err := svc.CambiarEstado(context.Background(), actorRol(auth.RolMozo), "p-1",
+			pedido.CambiarEstadoInput{Estado: "entregado", ModoEntrega: modo})
+		if err != nil || p.Estado != "entregado" || store.modoEntrega != modo {
+			t.Errorf("modo %q: err=%v estado=%v modo persistido=%q", modo, err, p, store.modoEntrega)
+		}
+	}
+}
+
+func TestCambiarEstado_EntregadoSoloDesdeListo(t *testing.T) {
+	for _, desde := range []string{"recibido", "confirmado", "preparando"} {
+		svc := pedido.NuevoService(&mockStore{estadoActual: desde})
+		_, err := svc.CambiarEstado(context.Background(), actorRol(auth.RolDuenio), "p-1",
+			pedido.CambiarEstadoInput{Estado: "entregado", ModoEntrega: "mesa"})
+		if !errors.Is(err, pedido.ErrTransicionInvalida) {
+			t.Errorf("%s -> entregado: esperaba ErrTransicionInvalida, got %v", desde, err)
+		}
+	}
+}
+
+func TestCambiarEstado_PublicaSSEParaConfirmadoYEntregado(t *testing.T) {
+	casos := []struct{ desde, hasta string }{{"recibido", "confirmado"}, {"listo", "entregado"}}
+	for _, c := range casos {
+		svc := pedido.NuevoService(&mockStore{estadoActual: c.desde})
+		var canales []<-chan notificacion.Evento
+		for _, canal := range []string{"pedido:p-1", "sucursal:suc-1", "mesa:mesa-1", "kds:suc-1"} {
+			ch, desuscribir := notificacion.Instancia.Suscribir(canal)
+			defer desuscribir()
+			canales = append(canales, ch)
+		}
+		if _, err := svc.CambiarEstado(context.Background(), actorRol(auth.RolMozo), "p-1",
+			pedido.CambiarEstadoInput{Estado: c.hasta, ModoEntrega: modoPara(c.hasta)}); err != nil {
+			t.Fatalf("%s: %v", c.hasta, err)
+		}
+		for i, ch := range canales {
+			select {
+			case ev := <-ch:
+				if ev.Nombre != "pedido_actualizado" || !strings.Contains(string(ev.Data), `"estado":"`+c.hasta+`"`) {
+					t.Errorf("%s canal %d: evento incorrecto %q %s", c.hasta, i, ev.Nombre, ev.Data)
+				}
+			case <-time.After(time.Second):
+				t.Errorf("%s: canal %d sin evento SSE", c.hasta, i)
+			}
+		}
+	}
+}
+
+func TestCambiarEstado_ModoEntregaSoloEnEntregado(t *testing.T) {
+	store := &mockStore{estadoActual: "recibido"}
+	svc := pedido.NuevoService(store)
+	_, err := svc.CambiarEstado(context.Background(), actorRol(auth.RolMozo), "p-1",
+		pedido.CambiarEstadoInput{Estado: "confirmado", ModoEntrega: "mesa"})
+	if !errors.Is(err, pedido.ErrModoEntregaInvalido) {
+		t.Fatalf("esperaba ErrModoEntregaInvalido, got %v", err)
+	}
+	if store.cambiosDeEstado != 0 {
+		t.Fatal("no debe persistirse")
+	}
+}
+
+func recibeEventoKDS(canal <-chan notificacion.Evento) bool {
+	select {
+	case <-canal:
+		return true
+	case <-time.After(100 * time.Millisecond):
+		return false
+	}
+}
+
+func TestCrear_PorQRNoPublicaEnKDS(t *testing.T) {
+	svc := pedido.NuevoService(&mockStore{})
+	kds, desKDS := notificacion.Instancia.Suscribir("kds:suc-1")
+	defer desKDS()
+	sucursal, desSuc := notificacion.Instancia.Suscribir("sucursal:suc-1")
+	defer desSuc()
+
+	_, err := svc.Crear(context.Background(), pedido.NuevoPedidoInput{
+		MesaID: "mesa-1",
+		Items:  []pedido.NuevoItemInput{{ArticuloID: "a-1", Cantidad: 1, ComensalID: "47dc8c9e-fb98-44d7-80a1-b598addc1e8a"}},
+	})
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+	if !recibeEventoKDS(sucursal) {
+		t.Error("el salón debe enterarse del pedido nuevo")
+	}
+	if recibeEventoKDS(kds) {
+		t.Error("el KDS no debe recibir pedidos sin confirmar")
+	}
+}
+
+func TestCrearAsistido_NaceConfirmadoYPublicaEnKDS(t *testing.T) {
+	store := &mockStore{}
+	svc := pedido.NuevoService(store)
+	kds, desKDS := notificacion.Instancia.Suscribir("kds:suc-1")
+	defer desKDS()
+
+	p, err := svc.CrearAsistido(context.Background(), &auth.Claims{
+		UsuarioID: "usuario-1", TenantID: "tenant-1", Rol: auth.RolMozo, SucursalID: "suc-1",
+	}, pedido.PedidoAsistidoInput{
+		MesaID: "mesa-1",
+		Items:  []pedido.NuevoItemInput{{ArticuloID: "art-1", Cantidad: 1}},
+	})
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+	if store.crearInput.EstadoInicial != "confirmado" || p.Estado != "confirmado" {
+		t.Fatalf("el pedido del mozo debe nacer confirmado: input=%q pedido=%q", store.crearInput.EstadoInicial, p.Estado)
+	}
+	if !recibeEventoKDS(kds) {
+		t.Error("un pedido confirmado debe llegar al KDS")
+	}
+}
+
+func TestCambiarEstadoItem_PedidoSinConfirmarPropagaError(t *testing.T) {
+	svc := pedido.NuevoService(&mockStore{errItem: pedido.ErrPedidoSinConfirmar})
+	_, err := svc.CambiarEstadoItem(context.Background(), "item-1", "tenant-1", "", "preparando")
+	if !errors.Is(err, pedido.ErrPedidoSinConfirmar) {
+		t.Fatalf("esperaba ErrPedidoSinConfirmar, got %v", err)
 	}
 }
 

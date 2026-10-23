@@ -38,21 +38,21 @@ const (
 		"`total_parcial` en ARS de la cuenta vigente, `minutos_desde_primer_pedido` y `minutos_desde_ultimo_pedido` (null si no hay pedidos), " +
 		"`espera` y `minutos_en_espera`, y `tomado_por` (nombres de quienes cargaron los pedidos de la cuenta, o \"QR\" si los pidió el comensal). " +
 		"`espera` indica en qué etapa está trabada la mesa: `cobro` si pidió la cuenta o tiene el pago habilitado; si no, `comida` si hay pedidos " +
-		"recibidos o en preparación (minutos desde el pedido pendiente más antiguo); si no, `entrega` si cocina ya terminó pedidos (minutos desde el " +
-		"listo más antiguo); si no, null. Para `cobro` `minutos_en_espera` es null porque no se registra cuándo se pidió la cuenta. " +
+		"recibidos, confirmados o en preparación (minutos desde el pedido pendiente más antiguo); si no, `entrega` si cocina ya terminó pedidos y falta marcar la entrega (minutos desde el " +
+		"listo más antiguo); si no, null (los pedidos entregados no generan espera). Para `cobro` `minutos_en_espera` es null porque no se registra cuándo se pidió la cuenta. " +
 		"`por_tomador` agrupa mesas, comensales y esperas por quien cargó pedidos; una mesa con varios tomadores cuenta en cada uno. " +
 		"Por defecto solo lista las mesas con actividad; con `incluir_libres` también las libres. " +
 		"Lo que NO se sabe: no hay registro de personal en turno ni de qué mozo atiende cada mesa más allá de quién cargó pedidos; " +
 		"`entrega` significa que cocina terminó el pedido, no hay confirmación de que se haya entregado; una mesa sentada que todavía no pidió aparece como libre."
 
-	descEstadoCocina = "Estado de la cocina de una sucursal. `cola` cuenta los pedidos de las cuentas vigentes en recibido, preparando y listo (los listos esperan entrega). " +
+	descEstadoCocina = "Estado de la cocina de una sucursal. `cola` cuenta los pedidos de las cuentas vigentes en recibido (pendiente de confirmar recepción), confirmado (esperan que cocina lo tome), preparando y listo (cocina terminó, falta marcar la entrega; los entregados ya no figuran). " +
 		"`pedidos` va ordenado del más antiguo al más nuevo (`minutos_desde_ingreso` descendente), con mesa, estado y `items` (cantidad de ítems pendientes, preparando y listos). " +
-		"Para ver el cuello de botella en cocina mirá los primeros pedidos en recibido o preparando. " +
+		"Para ver el cuello de botella en cocina mirá los primeros pedidos en recibido, confirmado o preparando. " +
 		"`ultima_hora` describe los últimos 60 minutos: `ingresados_60min`, `listos_60min`, `balance_60min` (ingresados menos listos: positivo significa que la cola crece) y " +
 		"el tiempo de despacho (desde que entra el pedido hasta que cocina lo marca listo) como promedio y p90 en minutos, calculado sobre los pedidos que pasaron a listo en esa hora; " +
 		"son null si ninguno pasó a listo. " +
 		"Lo que NO se sabe: no hay estaciones ni cocineros, ni historial de cambios de estado, ni referencia histórica para decidir qué es una demora normal; " +
-		"un pedido listo no implica que se haya entregado."
+		"un pedido listo no implica que se haya entregado: el mozo debe marcarlo entregado."
 
 	descResumenTurno = "Resumen de lo que va de hoy (desde las 00:00 hasta ahora, en la zona horaria del negocio; no contempla jornadas que cruzan la medianoche). " +
 		"`pedidos` son todos los creados hoy y `pedidos_cerrados` los ya cobrados/cerrados. " +
@@ -338,17 +338,22 @@ func (h *herramientas) estadoCocina(ctx context.Context, _ *sdk.CallToolRequest,
 			switch p.Estado {
 			case "recibido":
 				cola.Recibido++
+			case "confirmado":
+				cola.Confirmado++
 			case "preparando":
 				cola.Preparando++
 			case "listo":
 				cola.Listo++
 			}
-			if masDemorado == nil && (p.Estado == "recibido" || p.Estado == "preparando") {
+			if masDemorado == nil && (p.Estado == "recibido" || p.Estado == "confirmado" || p.Estado == "preparando") {
 				masDemorado = &pedidos[i]
 			}
 		}
 		resumen := suc.Nombre + ": en cocina " + cantidad(cola.Recibido, "pedido recibido", "pedidos recibidos") + ", " +
 			strconv.Itoa(cola.Preparando) + " preparando, " + cantidad(cola.Listo, "listo", "listos") + "."
+		if cola.Confirmado > 0 {
+			resumen += " " + cantidad(cola.Confirmado, "confirmado esperando a cocina", "confirmados esperando a cocina") + "."
+		}
 		if masDemorado != nil {
 			resumen += " Más demorado: mesa " + strconv.Itoa(masDemorado.Mesa) + " (" + masDemorado.Estado + ") hace " +
 				cantidad(masDemorado.MinutosDesdeIngreso, "minuto", "minutos") + "."

@@ -124,7 +124,7 @@ func (m *mockPedidoStore) ListarActivos(ctx context.Context, sucursalID, tenantI
 func (m *mockPedidoStore) ListarCuentaActualPorQR(ctx context.Context, qrToken string) ([]pedido.Pedido, error) {
 	return m.pedidos, nil
 }
-func (m *mockPedidoStore) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado string) (*pedido.Pedido, error) {
+func (m *mockPedidoStore) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado, modoEntrega string) (*pedido.Pedido, error) {
 	return nil, nil
 }
 func (m *mockPedidoStore) CambiarEstadoItem(ctx context.Context, itemID, tenantID, sucursalAlcance, nuevoEstado string) (*pedido.Pedido, error) {

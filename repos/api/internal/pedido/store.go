@@ -14,7 +14,7 @@ type Store interface {
 	Crear(ctx context.Context, input NuevoPedidoInput, sucursalID string, cuentaVersion int) (*Pedido, error)
 	ListarActivos(ctx context.Context, sucursalID, tenantID string) ([]Pedido, error)
 	ListarCuentaActualPorQR(ctx context.Context, qrToken string) ([]Pedido, error)
-	CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado string) (*Pedido, error)
+	CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado, modoEntrega string) (*Pedido, error)
 	CambiarEstadoItem(ctx context.Context, itemID, tenantID, sucursalAlcance, nuevoEstado string) (*Pedido, error)
 	SucursalPerteneceATenant(ctx context.Context, sucursalID, tenantID string) (bool, error)
 	ObtenerSucursalPorMesa(ctx context.Context, mesaID string) (string, int, error)
@@ -59,10 +59,15 @@ func (s *pgStore) Crear(ctx context.Context, input NuevoPedidoInput, sucursalID 
 		return nil, fmt.Errorf("error bloqueando mesa: %w", err)
 	}
 
+	estadoInicial := input.EstadoInicial
+	if estadoInicial == "" {
+		estadoInicial = "recibido"
+	}
+
 	p := &Pedido{}
 	err = tx.QueryRow(ctx,
 		`INSERT INTO pedidos (mesa_id, sucursal_id, cuenta_version, estado, origen, creado_por_usuario_id, creado_por_nombre)
-		 SELECT $1, $2, $3, 'recibido', $4, NULLIF($5, '')::uuid,
+		 SELECT $1, $2, $3, $7::text, $4, NULLIF($5, '')::uuid,
 		        COALESCE((SELECT nombre FROM usuarios WHERE id=NULLIF($5, '')::uuid), NULLIF($6, ''))
 		 WHERE EXISTS (
 			SELECT 1
@@ -74,7 +79,7 @@ func (s *pgStore) Crear(ctx context.Context, input NuevoPedidoInput, sucursalID 
 			  AND cuenta_version = $3
 		 )
 		 RETURNING id, mesa_id, sucursal_id, cuenta_version, estado, origen, creado_por_usuario_id, creado_por_nombre, created_at, updated_at`,
-		input.MesaID, sucursalID, cuentaVersion, input.Origen, input.CreadoPorUsuarioID, input.CreadoPorNombre,
+		input.MesaID, sucursalID, cuentaVersion, input.Origen, input.CreadoPorUsuarioID, input.CreadoPorNombre, estadoInicial,
 	).Scan(&p.ID, &p.MesaID, &p.SucursalID, &p.CuentaVersion, &p.Estado, &p.Origen, &p.CreadoPorUsuarioID, &p.CreadoPorNombre, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -189,7 +194,7 @@ func (s *pgStore) Crear(ctx context.Context, input NuevoPedidoInput, sucursalID 
 
 	hito := evento.Nuevo{
 		SucursalID: p.SucursalID, MesaID: p.MesaID, CuentaVersion: p.CuentaVersion,
-		PedidoID: p.ID, EstadoNuevo: p.Estado, Actor: evento.ActorDesdeContexto(ctx, nil),
+		PedidoID: p.ID, EstadoNuevo: "recibido", Actor: evento.ActorDesdeContexto(ctx, nil),
 		Detalle: map[string]any{"origen": p.Origen, "items": len(p.Items)},
 	}
 	if !hayPedidosPrevios {
@@ -201,6 +206,13 @@ func (s *pgStore) Crear(ctx context.Context, input NuevoPedidoInput, sucursalID 
 	hito.Tipo = evento.TipoPedidoCreado
 	if err := evento.Registrar(ctx, tx, hito); err != nil {
 		return nil, err
+	}
+	if p.Estado != "recibido" {
+		hito.Tipo = evento.TipoPedidoEstado
+		hito.EstadoAnterior, hito.EstadoNuevo = "recibido", p.Estado
+		if err := evento.Registrar(ctx, tx, hito); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -358,7 +370,7 @@ func (s *pgStore) cargarItemsDePedidos(ctx context.Context, pedidos []Pedido) er
 	return vRows.Err()
 }
 
-func (s *pgStore) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado string) (*Pedido, error) {
+func (s *pgStore) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado, modoEntrega string) (*Pedido, error) {
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error iniciando cambio de estado: %w", err)
@@ -380,6 +392,9 @@ func (s *pgStore) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcan
 		}
 		return nil, fmt.Errorf("error obteniendo estado del pedido: %w", err)
 	}
+	if err := ValidarTransicion(estadoAnterior, nuevoEstado); err != nil {
+		return nil, err
+	}
 
 	p := &Pedido{}
 	err = tx.QueryRow(ctx,
@@ -388,7 +403,7 @@ func (s *pgStore) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcan
 		     updated_at = now(),
 		     listo_at = CASE
 		       WHEN $1 = 'listo' THEN COALESCE(listo_at, now())
-		       WHEN $1 IN ('recibido', 'preparando') THEN NULL
+		       WHEN $1 IN ('recibido', 'confirmado', 'preparando') THEN NULL
 		       ELSE listo_at
 		     END
 		 WHERE id = $2
@@ -400,10 +415,16 @@ func (s *pgStore) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcan
 	}
 
 	if estadoAnterior != nuevoEstado {
+		var detalle map[string]any
+		if nuevoEstado == "entregado" {
+			// "entregado" se marca, no se mide: el ts del hito es cuando se lo marcó,
+			// que puede ser posterior a la entrega física.
+			detalle = map[string]any{"modo_entrega": modoEntrega}
+		}
 		if err := evento.Registrar(ctx, tx, evento.Nuevo{
 			SucursalID: p.SucursalID, MesaID: p.MesaID, CuentaVersion: p.CuentaVersion, PedidoID: p.ID,
 			Tipo: evento.TipoPedidoEstado, EstadoAnterior: estadoAnterior, EstadoNuevo: nuevoEstado,
-			Actor: evento.ActorDesdeContexto(ctx, nil),
+			Actor: evento.ActorDesdeContexto(ctx, nil), Detalle: detalle,
 		}); err != nil {
 			return nil, err
 		}
@@ -439,8 +460,14 @@ func (s *pgStore) CambiarEstadoItem(ctx context.Context, itemID, tenantID, sucur
 		}
 		return nil, fmt.Errorf("error obteniendo pedido del item: %w", err)
 	}
-	if estadoPedido == "cerrado" {
+	switch estadoPedido {
+	case "cerrado":
 		return nil, ErrPedidoCerrado
+	case "entregado":
+		// Un pedido entregado ya no vuelve a cocina: reabrirlo retrocedería el flujo.
+		return nil, ErrPedidoEntregado
+	case "recibido":
+		return nil, ErrPedidoSinConfirmar
 	}
 
 	resultado, err := tx.Exec(ctx,
@@ -478,23 +505,25 @@ func (s *pgStore) CambiarEstadoItem(ctx context.Context, itemID, tenantID, sucur
 		}
 	}
 
-	estadoAgregado := resolverEstadoPedido(total, listos, iniciados)
-	_, err = tx.Exec(ctx,
-		`UPDATE pedidos
-		 SET estado = $1,
-		     updated_at = now(),
-		     listo_at = CASE
-		       WHEN $1 = 'listo' THEN COALESCE(listo_at, now())
-		       ELSE NULL
-		     END
-		 WHERE id = $2 AND estado IS DISTINCT FROM $1`,
-		estadoAgregado, pedidoID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("error actualizando estado agregado del pedido: %w", err)
-	}
+	// Los estados del pedido solo avanzan: si la cocina deshace un ítem, el pedido
+	// conserva su estado (p. ej. un "listo" que el mozo marcó no vuelve a "confirmado").
+	estadoAgregado := estadoTrasItems(estadoPedido, total, listos, iniciados)
+	if estadoAgregado != estadoPedido {
+		_, err = tx.Exec(ctx,
+			`UPDATE pedidos
+			 SET estado = $1,
+			     updated_at = now(),
+			     listo_at = CASE
+			       WHEN $1 = 'listo' THEN COALESCE(listo_at, now())
+			       ELSE listo_at
+			     END
+			 WHERE id = $2`,
+			estadoAgregado, pedidoID,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error actualizando estado agregado del pedido: %w", err)
+		}
 
-	if estadoPedido != estadoAgregado {
 		if err := evento.Registrar(ctx, tx, evento.Nuevo{
 			SucursalID: sucursalID, MesaID: mesaID, CuentaVersion: cuentaVersion, PedidoID: pedidoID,
 			Tipo: evento.TipoPedidoEstado, EstadoAnterior: estadoPedido, EstadoNuevo: estadoAgregado, Actor: actor,
@@ -511,6 +540,16 @@ func (s *pgStore) CambiarEstadoItem(ctx context.Context, itemID, tenantID, sucur
 	return s.obtenerPedidoPorID(ctx, pedidoID, tenantID)
 }
 
+// estadoTrasItems devuelve el estado del pedido luego de un cambio de ítem:
+// el agregado de los ítems solo se aplica si avanza respecto del estado actual.
+func estadoTrasItems(actual string, total, listos, iniciados int) string {
+	agregado := resolverEstadoPedido(total, listos, iniciados)
+	if rangoEstado[agregado] > rangoEstado[actual] {
+		return agregado
+	}
+	return actual
+}
+
 func resolverEstadoPedido(total, listos, iniciados int) string {
 	if total > 0 && listos == total {
 		return "listo"
@@ -518,7 +557,8 @@ func resolverEstadoPedido(total, listos, iniciados int) string {
 	if iniciados > 0 {
 		return "preparando"
 	}
-	return "recibido"
+	// La cocina solo opera pedidos confirmados: sin ítems iniciados el pedido vuelve a "confirmado".
+	return "confirmado"
 }
 
 func (s *pgStore) obtenerPedidoPorID(ctx context.Context, pedidoID, tenantID string) (*Pedido, error) {
