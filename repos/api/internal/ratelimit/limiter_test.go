@@ -1,6 +1,7 @@
 package ratelimit
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -57,19 +58,26 @@ func TestLimitador_PurgaVencidasAlLlenarse(t *testing.T) {
 	}
 }
 
-func TestLimitador_MapaLlenoRechazaClavesNuevas(t *testing.T) {
+func TestLimitador_MapaLlenoDesalojaLaMasViejaYAceptaLaNueva(t *testing.T) {
 	l := Nuevo(5, time.Minute)
 	l.maxClaves = 2
+	ahora := time.Now()
+	l.ahora = func() time.Time { return ahora }
 	l.Permitir("a")
+	ahora = ahora.Add(time.Second)
 	l.Permitir("b")
-	if l.Permitir("c") {
-		t.Fatal("con el mapa lleno de claves vigentes no debería admitir una nueva")
-	}
-	if !l.Permitir("a") {
-		t.Fatal("una clave existente debería seguir admitida")
+	ahora = ahora.Add(time.Second)
+	if !l.Permitir("c") {
+		t.Fatal("con el mapa lleno debería admitir la clave nueva")
 	}
 	if len(l.conteos) != 2 {
 		t.Fatalf("el mapa no debería crecer: %d", len(l.conteos))
+	}
+	if _, ok := l.conteos["a"]; ok {
+		t.Fatal("debería haberse desalojado la entrada más vieja (a)")
+	}
+	if _, ok := l.conteos["b"]; !ok {
+		t.Fatal("b debería conservarse")
 	}
 }
 
@@ -95,11 +103,39 @@ func TestIPCliente(t *testing.T) {
 	if ip := IPCliente(r); ip != "10.0.0.1" {
 		t.Fatalf("con XFF no IP: %q", ip)
 	}
-	r.Header.Set("X-Forwarded-For", "203.0.113.7")
-	r.Header.Set("CF-Connecting-IP", " 198.51.100.9 ")
-	if ip := IPCliente(r); ip != "198.51.100.9" {
-		t.Fatalf("CF-Connecting-IP debe tener prioridad: %q", ip)
+}
+
+func TestIPCliente_CFConnectingIP(t *testing.T) {
+	nuevo := func(secretoHeader string) *http.Request {
+		r := httptest.NewRequest("GET", "/", nil)
+		r.RemoteAddr = "10.0.0.1:1234"
+		r.Header.Set("X-Forwarded-For", "6.6.6.6, 203.0.113.7")
+		r.Header.Set("CF-Connecting-IP", " 198.51.100.9 ")
+		if secretoHeader != "" {
+			r.Header.Set("X-Fudd-Proxy-Secret", secretoHeader)
+		}
+		return r
 	}
+
+	t.Setenv("CF_PROXY_SECRET", "")
+	if ip := IPCliente(nuevo("")); ip != "203.0.113.7" {
+		t.Fatalf("sin env se ignora CF-Connecting-IP: %q", ip)
+	}
+	if ip := IPCliente(nuevo("x")); ip != "203.0.113.7" {
+		t.Fatalf("sin env, un secreto vacío/ajeno no habilita el header: %q", ip)
+	}
+
+	t.Setenv("CF_PROXY_SECRET", "s3creto")
+	if ip := IPCliente(nuevo("")); ip != "203.0.113.7" {
+		t.Fatalf("sin header secreto se ignora: %q", ip)
+	}
+	if ip := IPCliente(nuevo("incorrecto")); ip != "203.0.113.7" {
+		t.Fatalf("con secreto incorrecto se ignora: %q", ip)
+	}
+	if ip := IPCliente(nuevo("s3creto")); ip != "198.51.100.9" {
+		t.Fatalf("con secreto correcto se usa CF-Connecting-IP: %q", ip)
+	}
+	r := nuevo("s3creto")
 	r.Header.Set("CF-Connecting-IP", "basura")
 	if ip := IPCliente(r); ip != "203.0.113.7" {
 		t.Fatalf("CF-Connecting-IP no IP se ignora: %q", ip)

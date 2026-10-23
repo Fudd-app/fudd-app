@@ -1,8 +1,10 @@
 package ratelimit
 
 import (
+	"crypto/subtle"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -47,8 +49,9 @@ func (l *Limitador) Permitir(clave string) bool {
 	if !ok && len(l.conteos) >= l.maxClaves {
 		l.purgarVencidas(ahora)
 		if len(l.conteos) >= l.maxClaves {
-			// Fail-closed: con el mapa lleno de claves vigentes no se admiten claves nuevas.
-			return false
+			// Nunca se rechaza por mapa lleno (un atacante rotando IPs bloquearía a
+			// los clientes nuevos): se desaloja la entrada más vieja.
+			l.desalojarMasVieja()
 		}
 	}
 	if !ok || ahora.Sub(v.inicio) >= l.ventana {
@@ -70,12 +73,31 @@ func (l *Limitador) purgarVencidas(ahora time.Time) {
 	}
 }
 
-// IPCliente prioriza CF-Connecting-IP (la API está detrás de Cloudflare) y luego
-// el último valor de X-Forwarded-For, que es el que agrega el proxy de Render:
-// el primero lo controla el cliente y permitiría evadir el límite.
+func (l *Limitador) desalojarMasVieja() {
+	var claveVieja string
+	var inicioViejo time.Time
+	primera := true
+	for k, v := range l.conteos {
+		if primera || v.inicio.Before(inicioViejo) {
+			claveVieja, inicioViejo, primera = k, v.inicio, false
+		}
+	}
+	if !primera {
+		delete(l.conteos, claveVieja)
+	}
+}
+
+// IPCliente confía en CF-Connecting-IP solo si el request trae el secreto
+// compartido en X-Fudd-Proxy-Secret (Cloudflare lo agrega con una Transform Rule):
+// sin él, un atacante que le pegue directo al borde de Render puede falsificar el
+// header. Si no, usa el último valor de X-Forwarded-For, que es el que agrega el
+// proxy de Render (el primero lo controla el cliente y permitiría evadir el límite).
 func IPCliente(r *http.Request) string {
-	if ip := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); net.ParseIP(ip) != nil {
-		return ip
+	if secreto := os.Getenv("CF_PROXY_SECRET"); secreto != "" &&
+		subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Fudd-Proxy-Secret")), []byte(secreto)) == 1 {
+		if ip := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); net.ParseIP(ip) != nil {
+			return ip
+		}
 	}
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		valores := strings.Split(xff, ",")
