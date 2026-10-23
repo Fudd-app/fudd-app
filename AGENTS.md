@@ -44,7 +44,7 @@ Estas reglas aplican a cualquier agente de IA (Claude, Gemini, CLI, etc.) que tr
 | | |
 |---|---|
 | **Fase actual** | Fase 4 — Evolución, Monetización & Analítica (2do Cuatrimestre) |
-| **Sprint en curso** | **Sprint 15 (KDS, Impresión de Comandas & Acceso del Equipo)** — sprints semanales (S10 a S19, 31/08 → 08/11/2026). Sprints 16 y 17 completados por adelantado |
+| **Sprint en curso** | **Sprint 18 (Business Analytics, Reputación & Exportación)** — pendientes US-74 y US-75. Sprints semanales (S10 a S19, 31/08 → 08/11/2026); 16, 17 y 19 completados por adelantado. El estado al día de cada ítem está en el [tablero](https://github.com/orgs/Fudd-app/projects/1) |
 | **Objetivo Fase 4** | Llevar Mesa CLICK a nivel comercial: SaaS Freemium (Free vs Pro), Mobile-First comensal, carga masiva CSV/Excel, KDS de cocina, disponibilidad/franjas horarias, métricas y analítica de negocio |
 
 ### Sprints detallados
@@ -65,11 +65,11 @@ Estas reglas aplican a cualquier agente de IA (Claude, Gemini, CLI, etc.) que tr
 | 12 | Mobile-First Comensal (sticky, bottom-sheet, personalización, pedidos colaborativos) · 14/09–20/09 | ✓ Completado |
 | 13 | Carga masiva CSV/Excel & ajuste porcentual de precios · 21/09–27/09 | ✓ Completado |
 | 14 | Disponibilidad de ítems (86) & menús por franja horaria · 28/09–04/10 | ✓ Completado |
-| 15 | KDS, impresión de comandas térmicas & acceso del equipo (credenciales, login por negocio, Google) · 05/10–11/10 | ⚡ En Curso |
+| 15 | KDS, impresión de comandas térmicas & acceso del equipo (credenciales, login por negocio, Google) · 05/10–11/10 | ✓ Completado |
 | 16 | Modelo Freemium (Free vs Pro) & control de suscripciones · 12/10–18/10 | ✓ Completado (adelantado) |
 | 17 | Dashboard con métricas (KPIs, agregaciones SQL) · 19/10–25/10 | ✓ Completado (adelantado) |
-| 18 | Business Analytics, Reputación (Reseñas & Google Funnel) & exportación · 26/10–01/11 | 📋 Planificado |
-| 19 | QA E2E, Load Testing, Polish final & Demo de cierre · 02/11–08/11 | 📋 Planificado |
+| 18 | Business Analytics, Reputación (Reseñas & Google Funnel) & exportación · 26/10–01/11 | ⚡ En Curso (US-74, US-75) |
+| 19 | QA E2E, Load Testing, Polish final & Demo de cierre · 02/11–08/11 | ✓ Completado (adelantado) |
 
 ---
 
@@ -78,9 +78,9 @@ Estas reglas aplican a cualquier agente de IA (Claude, Gemini, CLI, etc.) que tr
 | Capa | Tecnología |
 |---|---|
 | Frontend | Next.js (v16+), React 19+, Tailwind CSS v4+, TypeScript |
-| Backend | Go (Golang), PostgreSQL, net/http estándar |
+| Backend | Go 1.25, PostgreSQL (`pgx/v5`), net/http estándar |
 | Logging | `slog` (estructurado) |
-| Auth | Magic link por email (JWT) |
+| Auth | Google Identity (dueño y staff) + magic link/contraseña heredados para admins; JWT en cookie HttpOnly |
 | Tiempo real | Server-Sent Events (SSE) |
 
 ---
@@ -93,17 +93,22 @@ mesa-click/
 │   ├── api/          ← Backend Go
 │   └── web/          ← Frontend Next.js
 ├── docs/
+│   ├── proceso/flujo-de-trabajo.md        ← flujo obligatorio: requerimiento → issue → PR → review
+│   ├── deploy/README.md                   ← ambientes prod y qa (Vercel, Render, Neon, DNS)
 │   ├── presentations/
-│   │   ├── mesa-click-presentacion.html   ← US, roadmap y backlog
-│   │   └── status-report-01.html          ← último reporte de estado
+│   │   ├── parte-1/                       ← presentación y status reports 01–03 (1er cuatrimestre)
+│   │   └── parte-2/                       ← index.html (roadmap Fase 4) y status reports 04 → actual
 │   ├── product/
-│   │   └── arquitectura-back.md           ← diseño técnico del backend
-│   ├── flows/
-│   │   ├── happy-path-admin-negocio.md
-│   │   └── happy-path-cliente.md
+│   │   ├── arquitectura-back.md           ← diseño técnico del backend
+│   │   └── propuesta-reseñas-local.html   ← propuesta base de US-79 / US-80
+│   ├── flows/                             ← happy paths admin y cliente, mapa de pantallas
+│   ├── testing/                           ← reportes de load testing, Lighthouse y guion de demo
+│   ├── legal/                             ← checklist de compliance
 │   └── diseño/
 │       ├── maqueta/                       ← maqueta de referencia UX (ver "Guía de diseño")
-│       └── old/                           ← propuestas de diseño anteriores (histórico)
+│       └── fudd/                          ← identidad de marca fudd
+├── load-tests/                            ← scripts k6
+├── scripts/                               ← scripts PowerShell de desarrollo local (ver LOCAL_DEV.md)
 └── AGENTS.md    ← este archivo (fuente de verdad principal)
 ```
 
@@ -127,7 +132,7 @@ En `docs/diseño/maqueta/` hay una maqueta (Vite + React + Tailwind, exportada d
 - **Patrones de componentes**: estructura de botones (`primary-button`, `secondary-button`, `icon-button`), tarjetas (`metric-card`, `table-card`, `settings-card`), `status-pill`, filtros segmentados, encabezados de página (`eyebrow` + título + descripción) y layouts de drawer. Los estilos están en `src/index.css`.
 
 **Qué NO tomar:**
-- **Colores, tipografías y tokens** de la maqueta (ni `docs/diseño/tokens.json` / `variables.css`). Se mantiene la identidad visual actual de `repos/web`.
+- **Colores, tipografías y tokens** de la maqueta. Se mantiene la identidad visual actual de `repos/web`.
 - **Datos y lógica**: la maqueta usa datos mock y estado local. Todo dato real se consume de la API existente (ver "No duplicar lógica").
 - **Código copiado literal**: adaptar cada patrón a los componentes y a Tailwind de `repos/web`, sin agregar dependencias de la maqueta.
 
@@ -145,7 +150,7 @@ Los cambios de UI inspirados en la maqueta siguen la regla general: solo dentro 
 - **KDS (cocina)**: La pantalla de cocina es una vista independiente del dashboard de mozo. Los estados por ítem se propagan por SSE; la impresión térmica (ESC/POS 58/80 mm) debe tolerar fallos con reintento manual.
 - **Disponibilidad & Franjas horarias**: La carta visible del comensal se resuelve combinando disponibilidad del ítem (86), franja horaria de la sucursal y estado de apertura en una sola consulta.
 - **Reseñas & Reputación (Smart Google Funnel)**: Calificación 1 a 5★ + comentario post-consumo (estado "Listo"). Comensales satisfechos (4-5★) reciben CTA directo para recomendar en Google Reviews vía Place ID; valoraciones bajas (1-3★) se retienen internamente como feedback privado y alertan en tiempo real al encargado.
-- **Sprints semanales**: Cada sprint dura 1 semana y culmina con un release desplegado en Render.
+- **Sprints semanales**: Cada sprint dura 1 semana y culmina con un release desplegado (ver [ambientes](docs/deploy/README.md)).
 - Mantener cobertura de tests en Go y validar compilación con `go test ./...` y `npm run build` en web antes de cada merge.
 
 ---
@@ -153,18 +158,20 @@ Los cambios de UI inspirados en la maqueta siguen la regla general: solo dentro 
 ## Estrategia de Ramas y Despliegue (Git Workflow)
 
 ### Ramas Principales y Entornos
-- **`main` (Producción)**: Código productivo y estable.
-  - **Backend (`repos/api`)**: Desplegado y corriendo en **Render** (Servicio Free, Docker, Región: Ohio, Servicio: `mesa-click-api`).
-  - **Frontend (`repos/web`)**: Desplegado y corriendo en **Render** (Servicio Free, Docker, Región: Ohio, Servicio: `mesa-click-web`).
-- **`qa` (QA / Staging)**: Rama base para integración continua y pruebas de calidad.
+| Rama | Ambiente | Frontend (`repos/web`) | Backend (`repos/api`) | Base de datos |
+|---|---|---|---|---|
+| `main` | Producción | Vercel → `fudd.com.ar` | Render → `fudd-app-api-prod` | Neon (prod) |
+| `qa` | QA / Staging | Vercel → `qa.fudd.com.ar` | Render → `fidd-app-api-qa` | Neon (qa) |
+
+Ambos ambientes se despliegan automáticamente al pushear a su rama. Detalle de cuentas, dominios y servicios en [`docs/deploy/README.md`](docs/deploy/README.md).
 
 ### Flujo de Desarrollo
 1. **Creación de ramas**: Todo nuevo desarrollo (feature o corrección de bug) **debe crearse a partir de `qa`**:
    - `git checkout qa && git pull`
    - `git checkout -b feat/US-XX-descripcion` (features)
-   - `git checkout -b fix/descripcion` (correcciones de bugs)
+   - `git checkout -b fix/<nro-issue>-descripcion` (correcciones de bugs)
 2. **Integración en QA**: Al finalizar, abrir PR hacia **`qa`**; se mergea solo después del code review (ver [flujo de trabajo](docs/proceso/flujo-de-trabajo.md)).
-3. **Pase a Producción**: Una vez testeado y validado en `qa`, se mergea hacia **`main`**, actualizando automáticamente ambos servicios (`mesa-click-api` y `mesa-click-web`) en Render mediante Docker.
+3. **Pase a Producción**: Una vez testeado y validado en `qa`, se mergea hacia **`main`**, lo que despliega automáticamente producción (Vercel + Render).
 
 ---
 
@@ -174,3 +181,5 @@ Los cambios de UI inspirados en la maqueta siguen la regla general: solo dentro 
 - **Commits**: Conventional Commits con scope del repo (`feat(web): ...`, `fix(api): ...`). Explicar el "por qué" en lugar del "qué".
 - **Variables de entorno (`.env`)**: Solicitar credenciales y `.env` para la API directamente a **Pablo Aguirre**.
 - **No duplicar lógica**: Si algo ya está en el backend, el frontend solo lo consume.
+- **Nunca pushear sin confirmación**: antes de `git push`, indicar los pasos para probar lo implementado y esperar la confirmación explícita del usuario.
+- **Mantener la documentación al día**: al terminar una tarea que cambie fase, sprint, stack, estructura de carpetas, ambientes o arquitectura, actualizar sin que lo pidan `AGENTS.md`, `repos/web/AGENTS.md`, `.github/copilot-instructions.md`, los README (raíz, `repos/api`, `repos/web`) y los docs afectados.

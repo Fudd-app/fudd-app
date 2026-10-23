@@ -8,17 +8,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # Contexto del proyecto — Mesa CLICK (Frontend)
 
-> **Leer antes de empezar**: Las User Stories del sprint actual están en
-> `../../docs/presentations/mesa-click-presentacion.html` → slide "Backlog".
+> **Leer antes de empezar**: las reglas generales están en `../../AGENTS.md` y el flujo obligatorio de trabajo en `../../docs/proceso/flujo-de-trabajo.md`.
+> Las User Stories y bugs viven en el tablero de GitHub [Fudd APP](https://github.com/orgs/Fudd-app/projects/1); los de este repo llevan el prefijo `[web]`.
 > Los happy paths están en `../../docs/flows/`.
-> Las reglas generales del proyecto están en `../../AGENTS.md`.
 
 ---
 
 ## Fase actual: Fase 4 — Evolución, Monetización & Analítica (2do Cuatrimestre)
 
-**Sprint 16 completado (Modelo Freemium: Free vs Pro & Control de Suscripciones)**.
-**Sprint 17 en curso (Dashboard con Métricas (KPIs))**.
+El sprint en curso y su estado están en `../../AGENTS.md` → "Estado del proyecto".
 
 - **Control de Suscripciones**: El backend valida cuotas del plan (Free vs Pro) devolviendo HTTP 403 `PLAN_LIMIT_REACHED`. El frontend intercepta este error en `lib/api.ts` y despliega preventivamente `UpgradeModal`.
 - **Personalización Pro & Marca de Agua**: Los clientes en plan Pro pueden ocultar la marca de agua 'Potenciado por Mesa CLICK' y configurar paleta y fuentes extendidas en `AparienciaTab`. En plan Free, estos controles se bloquean elegantemente con candados hacia `UpgradeModal`.
@@ -31,17 +29,18 @@ This version has breaking changes — APIs, conventions, and file structure may 
 repos/web/
 ├── app/                        ← rutas y páginas (Next.js App Router)
 │   ├── page.tsx                (landing)
-│   ├── login/page.tsx
-│   ├── onboarding/page.tsx
-│   ├── dashboard/page.tsx      (admin: sidebar con Carta, Mesas, Equipo, Recepcionista)
-│   └── mesa/[token]/page.tsx   (cliente: carta → carrito → seguimiento)
-├── components/
-│   ├── landing/
-│   ├── onboarding/
-│   ├── dashboard/              (CartaSection, MesasSection, EquipoSection, RecepcionistaSection)
-│   └── menu/                   (CategoriaNav, ItemCard, CartDrawer, SeguimientoView)
+│   ├── (alta)/                 (registro y onboarding del negocio)
+│   ├── login/ · [slug]/login/  (login admin · login del staff por negocio)
+│   ├── auth/verify/            (verificación de magic link)
+│   ├── invitacion/[token]/     (aceptación de invitación al equipo)
+│   ├── dashboard/              (panel: salón, carta, mesas, equipo, métricas, configuración, planes)
+│   ├── kds/                    (pantalla de cocina)
+│   ├── mesa/[token]/           (comensal: carta → carrito → seguimiento → cuenta)
+│   └── privacidad/ · terminos/
+├── components/                 (auth, brand, comensal, dashboard, kds, landing, legal, menu, onboarding, registro, ui)
 ├── lib/
-│   └── mock/                   (menu.ts, mesas.ts, pedidos.ts, equipo.ts)
+│   ├── api.ts                  (cliente HTTP tipado, SSE e interceptor PLAN_LIMIT_REACHED)
+│   └── ...                     (comensal, planes, desgloseCuenta, legal, product-image)
 └── public/
 ```
 
@@ -53,13 +52,14 @@ repos/web/
 - **Estilos**: Tailwind CSS v4+ — no usar CSS modules ni styled-components
 - **Lenguaje**: TypeScript estricto — no usar `any`
 - **Componentes**: funcionales con hooks, sin class components
-- **Estado global**: ninguno por ahora (todo local o props)
-- **Datos mock**: definir los datos estáticos cerca del componente que los usa (no en stores globales)
+- **Estado global**: ninguno (todo local o props)
+- **Datos**: todo dato real se consume de la API vía `lib/api.ts`; no duplicar lógica del backend
 
 ## Reglas de código
 
-- **Git workflow**: Crear ramas (`feat/*`, `fix/*`) siempre a partir de `qa`. Al validar en QA, mergear a `main` (desplegado en **Render** como `mesa-click-web` con Docker en región Ohio, servicio Free Web Service).
-- No crear llamadas a `fetch` ni a APIs externas en Fase 1
+- **Git workflow**: ramas (`feat/US-XX-*`, `fix/<nro-issue>-*`) siempre desde `qa`, PR con título `[web] ...` y code review antes del merge. `qa` se despliega en Vercel como `qa.fudd.com.ar` y `main` como `fudd.com.ar`.
+- Un issue `[web]` no modifica `repos/api`; si hace falta un cambio de backend, se crea el issue `[api]` correspondiente.
+- Validar con `npm run build` antes de abrir el PR
 - No instalar librerías sin justificación explícita en la US
 - Mantener diseño responsive — la vista del cliente es mobile-first (el cliente usa su celular)
-- Antes de agregar una pantalla nueva, verificar que existe la US correspondiente en el sprint actual
+- Antes de agregar una pantalla nueva, verificar que existe el issue `[web]` correspondiente en el sprint actual
