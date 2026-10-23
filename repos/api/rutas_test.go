@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -100,6 +101,32 @@ func TestCORS_RutasOAuthPublicas(t *testing.T) {
 	manejador.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || rec.Header().Get("Access-Control-Allow-Origin") != "*" {
 		t.Errorf("POST /oauth/token: got %d / %q", rec.Code, rec.Header().Get("Access-Control-Allow-Origin"))
+	}
+}
+
+func TestCORS_RutaMCP(t *testing.T) {
+	req := httptest.NewRequest(http.MethodOptions, "/mcp", nil)
+	req.Header.Set("Origin", "https://claude.ai")
+	rec := httptest.NewRecorder()
+	nuevoCORSDePrueba(t).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("OPTIONS /mcp: got %d, want 204", rec.Code)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Errorf("Allow-Origin: got %q, want *", got)
+	}
+	for cabecera, esperado := range map[string]string{
+		"Access-Control-Allow-Methods":  "DELETE",
+		"Access-Control-Allow-Headers":  "Mcp-Session-Id",
+		"Access-Control-Expose-Headers": "WWW-Authenticate",
+	} {
+		if got := rec.Header().Get(cabecera); !strings.Contains(got, esperado) {
+			t.Errorf("%s: got %q, debe contener %q", cabecera, got, esperado)
+		}
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Credentials"); got != "" {
+		t.Errorf("no debe enviar Allow-Credentials, got %q", got)
 	}
 }
 

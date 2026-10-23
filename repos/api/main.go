@@ -88,6 +88,11 @@ func corsMiddleware(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, MCP-Protocol-Version")
+			if r.URL.Path == "/mcp" {
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, MCP-Protocol-Version, Mcp-Session-Id, Last-Event-ID")
+				w.Header().Set("Access-Control-Expose-Headers", "WWW-Authenticate, Mcp-Session-Id")
+			}
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
 				return
@@ -121,7 +126,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 
 func esRutaOAuthPublica(path string) bool {
 	return strings.HasPrefix(path, "/.well-known/") ||
-		path == "/oauth/register" || path == "/oauth/token" || path == "/oauth/revoke"
+		path == "/oauth/register" || path == "/oauth/token" || path == "/oauth/revoke" || path == "/mcp"
 }
 
 func origenCORSPermitido(origin string) bool {
