@@ -733,7 +733,7 @@ export default function MetricasSection() {
 
           <div className="flex flex-wrap items-center gap-10">
             {/* Selector de Presets Temporales (US-75) */}
-            <div className="flex items-center rounded-lg border border-concrete bg-canvas-white p-3 shadow-xs">
+            <div className="flex h-44 items-stretch overflow-hidden rounded-lg border border-concrete bg-canvas-white shadow-xs">
               {(
                 [
                   { id: "hoy", label: "Hoy" },
@@ -747,7 +747,7 @@ export default function MetricasSection() {
                   key={preset.id}
                   type="button"
                   onClick={() => setPresetRango(preset.id)}
-                  className={`rounded-md px-10 py-5 text-11 font-semibold transition-all ${
+                  className={`h-full min-h-0 rounded-md px-10 py-0 text-11 font-semibold transition-all ${
                     presetRango === preset.id
                       ? "bg-ash-graphite text-canvas-white shadow-xs"
                       : "text-sage-green hover:text-ash-graphite"
@@ -766,7 +766,7 @@ export default function MetricasSection() {
               id="filtro-sucursal-metricas"
               value={sucursalId}
               onChange={(event) => setSucursalId(event.target.value)}
-              className="h-40 min-w-[180px] rounded-lg border border-concrete bg-canvas-white px-12 text-12 text-ash-graphite shadow-xs"
+              className="h-44 min-w-[180px] rounded-lg border border-concrete bg-canvas-white px-12 text-12 text-ash-graphite shadow-xs"
             >
               <option value="">Todo el negocio</option>
               {sucursales.map((sucursal) => (
@@ -782,7 +782,7 @@ export default function MetricasSection() {
                 type="button"
                 onClick={handleExportarExcel}
                 disabled={!resumen || cargando}
-                className="inline-flex h-40 items-center justify-center gap-6 rounded-lg border border-concrete bg-canvas-white px-12 text-12 font-semibold text-ash-graphite shadow-xs transition-colors hover:bg-ghost-fog disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-44 items-center justify-center gap-6 rounded-lg border border-concrete bg-canvas-white px-12 text-12 font-semibold text-ash-graphite shadow-xs transition-colors hover:bg-ghost-fog disabled:cursor-not-allowed disabled:opacity-50"
                 title="Exportar a Excel / CSV (.csv UTF-8 compatible)"
               >
                 <span className="material-symbols-outlined text-18 text-[#087657]">table_view</span>
@@ -792,7 +792,7 @@ export default function MetricasSection() {
                 type="button"
                 onClick={handleImprimirPDF}
                 disabled={!resumen || cargando}
-                className="inline-flex h-40 items-center justify-center gap-6 rounded-lg border border-concrete bg-canvas-white px-12 text-12 font-semibold text-ash-graphite shadow-xs transition-colors hover:bg-ghost-fog disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex h-44 items-center justify-center gap-6 rounded-lg border border-concrete bg-canvas-white px-12 text-12 font-semibold text-ash-graphite shadow-xs transition-colors hover:bg-ghost-fog disabled:cursor-not-allowed disabled:opacity-50"
                 title="Descargar o imprimir informe ejecutivo en PDF (A4)"
               >
                 <span className="material-symbols-outlined text-18 text-[#287CC1]">picture_as_pdf</span>
@@ -805,7 +805,7 @@ export default function MetricasSection() {
               type="button"
               onClick={() => void cargarMetricas()}
               disabled={cargando}
-              className="inline-flex h-40 items-center justify-center gap-6 rounded-lg border border-concrete bg-canvas-white px-12 text-12 font-semibold text-ash-graphite shadow-xs transition-colors hover:bg-ghost-fog disabled:cursor-wait disabled:opacity-60"
+              className="inline-flex h-44 items-center justify-center gap-6 rounded-lg border border-concrete bg-canvas-white px-12 text-12 font-semibold text-ash-graphite shadow-xs transition-colors hover:bg-ghost-fog disabled:cursor-wait disabled:opacity-60"
             >
               <span className={`material-symbols-outlined text-16 ${cargando ? "animate-spin" : ""}`}>
                 refresh
