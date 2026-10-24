@@ -45,6 +45,20 @@ function getContrastColor(hex: string) {
   return contrastWithDark >= contrastWithWhite ? "#0f172a" : "#ffffff";
 }
 
+function getFontFamily(fontName: string) {
+  switch (fontName) {
+    case "Space Grotesk":
+      return "var(--font-space-grotesk), sans-serif";
+    case "Playfair Display":
+      return "var(--font-playfair-display), serif";
+    case "system-ui":
+      return "system-ui, sans-serif";
+    case "Inter":
+    default:
+      return "var(--font-inter), sans-serif";
+  }
+}
+
 export function buildMesaTheme(branding: MesaBranding): MesaTheme {
   const primaryColor = isHexColor(branding.color_primario)
     ? branding.color_primario
@@ -75,7 +89,7 @@ export function buildMesaTheme(branding: MesaBranding): MesaTheme {
   };
 
   if (branding.tipo_fuente && branding.tipo_fuente.trim() !== "") {
-    styleObj["--mesa-font"] = branding.tipo_fuente;
+    styleObj["--mesa-font"] = getFontFamily(branding.tipo_fuente);
   }
 
   return {

@@ -22,7 +22,7 @@ Este repositorio utiliza **AGENTS.md** como la fuente principal de verdad y regl
    - Para la API backend, solicitar el archivo `.env` configurado directamente a **Pablo Aguirre**.
 
 4. **Backend (Go)**:
-   - Go 1.25+, PostgreSQL con driver `pgx/v5`, `net/http` estándar.
+   - Go 1.26+, PostgreSQL con driver `pgx/v5`, `net/http` estándar.
    - Usar `slog` para logs estructurados.
    - Mantener migraciones SQL idempotentes (no modificar archivos `.sql` existentes, agregar nuevos numerados).
 
