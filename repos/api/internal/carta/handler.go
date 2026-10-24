@@ -425,7 +425,7 @@ func (h *Handlers) ImportarCarta(w http.ResponseWriter, r *http.Request) {
 	if len(erroresParseo) > 0 {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(ResultadoImportacion{
-			Omitidos: len(erroresParseo),
+			Omitidos: len(filas) + len(erroresParseo),
 			Errores:  erroresParseo,
 		})
 		return
