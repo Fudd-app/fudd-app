@@ -21,7 +21,7 @@ const ICONOS_CATEGORIA = [
   'local_cafe', 'local_bar', 'liquor', 'emoji_food_beverage',
 ] as const;
 
-const MAX_DESCRIPCION_ARTICULO = 160;
+const MAX_DESCRIPCION_ARTICULO = 140;
 
 type SelectorFranjaCategoriaProps = {
   categoria: CategoriaConItems;

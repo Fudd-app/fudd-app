@@ -97,6 +97,18 @@ func TestParsearXLSX_ArchivoCorrupto(t *testing.T) {
 	}
 }
 
+func TestParsearCSV_RechazaDescripcionDeMasDe140Caracteres(t *testing.T) {
+	contenido := "categoria,nombre,precio,descripcion\nEntradas,Plato,100," + strings.Repeat("á", 141)
+	filas, errores := ParsearCSV(strings.NewReader(contenido))
+
+	if len(filas) != 0 {
+		t.Fatalf("no deben aceptarse filas con descripción excedida: %+v", filas)
+	}
+	if len(errores) != 1 || !strings.Contains(errores[0].Motivo, "140") {
+		t.Fatalf("se esperaba error de límite de descripción, obtenido: %+v", errores)
+	}
+}
+
 // hojaConFilas arma el XML de una hoja con una celda en `columna` por fila.
 func hojaConFilas(cantidad int, columna string) string {
 	var b strings.Builder

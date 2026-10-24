@@ -133,8 +133,8 @@ func TestCrearArticulo_RechazaFotoNoRaster(t *testing.T) {
 
 func TestCrearYActualizarArticulo_ValidanLongitudDescripcion(t *testing.T) {
 	svc := carta.NuevoService(&mockStore{})
-	descripcionEnLimite := strings.Repeat("á", 160)
-	descripcionExcedida := strings.Repeat("á", 161)
+	descripcionEnLimite := strings.Repeat("á", 140)
+	descripcionExcedida := strings.Repeat("á", 141)
 
 	if _, err := svc.CrearArticulo(context.Background(), "t-1", carta.ArticuloInput{
 		CategoriaID: "cat-1",

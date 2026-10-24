@@ -17,7 +17,7 @@ type Service struct {
 	store Store
 }
 
-const maxDescripcionArticuloRunes = 160
+const maxDescripcionArticuloRunes = 140
 
 func NuevoService(s Store) *Service { return &Service{store: s} }
 

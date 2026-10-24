@@ -7,6 +7,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/xuri/excelize/v2"
 )
@@ -227,6 +228,13 @@ func parsearRegistros(registros [][]string) ([]FilaImportacion, []ErrorFila) {
 		descripcion := ""
 		if idxDes >= 0 {
 			descripcion = obtenerCelda(fila, idxDes)
+		}
+		if utf8.RuneCountInString(descripcion) > maxDescripcionArticuloRunes {
+			errores = append(errores, ErrorFila{
+				Fila:   numFila,
+				Motivo: fmt.Sprintf("descripción supera el máximo de %d caracteres", maxDescripcionArticuloRunes),
+			})
+			continue
 		}
 
 		// Leer disponible (opcional, default: true)
