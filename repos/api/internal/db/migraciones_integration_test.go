@@ -21,8 +21,10 @@ func TestEjecutarMigraciones_Concurrentes(t *testing.T) {
 	if os.Getenv("DATABASE_URL") == "" {
 		t.Skip("DATABASE_URL no configurada, saltando test de integración")
 	}
+	// Fatal y no Skip: con DATABASE_URL configurada (CI) este test tiene que correr; si no
+	// conecta, saltearlo dejaría el CI en verde sin haber verificado la carrera.
 	if err := Conectar(); err != nil {
-		t.Skipf("no se pudo conectar a la base de datos: %v", err)
+		t.Fatalf("no se pudo conectar a la base de datos: %v", err)
 	}
 	t.Cleanup(Cerrar)
 	ctx := context.Background()

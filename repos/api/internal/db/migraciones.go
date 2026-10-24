@@ -19,7 +19,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
 )
 
 // claveLockMigraciones identifica el advisory lock que serializa las migraciones.
@@ -27,34 +27,26 @@ import (
 // que migran la misma base usen el mismo.
 const claveLockMigraciones int64 = 7_262_873_421
 
+// esperaMaximaLock acota cuánto espera un proceso a que otro termine de migrar.
+// Mejor fallar el arranque con un error claro que colgarse sin logs.
+const esperaMaximaLock = "2min"
+
 // EjecutarMigraciones corre todos los archivos .sql de la carpeta migrations/.
 //
-// Toma un advisory lock antes de empezar: si dos procesos migran la misma base a la
-// vez (tests de integración en paralelo, dos instancias arrancando juntas), el segundo
-// espera al primero y después encuentra las migraciones ya registradas.
+// Si dos procesos migran la misma base a la vez (tests de integración en paralelo,
+// dos instancias arrancando juntas), cada migración toma un advisory lock de
+// transacción: el segundo proceso espera al primero y después la encuentra registrada.
+// Se usa el lock de transacción y no el de sesión porque prod y QA se conectan por el
+// pooler de Neon (PgBouncer en modo transacción), donde los locks de sesión no sirven:
+// el lock y el unlock pueden caer en conexiones distintas del servidor.
 func EjecutarMigraciones(carpeta string) error {
 	ctx := context.Background()
 
-	// El lock es de sesión: hay que tomarlo, usarlo y soltarlo en la misma conexión.
-	conn, err := Pool.Acquire(ctx)
-	if err != nil {
-		return fmt.Errorf("error obteniendo conexión para migrar: %w", err)
-	}
-	defer conn.Release()
-
-	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1)", claveLockMigraciones); err != nil {
-		return fmt.Errorf("error tomando lock de migraciones: %w", err)
-	}
-	defer func() {
-		if _, err := conn.Exec(ctx, "SELECT pg_advisory_unlock($1)", claveLockMigraciones); err != nil {
-			// Si falla, Postgres libera el lock igual cuando se cierra la conexión.
-			slog.Warn("no se pudo liberar el lock de migraciones", "err", err)
-		}
-	}()
-
 	// Primero creamos la tabla que registra qué migraciones ya corrieron.
-	// Va dentro del lock: dos CREATE TABLE IF NOT EXISTS simultáneos también chocan.
-	err = crearTablaMigraciones(ctx, conn)
+	// Va con el lock tomado: dos CREATE TABLE IF NOT EXISTS simultáneos también chocan.
+	err := enTransaccionConLock(ctx, func(tx pgx.Tx) error {
+		return crearTablaMigraciones(ctx, tx)
+	})
 	if err != nil {
 		return fmt.Errorf("error creando tabla de migraciones: %w", err)
 	}
@@ -68,15 +60,17 @@ func EjecutarMigraciones(carpeta string) error {
 	// Los ordenamos por nombre (así respetamos el orden 001, 002, 003...)
 	sort.Strings(archivos)
 
+	// Una sola lectura para saltear rápido las ya ejecutadas (el caso normal al arrancar).
+	// Las pendientes se vuelven a chequear con el lock tomado.
+	ejecutadas, err := migracionesEjecutadas(ctx)
+	if err != nil {
+		return fmt.Errorf("error leyendo migraciones ejecutadas: %w", err)
+	}
+
 	for _, archivo := range archivos {
 		nombre := filepath.Base(archivo)
 
-		// Verificamos si esta migración ya fue ejecutada
-		yaEjecutada, err := migracionYaEjecutada(ctx, conn, nombre)
-		if err != nil {
-			return err
-		}
-		if yaEjecutada {
+		if ejecutadas[nombre] {
 			slog.Info("migración ya ejecutada, se saltea", "archivo", nombre)
 			continue
 		}
@@ -87,59 +81,105 @@ func EjecutarMigraciones(carpeta string) error {
 			return fmt.Errorf("error leyendo %s: %w", nombre, err)
 		}
 
-		err = ejecutarMigracion(ctx, conn, nombre, string(contenido))
+		var ejecutada bool
+		err = enTransaccionConLock(ctx, func(tx pgx.Tx) error {
+			var errMig error
+			ejecutada, errMig = ejecutarMigracion(ctx, tx, nombre, string(contenido))
+			return errMig
+		})
 		if err != nil {
 			return err
 		}
 
-		slog.Info("migración ejecutada", "archivo", nombre)
+		if ejecutada {
+			slog.Info("migración ejecutada", "archivo", nombre)
+		} else {
+			slog.Info("migración ejecutada por otro proceso, se saltea", "archivo", nombre)
+		}
 	}
 
 	return nil
 }
 
-// ejecutarMigracion corre el SQL y registra la migración en una misma transacción:
-// si algo falla, no queda aplicada a medias ni registrada como hecha.
-func ejecutarMigracion(ctx context.Context, conn *pgxpool.Conn, nombre, contenido string) error {
-	tx, err := conn.Begin(ctx)
+// enTransaccionConLock corre fn en una transacción que primero toma el lock de
+// migraciones. El lock se libera solo con el COMMIT o el ROLLBACK.
+func enTransaccionConLock(ctx context.Context, fn func(tx pgx.Tx) error) error {
+	tx, err := Pool.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("error iniciando transacción para %s: %w", nombre, err)
+		return fmt.Errorf("error iniciando transacción: %w", err)
 	}
 	// Después de un Commit exitoso el Rollback no hace nada.
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	if _, err := tx.Exec(ctx, contenido); err != nil {
-		return fmt.Errorf("error ejecutando migración %s: %w", nombre, err)
+	// lock_timeout también acota la espera de advisory locks. Se restablece después
+	// para no limitar los locks que tomen las propias migraciones.
+	if _, err := tx.Exec(ctx, "SET LOCAL lock_timeout = '"+esperaMaximaLock+"'"); err != nil {
+		return fmt.Errorf("error configurando lock_timeout: %w", err)
 	}
-	if _, err := tx.Exec(ctx, "INSERT INTO _migraciones (nombre) VALUES ($1)", nombre); err != nil {
-		return fmt.Errorf("error registrando migración %s: %w", nombre, err)
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", claveLockMigraciones); err != nil {
+		return fmt.Errorf("error tomando lock de migraciones (otro proceso lleva más de %s migrando?): %w", esperaMaximaLock, err)
+	}
+	if _, err := tx.Exec(ctx, "SET LOCAL lock_timeout = DEFAULT"); err != nil {
+		return fmt.Errorf("error restableciendo lock_timeout: %w", err)
+	}
+
+	if err := fn(tx); err != nil {
+		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("error confirmando migración %s: %w", nombre, err)
+		return fmt.Errorf("error confirmando transacción: %w", err)
 	}
 	return nil
 }
 
+// ejecutarMigracion corre el SQL y registra la migración en la transacción recibida:
+// si algo falla, no queda aplicada a medias ni registrada como hecha. Devuelve false
+// si otro proceso ya la había registrado mientras se esperaba el lock.
+func ejecutarMigracion(ctx context.Context, tx pgx.Tx, nombre, contenido string) (bool, error) {
+	var yaEjecutada bool
+	err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM _migraciones WHERE nombre = $1)", nombre).Scan(&yaEjecutada)
+	if err != nil {
+		return false, fmt.Errorf("error verificando migración %s: %w", nombre, err)
+	}
+	if yaEjecutada {
+		return false, nil
+	}
+
+	if _, err := tx.Exec(ctx, contenido); err != nil {
+		return false, fmt.Errorf("error ejecutando migración %s: %w", nombre, err)
+	}
+	if _, err := tx.Exec(ctx, "INSERT INTO _migraciones (nombre) VALUES ($1)", nombre); err != nil {
+		return false, fmt.Errorf("error registrando migración %s: %w", nombre, err)
+	}
+	return true, nil
+}
+
 // crearTablaMigraciones crea la tabla que lleva el registro de migraciones.
 // Si ya existe, no hace nada.
-func crearTablaMigraciones(ctx context.Context, conn *pgxpool.Conn) error {
+func crearTablaMigraciones(ctx context.Context, tx pgx.Tx) error {
 	sql := `
 		CREATE TABLE IF NOT EXISTS _migraciones (
 			nombre     TEXT        PRIMARY KEY,
 			ejecutada_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)
 	`
-	_, err := conn.Exec(ctx, strings.TrimSpace(sql))
+	_, err := tx.Exec(ctx, strings.TrimSpace(sql))
 	return err
 }
 
-// migracionYaEjecutada devuelve true si esa migración ya está registrada.
-func migracionYaEjecutada(ctx context.Context, conn *pgxpool.Conn, nombre string) (bool, error) {
-	var existe bool
-	err := conn.QueryRow(
-		ctx,
-		"SELECT EXISTS(SELECT 1 FROM _migraciones WHERE nombre = $1)",
-		nombre,
-	).Scan(&existe)
-	return existe, err
+// migracionesEjecutadas devuelve el conjunto de migraciones ya registradas.
+func migracionesEjecutadas(ctx context.Context) (map[string]bool, error) {
+	filas, err := Pool.Query(ctx, "SELECT nombre FROM _migraciones")
+	if err != nil {
+		return nil, err
+	}
+	nombres, err := pgx.CollectRows(filas, pgx.RowTo[string])
+	if err != nil {
+		return nil, err
+	}
+	ejecutadas := make(map[string]bool, len(nombres))
+	for _, nombre := range nombres {
+		ejecutadas[nombre] = true
+	}
+	return ejecutadas, nil
 }
