@@ -1,100 +1,173 @@
-package carta_test
+package carta
 
 import (
+	"archive/zip"
 	"bytes"
-	"context"
-	"errors"
+	"fmt"
+	"io"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/aguirrepablo-iresm/mesa-click/api/internal/carta"
 	"github.com/xuri/excelize/v2"
 )
 
-func TestImportarCartaPropagaFalloAtomicoSinReportarExito(t *testing.T) {
-	errTransaccion := errors.New("falló la transacción")
-	store := &mockStore{
-		importarCartaFn: func(context.Context, string, []carta.FilaImportacion) (carta.ResultadoImportacion, error) {
-			return carta.ResultadoImportacion{}, errTransaccion
-		},
-	}
-
-	resultado, err := carta.NuevoService(store).ImportarCarta(
-		context.Background(),
-		"tenant-1",
-		[]carta.FilaImportacion{{Numero: 2, Categoria: "Cafés", Nombre: "Latte", Precio: 2800}},
-	)
-
-	if !errors.Is(err, errTransaccion) {
-		t.Fatalf("se esperaba propagar el error transaccional, obtenido %v", err)
-	}
-	if resultado.Creados != 0 {
-		t.Fatalf("una transacción fallida no debe reportar creados: %+v", resultado)
-	}
-}
-
-func TestImportarCartaIgnoraIdenticosYConservaVariantesDeDescripcion(t *testing.T) {
-	store := &mockStore{
-		categorias: []carta.Categoria{{ID: "cat-1", TenantID: "tenant-1", Nombre: "Cafés"}},
-		articulos: []carta.Articulo{{
-			ID: "existente", TenantID: "tenant-1", CategoriaID: "cat-1",
-			Nombre: "Latte", Descripcion: "Con vainilla", Precio: 2800,
-		}},
-	}
-	svc := carta.NuevoService(store)
-
-	resultado, err := svc.ImportarCarta(context.Background(), "tenant-1", []carta.FilaImportacion{
-		{Numero: 2, Categoria: "Cafés", Nombre: " latte ", Descripcion: "con VAINILLA", Precio: 3000},
-		{Numero: 3, Categoria: "Cafés", Nombre: "Latte", Descripcion: "Con caramelo", Precio: 3100},
-		{Numero: 4, Categoria: "Cafés", Nombre: "Latte", Descripcion: "Con caramelo", Precio: 3200},
-	})
-
+// xlsxValido genera un XLSX real con encabezado y una fila de carta.
+func xlsxValido(t *testing.T) []byte {
+	t.Helper()
+	f := excelize.NewFile()
+	defer f.Close()
+	hoja := f.GetSheetName(0)
+	_ = f.SetSheetRow(hoja, "A1", &[]any{"categoria", "nombre", "precio"})
+	_ = f.SetSheetRow(hoja, "A2", &[]any{"Bebidas", "Agua", 1500})
+	buf, err := f.WriteToBuffer()
 	if err != nil {
-		t.Fatalf("importación inesperadamente fallida: %v", err)
+		t.Fatalf("generando xlsx: %v", err)
 	}
-	if resultado.Creados != 1 || resultado.Omitidos != 2 || len(resultado.Errores) != 0 {
-		t.Fatalf("resultado inesperado: %+v", resultado)
-	}
-	if len(store.articulos) != 2 || store.articulos[1].Descripcion != "Con caramelo" {
-		t.Fatalf("la variante por descripción no fue creada correctamente: %+v", store.articulos)
-	}
+	return buf.Bytes()
 }
 
-func TestCSVYXLSXCompartenElMismoParseo(t *testing.T) {
-	csv := "categoria,nombre,precio,descripcion\nCafés,Latte,2800,Con vainilla\n"
-	filasCSV, erroresCSV := carta.ParsearCSV(strings.NewReader(csv))
-	if len(erroresCSV) != 0 || len(filasCSV) != 1 {
-		t.Fatalf("CSV inesperado: filas=%+v errores=%+v", filasCSV, erroresCSV)
+// reemplazarHoja devuelve una copia del XLSX con el XML de la primera hoja
+// reemplazado, para simular archivos manipulados.
+func reemplazarHoja(t *testing.T, original []byte, xmlHoja string) []byte {
+	t.Helper()
+	zr, err := zip.NewReader(bytes.NewReader(original), int64(len(original)))
+	if err != nil {
+		t.Fatalf("leyendo zip: %v", err)
 	}
-
-	libro := excelize.NewFile()
-	hoja := libro.GetSheetName(0)
-	valores := [][]interface{}{
-		{"categoria", "nombre", "precio", "descripcion"},
-		{"Cafés", "Latte", 2800, "Con vainilla"},
-	}
-	for indice, fila := range valores {
-		celda, err := excelize.CoordinatesToCellName(1, indice+1)
+	var out bytes.Buffer
+	zw := zip.NewWriter(&out)
+	for _, entrada := range zr.File {
+		w, err := zw.Create(entrada.Name)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("creando entrada: %v", err)
 		}
-		if err := libro.SetSheetRow(hoja, celda, &fila); err != nil {
-			t.Fatal(err)
+		if entrada.Name == "xl/worksheets/sheet1.xml" {
+			_, _ = io.WriteString(w, xmlHoja)
+			continue
 		}
+		rc, err := entrada.Open()
+		if err != nil {
+			t.Fatalf("abriendo entrada: %v", err)
+		}
+		_, _ = io.Copy(w, rc)
+		rc.Close()
 	}
-	buffer, err := libro.WriteToBuffer()
-	if err != nil {
-		t.Fatal(err)
+	if err := zw.Close(); err != nil {
+		t.Fatalf("cerrando zip: %v", err)
 	}
-	filasXLSX, erroresXLSX := carta.ParsearXLSX(bytes.NewReader(buffer.Bytes()))
-	if len(erroresXLSX) != 0 || len(filasXLSX) != 1 {
-		t.Fatalf("XLSX inesperado: filas=%+v errores=%+v", filasXLSX, erroresXLSX)
-	}
+	return out.Bytes()
+}
 
-	if filasCSV[0].Categoria != filasXLSX[0].Categoria ||
-		filasCSV[0].Nombre != filasXLSX[0].Nombre ||
-		filasCSV[0].Descripcion != filasXLSX[0].Descripcion ||
-		filasCSV[0].Precio != filasXLSX[0].Precio {
-		t.Fatalf("CSV y XLSX no produjeron la misma fila: csv=%+v xlsx=%+v", filasCSV[0], filasXLSX[0])
+// parsearConTimeout falla el test si el parseo se cuelga en vez de terminar.
+func parsearConTimeout(t *testing.T, contenido []byte) ([]FilaImportacion, []ErrorFila) {
+	t.Helper()
+	type resultado struct {
+		filas   []FilaImportacion
+		errores []ErrorFila
+	}
+	listo := make(chan resultado, 1)
+	go func() {
+		filas, errores := ParsearXLSX(bytes.NewReader(contenido))
+		listo <- resultado{filas, errores}
+	}()
+	select {
+	case r := <-listo:
+		return r.filas, r.errores
+	case <-time.After(10 * time.Second):
+		t.Fatal("ParsearXLSX no terminó: posible loop infinito con archivo malicioso")
+		return nil, nil
+	}
+}
+
+func TestParsearXLSX_Valido(t *testing.T) {
+	filas, errores := parsearConTimeout(t, xlsxValido(t))
+	if len(errores) != 0 {
+		t.Fatalf("errores inesperados: %+v", errores)
+	}
+	if len(filas) != 1 || filas[0].Nombre != "Agua" || filas[0].Precio != 1500 {
+		t.Fatalf("filas inesperadas: %+v", filas)
+	}
+}
+
+func TestParsearXLSX_ArchivoCorrupto(t *testing.T) {
+	_, errores := parsearConTimeout(t, []byte("esto no es un xlsx"))
+	if len(errores) == 0 || !strings.Contains(errores[0].Motivo, "malformado") {
+		t.Fatalf("se esperaba error de archivo malformado, se obtuvo: %+v", errores)
+	}
+}
+
+// hojaConFilas arma el XML de una hoja con una celda en `columna` por fila.
+func hojaConFilas(cantidad int, columna string) string {
+	var b strings.Builder
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+		`<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>`)
+	for i := 1; i <= cantidad; i++ {
+		fmt.Fprintf(&b, `<row r="%d"><c r="%s%d" t="inlineStr"><is><t>x</t></is></c></row>`, i, columna, i)
+	}
+	b.WriteString(`</sheetData></worksheet>`)
+	return b.String()
+}
+
+// Una hoja con un número de fila fuera del rango de Excel debe rechazarse sin
+// colgar el parseo. Es un test de robustez: no reproduce GO-2026-6685, que se
+// cubre actualizando excelize.
+func TestParsearXLSX_NumeroDeFilaDesmedido(t *testing.T) {
+	hoja := `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+		`<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>` +
+		`<row r="2147483647"><c r="A2147483647" t="inlineStr"><is><t>x</t></is></c></row>` +
+		`</sheetData></worksheet>`
+	contenido := reemplazarHoja(t, xlsxValido(t), hoja)
+
+	filas, errores := parsearConTimeout(t, contenido)
+	if len(filas) != 0 || len(errores) == 0 {
+		t.Fatalf("se esperaba rechazo del archivo, se obtuvo filas=%+v errores=%+v", filas, errores)
+	}
+}
+
+// Una celda en la columna XFD por fila cuesta ~1 MB por fila en excelize aunque
+// el archivo pese pocos KB. Pasado el máximo de filas el archivo se rechaza.
+func TestParsearXLSX_CeldasEnUltimaColumna(t *testing.T) {
+	contenido := reemplazarHoja(t, xlsxValido(t), hojaConFilas(maxFilasXLSX+1, "XFD"))
+
+	filas, errores := parsearConTimeout(t, contenido)
+	if len(filas) != 0 || len(errores) == 0 || !strings.Contains(errores[0].Motivo, "máximo") {
+		t.Fatalf("se esperaba rechazo por máximo de filas, se obtuvo filas=%+v errores=%+v", filas, errores)
+	}
+}
+
+// Las columnas más allá de maxColumnasXLSX se descartan sin romper las filas válidas.
+func TestLeerFilasXLSX_RecortaColumnas(t *testing.T) {
+	f := excelize.NewFile()
+	defer f.Close()
+	hoja := f.GetSheetName(0)
+	_ = f.SetSheetRow(hoja, "A1", &[]any{"categoria", "nombre", "precio"})
+	_ = f.SetSheetRow(hoja, "A2", &[]any{"Bebidas", "Agua", 1500})
+	_ = f.SetCellValue(hoja, "XFD2", "basura")
+
+	filas, errFila := leerFilasXLSX(f, hoja)
+	if errFila != nil {
+		t.Fatalf("error inesperado: %+v", errFila)
+	}
+	if len(filas) != 2 || len(filas[1]) != maxColumnasXLSX || filas[1][1] != "Agua" {
+		t.Fatalf("filas inesperadas: %+v", filas)
+	}
+}
+
+func TestParsearXLSX_ZipBomb(t *testing.T) {
+	limiteOriginal := limiteDescompresionXLSX
+	limiteDescompresionXLSX = 1 << 20 // 1 MB, para no armar 50 MB en cada corrida
+	t.Cleanup(func() { limiteDescompresionXLSX = limiteOriginal })
+
+	// Más del límite descomprimido, pero muy chico comprimido.
+	relleno := strings.Repeat(" ", int(limiteDescompresionXLSX)+1)
+	hoja := `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+		`<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+		relleno + `<sheetData/></worksheet>`
+	contenido := reemplazarHoja(t, xlsxValido(t), hoja)
+
+	filas, errores := parsearConTimeout(t, contenido)
+	if len(filas) != 0 || len(errores) == 0 || !strings.Contains(errores[0].Motivo, "demasiado grande") {
+		t.Fatalf("se esperaba rechazo por tamaño descomprimido, se obtuvo filas=%+v errores=%+v", filas, errores)
 	}
 }

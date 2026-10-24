@@ -56,12 +56,34 @@ func ParsearCSV(r io.Reader) ([]FilaImportacion, []ErrorFila) {
 	return parsearRegistros(registros)
 }
 
+// limiteDescompresionXLSX acota el tamaño descomprimido del XLSX. El handler
+// limita la subida a 5 MB comprimidos, pero un zip bomb de ese tamaño puede
+// expandirse a varios GB (el default de excelize es 16 GB).
+// Es variable para que los tests usen un límite chico.
+var limiteDescompresionXLSX int64 = 50 << 20 // 50 MB
+
+const (
+	// maxFilasXLSX acota las filas recorridas. excelize rellena cada fila hasta
+	// su última celda: una celda en la columna XFD cuesta ~1 MB por fila aunque
+	// el archivo pese pocos KB, y un número de fila enorme genera millones de
+	// filas vacías. Una carta real no se acerca a este máximo.
+	maxFilasXLSX = 2000
+	// maxColumnasXLSX es cuántas columnas por fila se conservan; el resto se
+	// descarta para no retener filas de 16384 celdas.
+	maxColumnasXLSX = 26 // A–Z
+)
+
 // ParsearXLSX lee un Reader con contenido XLSX y devuelve las filas válidas.
 // Lee la primera hoja del libro.
 func ParsearXLSX(r io.Reader) ([]FilaImportacion, []ErrorFila) {
-	f, err := excelize.OpenReader(r)
+	f, err := excelize.OpenReader(r, excelize.Options{UnzipSizeLimit: limiteDescompresionXLSX})
 	if err != nil {
-		return nil, []ErrorFila{{Fila: 0, Motivo: "archivo Excel malformado: " + err.Error()}}
+		// excelize no exporta este error, solo se distingue por el mensaje.
+		if strings.Contains(err.Error(), "unzip size exceeds") {
+			return nil, []ErrorFila{{Fila: 0, Motivo: fmt.Sprintf(
+				"el archivo Excel es demasiado grande: descomprimido supera los %d MB", limiteDescompresionXLSX>>20)}}
+		}
+		return nil, []ErrorFila{{Fila: 0, Motivo: "archivo Excel malformado o dañado"}}
 	}
 	defer f.Close()
 
@@ -70,15 +92,47 @@ func ParsearXLSX(r io.Reader) ([]FilaImportacion, []ErrorFila) {
 		return nil, []ErrorFila{{Fila: 0, Motivo: "el archivo Excel no tiene hojas"}}
 	}
 
-	filas, err := f.GetRows(hojas[0])
-	if err != nil {
-		return nil, []ErrorFila{{Fila: 0, Motivo: "error leyendo filas del Excel: " + err.Error()}}
+	filas, errFila := leerFilasXLSX(f, hojas[0])
+	if errFila != nil {
+		return nil, []ErrorFila{*errFila}
 	}
 	if len(filas) == 0 {
 		return nil, []ErrorFila{{Fila: 0, Motivo: "la hoja de cálculo está vacía"}}
 	}
 
 	return parsearRegistros(filas)
+}
+
+// leerFilasXLSX recorre la hoja fila por fila aplicando maxFilasXLSX y
+// maxColumnasXLSX. Reemplaza a f.GetRows, que no tiene ninguno de los dos.
+func leerFilasXLSX(f *excelize.File, hoja string) ([][]string, *ErrorFila) {
+	rows, err := f.Rows(hoja)
+	if err != nil {
+		return nil, &ErrorFila{Fila: 0, Motivo: "no se pudieron leer las filas del Excel"}
+	}
+	defer rows.Close()
+
+	var filas [][]string
+	for n := 1; rows.Next(); n++ {
+		if n > maxFilasXLSX {
+			return nil, &ErrorFila{Fila: 0, Motivo: fmt.Sprintf(
+				"el archivo Excel supera el máximo de %d filas", maxFilasXLSX)}
+		}
+		columnas, err := rows.Columns()
+		if err != nil {
+			return nil, &ErrorFila{Fila: 0, Motivo: "no se pudieron leer las filas del Excel"}
+		}
+		if len(columnas) > maxColumnasXLSX {
+			columnas = columnas[:maxColumnasXLSX]
+		}
+		// Copia para soltar el arreglo original, que puede tener 16384 celdas.
+		filas = append(filas, append([]string(nil), columnas...))
+	}
+	if err := rows.Error(); err != nil {
+		return nil, &ErrorFila{Fila: 0, Motivo: "no se pudieron leer las filas del Excel"}
+	}
+
+	return filas, nil
 }
 
 // parsearRegistros convierte la matriz de strings (cabecera + filas) en FilaImportacion.
