@@ -61,6 +61,7 @@ export default function OnboardingPage() {
   const [creando, setCreando] = useState("");
   const [magicLinkEnviado, setMagicLinkEnviado] = useState<{ email: string; devLink?: string } | null>(null);
   const [error, setError] = useState("");
+  const [negocioCreado, setNegocioCreado] = useState(false);
 
   // Sin datos de cuenta (recarga o acceso directo) no se puede crear el negocio.
   useEffect(() => {
@@ -124,40 +125,43 @@ export default function OnboardingPage() {
 
   const crearNegocio = async () => {
     setError("");
-    setCreando("Creando tu negocio…");
-    try {
-      await api.crearTenant({
-        nombre: nombreNegocio.trim(),
-        nombre_fantasia: nombreNegocio.trim(),
-        slug,
-        rubro,
-        descripcion: rubro === "otro" ? rubroDetalle.trim() : undefined,
-        email_admin: cuenta.email,
-        nombre_admin: cuenta.nombre,
-        password: cuenta.usarMagicLink || cuenta.googleCredential ? undefined : cuenta.password,
-        google_credential: cuenta.googleCredential || undefined,
-        sucursal_nombre: nombreSucursal.trim(),
-        whatsapp: whatsapp.trim(),
-        email_sucursal: emailSucursal.trim(),
-        horarios: HORARIO_ESTANDAR,
-      });
-    } catch (err: unknown) {
-      setCreando("");
-      const mensaje = getErrorMessage(err, "No pudimos crear el negocio. Revisá los datos e intentá nuevamente.");
-      const normalizado = mensaje.toLowerCase();
-      if (normalizado.includes("nombre en url")) {
-        setResultadoSlug({ slug, estado: "en-uso" });
-        setEditandoSlug(true);
-        irAPaso(1);
-        setError("Ese nombre en URL ya está en uso. Elegí otro para continuar.");
+    if (!negocioCreado) {
+      setCreando("Creando tu negocio…");
+      try {
+        await api.crearTenant({
+          nombre: nombreNegocio.trim(),
+          nombre_fantasia: nombreNegocio.trim(),
+          slug,
+          rubro,
+          descripcion: rubro === "otro" ? rubroDetalle.trim() : undefined,
+          email_admin: cuenta.email,
+          nombre_admin: cuenta.nombre,
+          password: cuenta.usarMagicLink || cuenta.googleCredential ? undefined : cuenta.password,
+          google_credential: cuenta.googleCredential || undefined,
+          sucursal_nombre: nombreSucursal.trim(),
+          whatsapp: whatsapp.trim(),
+          email_sucursal: emailSucursal.trim(),
+          horarios: HORARIO_ESTANDAR,
+        });
+        setNegocioCreado(true);
+      } catch (err: unknown) {
+        setCreando("");
+        const mensaje = getErrorMessage(err, "No pudimos crear el negocio. Revisá los datos e intentá nuevamente.");
+        const normalizado = mensaje.toLowerCase();
+        if (normalizado.includes("nombre en url")) {
+          setResultadoSlug({ slug, estado: "en-uso" });
+          setEditandoSlug(true);
+          irAPaso(1);
+          setError("Ese nombre en URL ya está en uso. Elegí otro para continuar.");
+          return;
+        }
+        if (normalizado.includes("correo de acceso") || normalizado.includes("cuenta de google")) {
+          setError(`${mensaje} Volvé a crear tu cuenta para continuar.`);
+          return;
+        }
+        setError(mensaje);
         return;
       }
-      if (normalizado.includes("correo de acceso") || normalizado.includes("cuenta de google")) {
-        setError(`${mensaje} Volvé a crear tu cuenta para continuar.`);
-        return;
-      }
-      setError(mensaje);
-      return;
     }
 
     // Si el usuario eligió enlace mágico, se solicita el link y se muestra pantalla de confirmación.
@@ -184,8 +188,8 @@ export default function OnboardingPage() {
         await api.autenticarConPassword(cuenta.email, cuenta.password || "");
       }
     } catch {
-      setCuenta(null);
-      router.replace("/login");
+      setCreando("");
+      setError("Tu negocio ya fue creado, pero no pudimos iniciar sesión automáticamente. Podés reintentar o ingresar con tu correo y contraseña.");
       return;
     }
 
@@ -466,10 +470,11 @@ export default function OnboardingPage() {
                     <div role="alert" className="auth-alert">
                       {error}
                       {(error.includes("correo") || error.includes("Google")) && <> <Link href="/registro">Volver a crear la cuenta</Link></>}
+                      {negocioCreado && <> <Link href={`/login?email=${encodeURIComponent(cuenta.email)}`}>Ir a iniciar sesión</Link></>}
                     </div>
                   )}
                   <button type="button" className="onboarding-primary finish" onClick={crearNegocio} disabled={Boolean(creando)}>
-                    {creando || "Crear mi negocio"}
+                    {creando || (negocioCreado ? "Reintentar inicio de sesión" : "Crear mi negocio")}
                   </button>
                   <small>Tu prueba Pro de {PLAN_PRUEBA_MESES} meses comienza al crear el negocio. Después te guiamos para cargar tu primer plato.</small>
                 </div>

@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- imagen de referencia de la maqueta (Unsplash) */
 
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, getErrorMessage } from "@/lib/api";
@@ -29,6 +29,16 @@ export default function RegistroPage() {
   const [error, setError] = useState("");
   const [emailEnUso, setEmailEnUso] = useState(false);
   const [validando, setValidando] = useState(false);
+  const [continuarOnboarding, setContinuarOnboarding] = useState(false);
+
+  useEffect(() => {
+    if (continuarOnboarding && cuenta) router.push("/onboarding");
+  }, [continuarOnboarding, cuenta, router]);
+
+  const continuarConCuenta = (siguienteCuenta: NonNullable<typeof cuenta>) => {
+    setCuenta(siguienteCuenta);
+    setContinuarOnboarding(true);
+  };
 
   // Devuelve si el correo puede usarse; si el servidor no responde, deja seguir.
   const emailDisponible = async (correo: string): Promise<boolean> => {
@@ -67,14 +77,13 @@ export default function RegistroPage() {
     setValidando(false);
     if (!disponible) return;
 
-    setCuenta({
+    continuarConCuenta({
       nombre: nombre.trim(),
       email: email.trim().toLowerCase(),
       password: metodo === "password" ? password : "",
       googleCredential: "",
       usarMagicLink: metodo === "magic",
     });
-    router.push("/onboarding");
   };
 
   const handleGoogleCredential = async (credential: string) => {
@@ -91,13 +100,12 @@ export default function RegistroPage() {
     setValidando(false);
     if (!disponible) return;
 
-    setCuenta({
+    continuarConCuenta({
       nombre: identidad.nombre || nombre.trim(),
       email: identidad.email.toLowerCase(),
       password: "",
       googleCredential: credential,
     });
-    router.push("/onboarding");
   };
 
   const handleGoogleError = useCallback((message: string) => setError(message), []);
