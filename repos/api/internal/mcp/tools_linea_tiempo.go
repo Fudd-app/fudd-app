@@ -13,29 +13,32 @@ const (
 	descEstadoMesas = "Reconstruye cómo estaban las mesas de una sucursal en un momento del pasado (o ahora). " +
 		"Sirve para preguntas como \"¿cómo estaban las mesas hace una hora?\" o \"¿qué mesas esperaban comida a las 21:00?\". " +
 		"`momento` acepta ISO-8601 con zona (\"2026-10-22T21:00:00-03:00\") o relativo (\"hace 60 min\", \"hace 2 horas\", \"60m\", \"2h\"); sin `momento` es ahora; no admite futuro. " +
-		"`mesa` (opcional) es el número de una mesa para ver solo esa. Lista todas las mesas activas. " +
-		"Por mesa: `cuenta_abierta` y `cuenta_version` (null si no había cuenta abierta), `pedidos` de esa cuenta con su `estado` en ese momento " +
-		"(recibido, confirmado, preparando, listo, entregado), `desde_ts`, `minutos_en_estado`, `quien_ultimo_cambio` y `rol` de quien hizo el último cambio, " +
+		"`mesa` (opcional) es el número de una mesa para ver solo esa. Lista las mesas activas ahora y las que tuvieron hitos en las 24 horas previas al momento (aunque hoy estén dadas de baja). " +
+		"Por mesa: `cuenta_abierta` y `cuenta_version` (null si no había cuenta abierta; misma regla que estado_salon: hace falta al menos un pedido de la cuenta), " +
+		"`pedidos` de esa cuenta con su `estado` en ese momento (recibido, confirmado, preparando, listo, entregado o cerrado), `desde_ts`, `minutos_en_estado`, `quien_ultimo_cambio` y `rol` de quien hizo el último cambio, " +
 		"`cuenta_solicitada`, `pago_habilitado`, y `espera` con la misma regla que estado_salon: `cobro` si pidió la cuenta o tiene el pago habilitado; " +
 		"si no, `comida` (pedidos recibidos, confirmados o en preparación); si no, `entrega` (hay pedidos listos); si no, null. " +
-		"`minutos_en_espera` es null para `cobro`. " +
+		"`minutos_en_espera`: para `comida`, desde que se creó el pedido más antiguo en cocina; para `entrega`, desde que se marcó listo el más antiguo; null para `cobro`. " +
 		"Si `momento` es anterior al primer hito registrado responde el error `sin_datos` con `detalle.historial_desde`: solo hay historial desde el despliegue del registro de hitos. " +
-		"Se reconstruye con hasta 24 horas de hitos previos al momento: una cuenta abierta hace más tiempo puede aparecer sin sus pedidos más viejos. " +
+		"Se reconstruye con hasta 24 horas de hitos previos al momento: una cuenta abierta hace más tiempo puede aparecer sin sus pedidos más viejos, " +
+		"y una cuenta sin ningún hito en esas 24 horas aparece sin cuenta abierta. " +
 		"Lo que NO se sabe: `entregado` registra cuándo se marcó, no necesariamente cuándo se entregó físicamente; " +
 		"no hay registro de cuándo se pidió la cuenta en minutos ni de comensales en ese momento."
 
 	descHistorialMesa = "Línea de tiempo de una mesa: cada hito registrado (cuenta abierta, pedido creado, cambios de estado del pedido y de ítems, cuenta solicitada, pago habilitado y aprobado, cuenta cerrada). " +
 		"Sirve para preguntas como \"¿quién tomó el pedido de la mesa 5 en cocina y cuánto tardó?\" o \"¿dónde se demoró el pedido de la mesa 3?\". " +
 		"`mesa` es el número de la mesa (obligatorio). `desde` y `hasta` aceptan ISO-8601 con zona o relativo (\"hace 2 horas\", \"90m\"); " +
-		"por defecto `hasta` es ahora y `desde` son 12 horas antes de `hasta`. " +
+		"por defecto `hasta` es ahora y `desde` son 12 horas antes de `hasta`; el rango máximo es de 7 días. " +
+		"Si `hasta` es anterior al primer hito registrado responde el error `sin_datos` con `detalle.historial_desde`. " +
 		"`hitos` va ordenado por `ts` con `hito` (tipo), `pedido_id`, `item_id`, `estado_anterior`, `estado_nuevo`, `quien` y `rol` (quien hizo el cambio: usuario, \"comensal\" por QR o sistema), " +
 		"`modo_entrega` (solo al entregar) y `minutos_desde_anterior` respecto del hito previo de la lista (null en el primero). " +
 		"`etapas` resume cada pedido en minutos: `minutos_hasta_confirmacion` (recibido a confirmado), `minutos_espera_cocina` (confirmado hasta que cocina empieza a preparar), " +
-		"`minutos_preparacion` (preparando a listo), `minutos_a_entrega` (listo a entregado) y `modo_entrega`; las etapas que faltan son null. " +
+		"`minutos_preparacion` (preparando a listo), `minutos_a_entrega` (listo a entregado: el tramo \"a retirar\", con el pedido listo esperando que lo lleven a la mesa o lo retiren) y `modo_entrega`; " +
+		"no hay un hito aparte para la entrega física, así que retiro y entrega son el mismo tramo. Las etapas que faltan son null. " +
 		"Lo que NO se sabe: `entregado` registra el momento en que se marcó, no necesariamente cuándo se entregó físicamente; " +
 		"hay historial solo desde el despliegue del registro de hitos, y no hay hitos de antes."
 
-	ejemplosMomento = "\"hace 60 min\", \"hace 2 horas\", \"60m\", \"2h\" o \"2026-10-22T21:00:00-03:00\""
+	ejemplosMomento = "\"hace 60 min\", \"hace una hora\", \"60m\", \"2h\" o \"2026-10-22T21:00:00-03:00\""
 )
 
 type entradaEstadoMesas struct {
@@ -59,6 +62,20 @@ func errParametroInvalido(parametro, valor string, causa error) error {
 	return &errTool{
 		Codigo: CodigoParametroInvalido, Mensaje: mensaje,
 		Detalle: map[string]any{"parametro": parametro, "valor": valor, "ejemplos": []string{"hace 60 min", "hace 2 horas", "60m", "2h", "2026-10-22T21:00:00-03:00"}},
+	}
+}
+
+// errSinDatos avisa que el instante pedido es anterior al registro de hitos de la sucursal.
+func errSinDatos(primero *time.Time, momento time.Time, loc *time.Location) error {
+	var desde any
+	mensaje := "Todavía no hay hitos registrados en esta sucursal."
+	if primero != nil {
+		desde = formatoTS(primero.In(loc))
+		mensaje = "No hay historial anterior a " + formatoTS(primero.In(loc)) + "."
+	}
+	return &errTool{
+		Codigo: CodigoSinDatos, Mensaje: mensaje + " El registro de hitos empezó recién en esa fecha.",
+		Detalle: map[string]any{"historial_desde": desde, "momento": formatoTS(momento.In(loc))},
 	}
 }
 
@@ -86,22 +103,20 @@ func (h *herramientas) estadoMesas(ctx context.Context, _ *sdk.CallToolRequest, 
 			return SalidaEstadoMesas{}, err
 		}
 		if primero == nil || momento.Before(*primero) {
-			var desde any
-			mensaje := "Todavía no hay hitos registrados en esta sucursal."
-			if primero != nil {
-				desde = formatoTS(primero.In(loc))
-				mensaje = "No hay historial anterior a " + formatoTS(primero.In(loc)) + "."
-			}
-			return SalidaEstadoMesas{}, &errTool{
-				Codigo: CodigoSinDatos, Mensaje: mensaje + " El registro de hitos empezó recién en esa fecha.",
-				Detalle: map[string]any{"historial_desde": desde, "momento": formatoTS(momento.In(loc))},
-			}
+			return SalidaEstadoMesas{}, errSinDatos(primero, momento, loc)
 		}
-		mesas, err := h.deps.Store.MesasActivas(ctx, h.claims.TenantID, suc.ID)
+		mesas, err := h.deps.Store.MesasSucursal(ctx, h.claims.TenantID, suc.ID)
+		if err != nil {
+			return SalidaEstadoMesas{}, err
+		}
+		// hasta es exclusivo en la lectura: se suma la resolución de Postgres para incluir el propio instante.
+		eventos, err := h.deps.Store.EventosSucursal(ctx, h.claims.TenantID, suc.ID,
+			momento.Add(-ventanaReconstruccion), momento.Add(time.Microsecond))
 		if err != nil {
 			return SalidaEstadoMesas{}, err
 		}
 		if in.Mesa != nil {
+			// Se busca entre todas las mesas, como historial_mesa: pedir una mesa dada de baja es válido.
 			filtradas := []MesaRef{}
 			for _, m := range mesas {
 				if m.Numero == *in.Mesa {
@@ -112,12 +127,8 @@ func (h *herramientas) estadoMesas(ctx context.Context, _ *sdk.CallToolRequest, 
 				return SalidaEstadoMesas{}, errMesaNoEncontrada(*in.Mesa)
 			}
 			mesas = filtradas
-		}
-		// hasta es exclusivo en la lectura: se suma la resolución de Postgres para incluir el propio instante.
-		eventos, err := h.deps.Store.EventosSucursal(ctx, h.claims.TenantID, suc.ID,
-			momento.Add(-ventanaReconstruccion), momento.Add(time.Microsecond))
-		if err != nil {
-			return SalidaEstadoMesas{}, err
+		} else {
+			mesas = mesasAReconstruir(mesas, eventos)
 		}
 		estados := reconstruirMesas(mesas, eventos, momento)
 
@@ -162,6 +173,19 @@ func (h *herramientas) historialMesa(ctx context.Context, _ *sdk.CallToolRequest
 				Codigo: CodigoParametroInvalido, Mensaje: "`desde` es posterior a `hasta`.",
 				Detalle: map[string]any{"parametro": "desde", "valor": in.Desde, "ejemplos": []string{"hace 2 horas", "90m"}},
 			}
+		}
+		if hasta.Sub(desde) > maxRangoHistorial {
+			return SalidaHistorialMesa{}, &errTool{
+				Codigo: CodigoParametroInvalido, Mensaje: "El rango entre `desde` y `hasta` no puede superar los 7 días.",
+				Detalle: map[string]any{"parametro": "desde", "valor": in.Desde, "ejemplos": []string{"hace 2 horas", "hace 24 h"}},
+			}
+		}
+		primero, err := h.deps.Store.PrimerEvento(ctx, h.claims.TenantID, suc.ID)
+		if err != nil {
+			return SalidaHistorialMesa{}, err
+		}
+		if primero == nil || hasta.Before(*primero) {
+			return SalidaHistorialMesa{}, errSinDatos(primero, hasta, loc)
 		}
 		mesa, err := h.deps.Store.MesaPorNumero(ctx, h.claims.TenantID, suc.ID, in.Mesa)
 		if errors.Is(err, ErrMesaNoEncontrada) {

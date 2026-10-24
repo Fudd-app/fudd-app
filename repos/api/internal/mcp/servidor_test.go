@@ -139,7 +139,7 @@ func nuevoStoreFalso() *storeFalso {
 			{Hora: "12:00", Pedidos: 3, Comensales: 4, Facturacion: 1000},
 		},
 		comensales: 11,
-		mesasRef:   map[string][]MesaRef{"s-a": {{ID: "m-1", Numero: 1}, {ID: "m-2", Numero: 2}}},
+		mesasRef:   map[string][]MesaRef{"s-a": {{ID: "m-1", Numero: 1, Activa: true}, {ID: "m-2", Numero: 2, Activa: true}, {ID: "m-baja", Numero: 7}}},
 		eventos:    map[string][]evento.Evento{"s-a": eventosDePrueba()},
 	}
 }

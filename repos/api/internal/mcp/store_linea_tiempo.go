@@ -41,15 +41,17 @@ func (s *pgStore) PrimerEvento(ctx context.Context, tenantID, sucursalID string)
 	return primero, err
 }
 
-func (s *pgStore) MesasActivas(ctx context.Context, tenantID, sucursalID string) ([]MesaRef, error) {
+// MesasSucursal devuelve todas las mesas de la sucursal, activas o no: para reconstruir el pasado
+// importa también una mesa que hoy está dada de baja.
+func (s *pgStore) MesasSucursal(ctx context.Context, tenantID, sucursalID string) ([]MesaRef, error) {
 	if !reUUID.MatchString(sucursalID) || !reUUID.MatchString(tenantID) {
 		return []MesaRef{}, nil
 	}
 	rows, err := db.Pool.Query(ctx, `
-		SELECT m.id, m.numero
+		SELECT m.id, m.numero, m.estado = 'activa'
 		FROM mesas m
 		JOIN sucursales su ON su.id = m.sucursal_id
-		WHERE su.tenant_id = $1 AND m.sucursal_id = $2 AND m.estado = 'activa'
+		WHERE su.tenant_id = $1 AND m.sucursal_id = $2
 		ORDER BY m.numero`, tenantID, sucursalID)
 	if err != nil {
 		return nil, err
@@ -58,7 +60,7 @@ func (s *pgStore) MesasActivas(ctx context.Context, tenantID, sucursalID string)
 	mesas := []MesaRef{}
 	for rows.Next() {
 		var m MesaRef
-		if err := rows.Scan(&m.ID, &m.Numero); err != nil {
+		if err := rows.Scan(&m.ID, &m.Numero, &m.Activa); err != nil {
 			return nil, err
 		}
 		mesas = append(mesas, m)

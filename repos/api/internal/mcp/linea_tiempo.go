@@ -25,8 +25,11 @@ const (
 	CodigoMesaNoEncontrada  = "mesa_no_encontrada"
 
 	// ventanaReconstruccion es cuánto se lee hacia atrás desde el momento consultado.
-	// Una cuenta abierta hace más que esto aparece sin los pedidos anteriores a la ventana.
+	// Una cuenta abierta hace más que esto aparece sin los pedidos anteriores a la ventana, y
+	// una cuenta sin ningún hito dentro de la ventana aparece sin cuenta abierta.
 	ventanaReconstruccion = 24 * time.Hour
+	// maxRangoHistorial acota historial_mesa para no volcar meses de hitos en una respuesta.
+	maxRangoHistorial = 7 * 24 * time.Hour
 	// toleranciaFuturo absorbe el desfase de reloj entre el cliente y el servidor.
 	toleranciaFuturo = time.Minute
 	// maxRelativoHoras acota los valores relativos ("hace 99999 h") para no desbordar la duración.
@@ -37,6 +40,7 @@ const (
 type MesaRef struct {
 	ID     string
 	Numero int
+	Activa bool
 }
 
 // PedidoEnMomento es un pedido de la cuenta abierta tal como estaba en el momento consultado.
@@ -106,7 +110,7 @@ type SalidaHistorialMesa struct {
 	Etapas         []EtapasPedido `json:"etapas"`
 }
 
-var reRelativo = regexp.MustCompile(`^(?:hace\s+)?(\d+)\s*([a-z]+)(?:\s+atras|\s+ago)?$`)
+var reRelativo = regexp.MustCompile(`^(?:hace\s+)?(\d+|una?)\s*([a-z]+)(?:\s+atras|\s+ago)?$`)
 
 var unidadesRelativas = map[string]time.Duration{
 	"m": time.Minute, "min": time.Minute, "mins": time.Minute, "minuto": time.Minute, "minutos": time.Minute,
@@ -116,17 +120,22 @@ var unidadesRelativas = map[string]time.Duration{
 }
 
 // parsearMomento interpreta un instante: ISO-8601 con zona ("2026-10-22T14:00:00-03:00") o relativo a
-// `ahora` ("hace 60 min", "hace 2 horas", "60m", "2h", "90 minutes ago"). El vacío, "ahora" y "now"
+// `ahora` ("hace 60 min", "hace una hora", "60m", "2h", "90 minutes ago"). El vacío, "ahora" y "now"
 // devuelven `ahora`. Un instante futuro (más allá de un minuto de tolerancia) es ErrMomentoFuturo.
 func parsearMomento(raw string, ahora time.Time) (time.Time, error) {
-	valor := strings.ToLower(strings.TrimSpace(raw))
+	// El modelo a veces cierra el valor con un punto ("hace 60 min.").
+	valor := strings.TrimRight(strings.ToLower(strings.TrimSpace(raw)), ".,;!? ")
 	switch valor {
 	case "", "ahora", "now":
 		return ahora, nil
 	}
 	if m := reRelativo.FindStringSubmatch(strings.ReplaceAll(valor, "á", "a")); m != nil {
 		unidad, ok := unidadesRelativas[m[2]]
-		cantidad, err := strconv.Atoi(m[1])
+		cantidad := 1 // "un" / "una"
+		var err error
+		if m[1] != "un" && m[1] != "una" {
+			cantidad, err = strconv.Atoi(m[1])
+		}
 		if !ok || err != nil || cantidad > maxRelativoHoras*int(time.Hour/unidad) {
 			return time.Time{}, ErrMomentoInvalido
 		}
@@ -175,6 +184,22 @@ func ordenarPorTS(eventos []evento.Evento) []evento.Evento {
 	return copia
 }
 
+// mesasAReconstruir elige qué mesas mostrar: las activas ahora y las que tuvieron hitos en la
+// ventana leída. Así una mesa dada de baja después del momento consultado no desaparece del pasado.
+func mesasAReconstruir(mesas []MesaRef, eventos []evento.Evento) []MesaRef {
+	conHitos := map[string]bool{}
+	for _, e := range eventos {
+		conHitos[e.MesaID] = true
+	}
+	elegidas := []MesaRef{}
+	for _, m := range mesas {
+		if m.Activa || conHitos[m.ID] {
+			elegidas = append(elegidas, m)
+		}
+	}
+	return elegidas
+}
+
 // reconstruirMesas arma el estado de cada mesa en `momento` solo con los eventos hasta ese instante.
 // Es determinista: depende únicamente de sus argumentos.
 func reconstruirMesas(mesas []MesaRef, eventos []evento.Evento, momento time.Time) []MesaEnMomento {
@@ -210,11 +235,11 @@ func estadoDeMesa(numero int, eventos []evento.Evento, momento time.Time) MesaEn
 			return m
 		}
 	}
-	m.CuentaAbierta, m.CuentaVersion = true, &version
-
 	type pedidoAcum struct {
 		PedidoEnMomento
 		desde time.Time
+		// creado es cuándo entró el pedido: la espera de comida se mide desde ahí, como en estado_salon.
+		creado time.Time
 	}
 	var orden []string
 	pedidos := map[string]*pedidoAcum{}
@@ -230,9 +255,13 @@ func estadoDeMesa(numero int, eventos []evento.Evento, momento time.Time) MesaEn
 			}
 			p := pedidos[*e.PedidoID]
 			if p == nil {
-				p = &pedidoAcum{PedidoEnMomento: PedidoEnMomento{PedidoID: *e.PedidoID}}
+				// Si la creación quedó fuera de la ventana, el primer hito visto es la mejor aproximación.
+				p = &pedidoAcum{PedidoEnMomento: PedidoEnMomento{PedidoID: *e.PedidoID}, creado: e.TS}
 				pedidos[*e.PedidoID] = p
 				orden = append(orden, *e.PedidoID)
+			}
+			if e.Tipo == evento.TipoPedidoCreado {
+				p.creado = e.TS
 			}
 			p.Estado, p.desde = e.EstadoNuevo, e.TS
 			p.DesdeTS = formatoTS(e.TS.In(loc))
@@ -244,33 +273,40 @@ func estadoDeMesa(numero int, eventos []evento.Evento, momento time.Time) MesaEn
 		}
 	}
 
-	var cocina, listos int
+	var cocina, listos, activos int
 	var cocinaDesde, listoDesde *time.Time
 	for _, id := range orden {
 		p := pedidos[id]
 		p.MinutosEnEstado = *minutosDesde(momento, &p.desde)
 		m.Pedidos = append(m.Pedidos, p.PedidoEnMomento)
-		desde := p.desde
+		if p.Estado != "cerrado" {
+			activos++
+		}
 		switch p.Estado {
 		case "recibido", "confirmado", "preparando":
 			cocina++
-			if cocinaDesde == nil || desde.Before(*cocinaDesde) {
-				cocinaDesde = &desde
+			if creado := p.creado; cocinaDesde == nil || creado.Before(*cocinaDesde) {
+				cocinaDesde = &creado
 			}
 		case "listo":
+			// desde es cuándo pasó a listo: equivale a pedidos.listo_at de estado_salon.
 			listos++
-			if listoDesde == nil || desde.Before(*listoDesde) {
+			if desde := p.desde; listoDesde == nil || desde.Before(*listoDesde) {
 				listoDesde = &desde
 			}
 		}
 	}
-	estado := MesaOcupada
-	switch {
-	case m.PagoHabilitado:
-		estado = MesaPagoHabilitado
-	case m.CuentaSolicitada:
-		estado = MesaCuentaSolicitada
+
+	// Misma regla que estado_salon: sin pedidos (p. ej. solo se habilitó el pago) o con todos
+	// cerrados y sin cuenta pedida, la mesa está libre y no hay cuenta abierta.
+	estado, _, _ := derivarMesa(datosMesa{
+		CuentaSolicitada: m.CuentaSolicitada, PagoHabilitado: m.PagoHabilitado,
+		PedidosTotales: len(orden), PedidosActivos: activos,
+	})
+	if estado == MesaLibre {
+		return MesaEnMomento{Mesa: numero, Pedidos: []PedidoEnMomento{}}
 	}
+	m.CuentaAbierta, m.CuentaVersion = true, &version
 	m.Espera, m.MinutosEnEspera = derivarEspera(estado, cocina, listos, minutosDesde(momento, cocinaDesde), minutosDesde(momento, listoDesde))
 	return m
 }

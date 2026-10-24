@@ -21,7 +21,7 @@ type Store interface {
 	UltimaHoraCocina(ctx context.Context, tenantID, sucursalID string, ahora time.Time) (UltimaHora, error)
 	ComensalesAtendidos(ctx context.Context, tenantID, sucursalID string, desde, hasta time.Time) (int, error)
 	ResumenPorHora(ctx context.Context, tenantID, sucursalID string, desde, hasta time.Time, zona string) ([]HoraTurno, error)
-	MesasActivas(ctx context.Context, tenantID, sucursalID string) ([]MesaRef, error)
+	MesasSucursal(ctx context.Context, tenantID, sucursalID string) ([]MesaRef, error)
 	MesaPorNumero(ctx context.Context, tenantID, sucursalID string, numero int) (*MesaRef, error)
 	PrimerEvento(ctx context.Context, tenantID, sucursalID string) (*time.Time, error)
 	EventosSucursal(ctx context.Context, tenantID, sucursalID string, desde, hasta time.Time) ([]evento.Evento, error)

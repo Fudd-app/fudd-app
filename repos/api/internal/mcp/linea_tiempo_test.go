@@ -44,7 +44,7 @@ func eventosDePrueba() []evento.Evento {
 	}
 }
 
-func (s *storeFalso) MesasActivas(_ context.Context, _, sucursalID string) ([]MesaRef, error) {
+func (s *storeFalso) MesasSucursal(_ context.Context, _, sucursalID string) ([]MesaRef, error) {
 	return s.mesasRef[sucursalID], s.falla
 }
 
@@ -104,6 +104,9 @@ func TestParsearMomento(t *testing.T) {
 		"90 minutes ago":            ahora.Add(-90 * time.Minute),
 		"2 hours ago":               ahora.Add(-2 * time.Hour),
 		"hace 30 minutos atrás":     ahora.Add(-30 * time.Minute),
+		"hace una hora":             ahora.Add(-time.Hour),
+		"hace un minuto":            ahora.Add(-time.Minute),
+		"hace 60 min.":              ahora.Add(-60 * time.Minute),
 		"2026-10-22T11:00:00-03:00": time.Date(2026, 10, 22, 14, 0, 0, 0, time.UTC),
 		"2026-10-22T14:00:00Z":      time.Date(2026, 10, 22, 14, 0, 0, 0, time.UTC),
 		"2026-10-22T15:30:30Z":      ahora, // dentro de la tolerancia de reloj: se recorta a ahora
@@ -152,7 +155,7 @@ func TestReconstruirMesas(t *testing.T) {
 		return MesaEnMomento{}
 	}
 
-	// 14:12, el pedido lo tiene cocina desde las 14:10.
+	// 14:12, el pedido lo tiene cocina desde las 14:10; la espera de comida cuenta desde que se creó (14:00), como estado_salon.
 	m := estado(en(12), 1)
 	if !m.CuentaAbierta || m.CuentaVersion == nil || *m.CuentaVersion != 3 || len(m.Pedidos) != 1 {
 		t.Fatalf("t=14:12: %+v", m)
@@ -162,7 +165,7 @@ func TestReconstruirMesas(t *testing.T) {
 		p.Rol == nil || *p.Rol != "cocinero" || p.DesdeTS != "2026-10-22T11:10:00-03:00" {
 		t.Errorf("pedido a las 14:12: %+v", p)
 	}
-	if m.Espera == nil || *m.Espera != EsperaComida || m.MinutosEnEspera == nil || *m.MinutosEnEspera != 2 || m.CuentaSolicitada || m.PagoHabilitado {
+	if m.Espera == nil || *m.Espera != EsperaComida || m.MinutosEnEspera == nil || *m.MinutosEnEspera != 12 || m.CuentaSolicitada || m.PagoHabilitado {
 		t.Errorf("espera a las 14:12: %+v", m)
 	}
 
@@ -238,6 +241,39 @@ func TestReconstruirMesas(t *testing.T) {
 	}
 }
 
+// La cuenta abierta sigue la regla de estado_salon (derivarMesa): sin pedidos, o con todos
+// cerrados y sin cuenta pedida ni pago habilitado, la mesa está libre.
+func TestReconstruirMesas_MismaReglaQueSalon(t *testing.T) {
+	mesas := []MesaRef{{ID: "m-1", Numero: 1}}
+
+	// El mozo habilita el pago de una cuenta nueva que todavía no tiene pedidos.
+	soloPago := append(eventosDePrueba()[:8:8],
+		evt("m-1", 4, evento.TipoPagoHabilitado, "", "deshabilitado", "habilitado", evento.ActorUsuario, "Laura", "mozo", en(50)))
+	if m := reconstruirMesas(mesas, soloPago, en(51))[0]; m.CuentaAbierta || m.Espera != nil || m.PagoHabilitado {
+		t.Errorf("pago habilitado sin pedidos no abre cuenta: %+v", m)
+	}
+
+	// Todos los pedidos cerrados y sin cuenta pedida: libre.
+	cerrado := append(eventosDePrueba()[:5:5],
+		evt("m-1", 3, evento.TipoPedidoEstado, "p-1", "listo", "cerrado", evento.ActorUsuario, "Laura", "mozo", en(30)))
+	if m := reconstruirMesas(mesas, cerrado, en(31))[0]; m.CuentaAbierta || m.CuentaVersion != nil || len(m.Pedidos) != 0 {
+		t.Errorf("pedidos cerrados sin cuenta pedida: %+v", m)
+	}
+}
+
+func TestMesasAReconstruir(t *testing.T) {
+	mesas := []MesaRef{
+		{ID: "m-1", Numero: 1, Activa: true},
+		{ID: "m-baja-con-hitos", Numero: 5},
+		{ID: "m-baja", Numero: 6},
+	}
+	eventos := []evento.Evento{evt("m-baja-con-hitos", 1, evento.TipoCuentaAbierta, "", "", "", evento.ActorComensal, "Ana", "", en(0))}
+	got := mesasAReconstruir(mesas, eventos)
+	if len(got) != 2 || got[0].ID != "m-1" || got[1].ID != "m-baja-con-hitos" {
+		t.Errorf("se esperaban la activa y la dada de baja con hitos: %+v", got)
+	}
+}
+
 func TestCalcularEtapas(t *testing.T) {
 	etapas := calcularEtapas(eventosDePrueba())
 	if len(etapas) != 2 || etapas[0].PedidoID != "p-1" || etapas[1].PedidoID != "p-2" {
@@ -309,6 +345,8 @@ func TestToolsLineaDeTiempo(t *testing.T) {
 		{"historial desde inválido", "historial_mesa", CodigoParametroInvalido, map[string]any{"mesa": 1, "desde": "x"}, "t-a"},
 		{"historial desde después de hasta", "historial_mesa", CodigoParametroInvalido, map[string]any{"mesa": 1, "desde": "hace 1 hora", "hasta": "hace 2 horas"}, "t-a"},
 		{"sucursal ajena", "historial_mesa", CodigoSucursalNoEncontrada, map[string]any{"mesa": 9, "sucursal_id": "s-a"}, "t-b"},
+		{"historial rango mayor a 7 días", "historial_mesa", CodigoParametroInvalido, map[string]any{"mesa": 1, "desde": "hace 200 horas"}, "t-a"},
+		{"historial antes del primer hito", "historial_mesa", CodigoSinDatos, map[string]any{"mesa": 1, "desde": "hace 5 horas", "hasta": "hace 3 horas"}, "t-a"},
 	}
 	for _, c := range errores {
 		t.Run(c.nombre, func(t *testing.T) {
@@ -318,6 +356,14 @@ func TestToolsLineaDeTiempo(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("estado_mesas de una mesa dada de baja", func(t *testing.T) {
+		var out SalidaEstadoMesas
+		salidaTool(t, llamarTool(t, h, "t-a", "estado_mesas", map[string]any{"mesa": 7}), &out)
+		if len(out.Mesas) != 1 || out.Mesas[0].Mesa != 7 || out.Mesas[0].CuentaAbierta {
+			t.Errorf("%+v", out)
+		}
+	})
 
 	t.Run("sin_datos indica desde cuándo hay historial", func(t *testing.T) {
 		e := errorEstructurado(t, llamarTool(t, h, "t-a", "estado_mesas", map[string]any{"momento": "hace 3 horas"}))
