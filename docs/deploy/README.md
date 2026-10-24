@@ -43,6 +43,8 @@ El frontend (`Next.js`) se despliega en **Vercel**, autenticado mediante la cuen
 | **Producción (`prod`)** | `https://fudd.com.ar` | `www.fudd.com.ar` ➔ `fudd.com.ar` (Redirección permanente) | `main` | `/repos/web` |
 | **QA (`qa`)** | `https://qa.fudd.com.ar` | Sin `www` | `qa` | `/repos/web` |
 
+- **Node.js:** 24.x en ambos proyectos (Settings → General → Node.js Version). Debe coincidir con `engines.node` de `repos/web/package.json`; si se cambia el major, actualizar también Vercel, `ARG NODE_VERSION` del `Dockerfile` y el README.
+
 ---
 
 ## 5. Backend / API (Render)
