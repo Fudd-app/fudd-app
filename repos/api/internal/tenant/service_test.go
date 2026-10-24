@@ -175,6 +175,20 @@ func TestCrear_SlugVacio_Error(t *testing.T) {
 	}
 }
 
+func TestCrear_WhatsappConLetras_Error(t *testing.T) {
+	svc := tenant.NuevoService(&mockStore{})
+	_, err := svc.Crear(context.Background(), tenant.OnboardingInput{
+		Nombre:      "Mi Bar",
+		Slug:        "mi-bar",
+		EmailAdmin:  "admin@mibar.com",
+		NombreAdmin: "Carlos",
+		Whatsapp:    "+54 contacto",
+	})
+	if !errors.Is(err, tenant.ErrValidation) {
+		t.Fatalf("se esperaba ErrValidation para WhatsApp inválido, obtenido: %v", err)
+	}
+}
+
 func TestActualizar_Exitoso(t *testing.T) {
 	store := &mockStore{
 		actualizarFn: func(ctx context.Context, id string, input tenant.ActualizarTenantInput) (*tenant.Tenant, error) {
