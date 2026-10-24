@@ -37,6 +37,13 @@ git checkout qa && git pull origin qa
 git checkout -b release/v2026.10.24
 ```
 
+**Etiquetar el alcance**: cada issue que entra en el release (US y bugs) lleva la etiqueta `release: vAAAA.MM.DD`. Así se puede buscar en GitHub qué salió en cada versión y en qué versión salió cada issue.
+
+```bash
+gh label create "release: v2026.10.24" --color 0E8A16 --description "Incluido en el release v2026.10.24"
+for n in 84 85 86; do gh issue edit $n --add-label "release: v2026.10.24"; done
+```
+
 `qa` ya contiene todo lo de `main`, porque cada release y cada hotfix termina con un PR `main` → `qa` (paso 8). Si igual `main` tuviera commits que no están en `qa` (`git log --oneline qa..origin/main`), primero se mergea `main` en la rama de release.
 
 ## 3. Novedades y versión
@@ -167,7 +174,7 @@ Lo que se saltea: el refinamiento, la estimación y la validación en `qa` **ant
 
 1. Crear el issue `[web] BUG: ...` o `[api] BUG: ...` en el momento, con el síntoma y la severidad (se completa después), y cargarlo en el tablero en `⚡ En Curso`.
 2. Rama desde **`main`**: `git checkout main && git pull && git checkout -b hotfix/<nro-issue>-descripcion`.
-3. El cambio mínimo que resuelve el problema, con su test si es `[api]`. En la misma rama, agregar al inicio de `novedades.json` la entrada de la versión del hotfix (misma convención de fecha): con un ítem `cambio` si el usuario notaba el problema, o con `items: []` si no.
+3. El cambio mínimo que resuelve el problema, con su test si es `[api]`. El issue lleva la etiqueta `release: v<versión del hotfix>`. En la misma rama, agregar al inicio de `novedades.json` la entrada de la versión del hotfix (misma convención de fecha): con un ítem `cambio` si el usuario notaba el problema, o con `items: []` si no.
 4. PR hacia **`main`** con `Closes #N`, review (puede ser de otro agente) y CI en verde. Merge commit.
 5. Verificar en producción.
 6. GitHub Release con `gh release create v<versión> --target <merge commit>` (crea el tag).
