@@ -53,6 +53,7 @@ repos/web/
 ## Stack y convenciones
 
 - **Framework**: Next.js App Router (no Pages Router)
+- **Runtime**: Node.js 24 — la versión se define en `engines.node` de `package.json` (la leen CI y Vercel) y en `ARG NODE_VERSION` del `Dockerfile`; cambiar ambas juntas
 - **Estilos**: Tailwind CSS v4+ — no usar CSS modules ni styled-components
 - **Lenguaje**: TypeScript estricto — no usar `any`
 - **Componentes**: funcionales con hooks, sin class components
