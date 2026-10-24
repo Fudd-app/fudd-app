@@ -22,11 +22,12 @@ export default function LoginPage() {
 
 function LoginForm() {
   const router = useRouter();
-  const returnToParam = useSearchParams().get("returnTo");
+  const searchParams = useSearchParams();
+  const returnToParam = searchParams.get("returnTo");
   // Se valida contra window.location.origin, por eso solo en el cliente (los usos son en handlers).
   const returnTo = typeof window === "undefined" ? null : returnToSeguro(returnToParam, window.location.origin);
   const [metodo, setMetodo] = useState<"password" | "magic">("password");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => searchParams.get("email")?.trim().toLowerCase() ?? "");
   const [password, setPassword] = useState("");
   const [mostrarPassword, setMostrarPassword] = useState(false);
   const [loading, setLoading] = useState(false);
