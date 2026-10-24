@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Geist_Mono, Anton } from "next/font/google";
+import { Inter, Geist_Mono, Anton, Playfair_Display, Space_Grotesk } from "next/font/google";
 import localFont from "next/font/local";
 import QaBanner from "@/components/ui/QaBanner";
 import "./globals.css";
@@ -19,6 +19,18 @@ const geistMono = Geist_Mono({
 const anton = Anton({
   variable: "--font-anton",
   weight: "400",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const playfairDisplay = Playfair_Display({
+  variable: "--font-playfair-display",
   subsets: ["latin"],
   display: "swap",
 });
@@ -58,7 +70,7 @@ export default function RootLayout({
   return (
     <html
       lang="es"
-      className={`${inter.variable} ${geistMono.variable} ${anton.variable} ${materialSymbols.variable} h-full antialiased`}
+      className={`${inter.variable} ${geistMono.variable} ${anton.variable} ${spaceGrotesk.variable} ${playfairDisplay.variable} ${materialSymbols.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-canvas-white text-ash-graphite">
         <QaBanner />

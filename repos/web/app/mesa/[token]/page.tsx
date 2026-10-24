@@ -81,6 +81,7 @@ type Action =
   | { type: "SET_PEDIDOS"; payload: PedidoSesion[] }
   | { type: "UPSERT_PEDIDO"; payload: PedidoSesion }
   | { type: "SET_ESTADO_PEDIDO"; payload: { pedidoId: string; estado: EstadoPedido } }
+  | { type: "RENOMBRAR_COMENSAL"; payload: { comensalId: string; nombre: string } }
   | { type: "SYNC_CUENTA"; payload: { cuentaSolicitada: boolean; pagoHabilitado?: boolean; cuentaVersion: number } }
   | { type: "RESET_SESSION" };
 
@@ -197,6 +198,23 @@ function reducer(state: State, action: Action): State {
         estadoPedido:
           state.pedidoId === action.payload.pedidoId ? action.payload.estado : state.estadoPedido,
       };
+    case "RENOMBRAR_COMENSAL":
+      return {
+        ...state,
+        items: state.items.map((item) =>
+          item.comensalId === action.payload.comensalId
+            ? { ...item, comensalNombre: action.payload.nombre }
+            : item
+        ),
+        pedidos: state.pedidos.map((pedido) => ({
+          ...pedido,
+          items: pedido.items.map((item) =>
+            item.comensalId === action.payload.comensalId
+              ? { ...item, comensalNombre: action.payload.nombre }
+              : item
+          ),
+        })),
+      };
     case "SYNC_CUENTA": {
       const cuentaCambio = state.cuentaVersion !== action.payload.cuentaVersion;
       const tieneSesionAnterior = state.items.length > 0 || state.pedidos.length > 0 || state.cuentaSolicitada;
@@ -235,6 +253,14 @@ function isEstadoPedido(value: unknown): value is EstadoPedido {
     value === "entregado" ||
     value === "cerrado"
   );
+}
+
+function normalizarBusqueda(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es")
+    .trim();
 }
 
 function parseCartItems(value: unknown): CartItem[] {
@@ -304,7 +330,8 @@ function parseCartItems(value: unknown): CartItem[] {
   });
 }
 
-function pedidoApiToSession(pedido: PedidoAPI): PedidoSesion {
+function pedidoApiToSession(pedido: PedidoAPI, identidad?: ComensalIdentity | null): PedidoSesion {
+  const aliasActual = identidad?.nombre.trim();
   return {
     id: pedido.id,
     estado: pedido.estado,
@@ -316,7 +343,10 @@ function pedidoApiToSession(pedido: PedidoAPI): PedidoSesion {
       cantidad: item.cantidad,
       nota: item.notas?.trim() || "",
       comensalId: item.comensal_id,
-      comensalNombre: item.comensal_nombre?.trim() || undefined,
+      comensalNombre:
+        aliasActual && item.comensal_id === identidad?.id
+          ? aliasActual
+          : item.comensal_nombre?.trim() || undefined,
       variantes: item.variantes?.map((v) => ({
         id: v.variante_id,
         articulo_id: item.articulo_id,
@@ -432,6 +462,11 @@ export default function MesaPage() {
   const [resenaCalificadaCuenta, setResenaCalificadaCuenta] = useState<number | null>(null);
 
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
+  const comensalRef = useRef<ComensalIdentity | null>(null);
+
+  useEffect(() => {
+    comensalRef.current = comensal;
+  }, [comensal]);
 
   const resenaYaEnviada = useMemo(() => {
     if (resenaCalificadaCuenta === state.cuentaVersion) return true;
@@ -476,7 +511,7 @@ export default function MesaPage() {
       const pedidosApi = await api.listarPedidosMesa(token);
       dispatch({
         type: "SET_PEDIDOS",
-        payload: (pedidosApi ?? []).map(pedidoApiToSession),
+        payload: (pedidosApi ?? []).map((pedido) => pedidoApiToSession(pedido, comensalRef.current)),
       });
     } catch (error) {
       console.warn("No se pudo sincronizar la cuenta de la mesa:", error);
@@ -554,6 +589,7 @@ export default function MesaPage() {
       ];
       setMenu(categoriasMock);
       const stored = getComensalIdentity(DEMO_MESA.id, DEMO_MESA.cuenta_version);
+      comensalRef.current = stored;
       setComensal(stored);
       setIdentidadLista(true);
       setLoading(false);
@@ -577,6 +613,7 @@ export default function MesaPage() {
         if (mesaApi.estado === "inactiva") {
           clearComensalIdentity(mesaApi.id);
         }
+        comensalRef.current = identidad;
         setComensal(identidad);
         setEditandoComensal(false);
         setIdentidadLista(true);
@@ -642,13 +679,14 @@ export default function MesaPage() {
 
   // 4. SSE en tiempo real para salón y cocina
   const mesaId = mesa?.id;
-  const mesaEstado = mesa?.estado;
+  const mesaTenantId = mesa?.tenant_id;
+  const mesaSucursalId = mesa?.sucursal_id;
 
   useEffect(() => {
     if (!mesaId || !token || isDemo) return;
 
     const eventSource = new EventSource(
-      api.obtenerEventosMesaUrl(mesaId, mesa?.tenant_id, mesa?.sucursal_id)
+      api.obtenerEventosMesaUrl(mesaId, mesaTenantId, mesaSucursalId)
     );
     eventSource.onopen = () => {
       void sincronizarPedidosMesa();
@@ -659,7 +697,10 @@ export default function MesaPage() {
         const payload: unknown = JSON.parse(event.data);
         if (!isRecord(payload) || typeof payload.id !== "string" || !isEstadoPedido(payload.estado))
           return;
-        dispatch({ type: "UPSERT_PEDIDO", payload: pedidoApiToSession(payload as unknown as PedidoAPI) });
+        dispatch({
+          type: "UPSERT_PEDIDO",
+          payload: pedidoApiToSession(payload as unknown as PedidoAPI, comensalRef.current),
+        });
       } catch (error) {
         console.warn("Error parseando pedido_creado:", error);
       }
@@ -701,6 +742,7 @@ export default function MesaPage() {
 
         if (mesaId) {
           const identidad = getComensalIdentity(mesaId, payload.cuenta_version);
+          comensalRef.current = identidad;
           setComensal(identidad);
           setEditandoComensal(false);
           setIdentidadLista(true);
@@ -739,7 +781,7 @@ export default function MesaPage() {
     return () => {
       eventSource.close();
     };
-  }, [mesaId, isDemo, sincronizarPedidosMesa, token]);
+  }, [mesaId, mesaTenantId, mesaSucursalId, isDemo, sincronizarPedidosMesa, token]);
 
   // 5. Manejo de retorno de Mercado Pago
   useEffect(() => {
@@ -760,24 +802,42 @@ export default function MesaPage() {
   }, [token, isDemo, pagoExitoso, pagoError]);
 
   // 6. Acciones del comensal
+  const volverAlInicioDelTelefono = () => {
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>(".guest-phone")?.scrollTo({ top: 0 });
+      window.scrollTo({ top: 0 });
+    });
+  };
+
   const handleGuardarComensal = (nombre: string) => {
     if (!mesa) return;
+    const nombreLimpio = nombre.trim();
     const identidad = comensal
-      ? { ...comensal, nombre: nombre.trim(), cuentaVersion: mesa.cuenta_version }
-      : createComensalIdentity(nombre, mesa.cuenta_version);
+      ? { ...comensal, nombre: nombreLimpio, cuentaVersion: mesa.cuenta_version }
+      : createComensalIdentity(nombreLimpio, mesa.cuenta_version);
     saveComensalIdentity(identidad, mesa.id);
+    comensalRef.current = identidad;
+    if (comensal) {
+      dispatch({
+        type: "RENOMBRAR_COMENSAL",
+        payload: { comensalId: comensal.id, nombre: nombreLimpio },
+      });
+    }
     setComensal(identidad);
     setEditandoComensal(false);
     setIdentidadLista(true);
+    volverAlInicioDelTelefono();
   };
 
   const handleContinuarSinAlias = () => {
     if (!mesa) return;
     const identidad = createComensalIdentity("", mesa.cuenta_version);
     saveComensalIdentity(identidad, mesa.id);
+    comensalRef.current = identidad;
     setComensal(identidad);
     setEditandoComensal(false);
     setIdentidadLista(true);
+    volverAlInicioDelTelefono();
   };
 
   const handleAddToCart = (
@@ -786,6 +846,7 @@ export default function MesaPage() {
     variantes: VariantePublica[],
     nota: string
   ) => {
+    if (state.cuentaSolicitada) return;
     const recargos = variantes.reduce((acc, v) => acc + (v.precio_adicional || 0), 0);
     const precioUnitario = item.precio + recargos;
 
@@ -965,7 +1026,7 @@ export default function MesaPage() {
   }
 
   // Si el usuario aún no se ha sumado a la mesa (fase Welcome Screen de la maqueta)
-  const yaSeSumo = Boolean(comensal && !editandoComensal);
+  const yaSeSumo = identidadLista && Boolean(comensal);
   if (!yaSeSumo) {
     return (
       <div className="guest-page" data-estilo-visual={theme.visualStyle} style={themeStyle}>
@@ -984,15 +1045,15 @@ export default function MesaPage() {
 
   // Filtrado de carta por categoría y búsqueda
   const categoriasNombres = ["Todos", ...menu.map((c) => c.nombre)];
-  const busquedaQuery = busqueda.trim().toLowerCase();
+  const busquedaQuery = normalizarBusqueda(busqueda);
 
   const articulosFiltrados = menu.flatMap((c) => {
     if (categoriaActiva !== "Todos" && c.nombre !== categoriaActiva) return [];
     return c.items.filter((item) => {
       if (!busquedaQuery) return true;
       return (
-        item.nombre.toLowerCase().includes(busquedaQuery) ||
-        (item.descripcion && item.descripcion.toLowerCase().includes(busquedaQuery))
+        normalizarBusqueda(item.nombre).includes(busquedaQuery) ||
+        (item.descripcion && normalizarBusqueda(item.descripcion).includes(busquedaQuery))
       );
     });
   });
@@ -1042,7 +1103,7 @@ export default function MesaPage() {
               <label className="guest-search">
                 <ComensalIcon name="search" size={19} />
                 <input
-                  type="search"
+                  type="text"
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
                   placeholder="¿Qué te gustaría comer?"
@@ -1149,6 +1210,9 @@ export default function MesaPage() {
             type="button"
             className={state.vista === "carta" ? "active" : ""}
             onClick={() => dispatch({ type: "SET_VISTA", payload: "carta" })}
+            disabled={state.cuentaSolicitada}
+            aria-disabled={state.cuentaSolicitada}
+            title={state.cuentaSolicitada ? "La cuenta ya fue solicitada" : "Ver carta"}
           >
             <ComensalIcon name="book" size={20} />
             <span>Carta</span>
@@ -1177,7 +1241,7 @@ export default function MesaPage() {
         </nav>
 
         {/* Modal de personalización de artículo */}
-        {itemParaPersonalizar && (
+        {itemParaPersonalizar && !state.cuentaSolicitada && (
           <GuestDetailSheet
             item={itemParaPersonalizar}
             onClose={() => setItemParaPersonalizar(null)}
@@ -1187,7 +1251,7 @@ export default function MesaPage() {
         )}
 
         {/* Bottom sheet de carrito */}
-        {carritoAbierto && (
+        {carritoAbierto && !state.cuentaSolicitada && (
           <GuestCartSheet
             mesaNumero={mesa.numero}
             dinerName={comensal?.nombre}

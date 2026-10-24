@@ -288,6 +288,7 @@ export interface OnboardingInput {
   nombre: string;
   nombre_fantasia?: string;
   rubro?: string;
+  descripcion?: string;
   slug: string;
   email_admin: string;
   nombre_admin: string;
