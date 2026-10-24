@@ -1059,7 +1059,7 @@ export default function MesaPage() {
   });
 
   return (
-    <div className="guest-page" data-estilo-visual={theme.visualStyle} style={themeStyle}>
+    <div className="guest-page guest-menu-page" data-estilo-visual={theme.visualStyle} style={themeStyle}>
       <div className="guest-phone menu-view">
         <div className="guest-scroll-area">
           {/* Cabecera del restaurante y avatar */}
@@ -1191,23 +1191,24 @@ export default function MesaPage() {
           )}
         </div>
 
-        {/* Barra flotante de carrito (cuando hay productos seleccionados) */}
-        {totalItemsEnCarrito > 0 && state.vista === "carta" && (
-          <button
-            type="button"
-            className="cart-bar"
-            onClick={() => setCarritoAbierto(true)}
-            aria-label="Ver pedido en curso"
-          >
-            <span>
-              <b>{totalItemsEnCarrito}</b> Ver pedido
-            </span>
-            <strong>{formatPrice(totalPrecioCarrito)}</strong>
-          </button>
-        )}
+        <div className="guest-bottom-dock">
+          {/* Barra flotante de carrito (cuando hay productos seleccionados) */}
+          {totalItemsEnCarrito > 0 && state.vista === "carta" && (
+            <button
+              type="button"
+              className="cart-bar"
+              onClick={() => setCarritoAbierto(true)}
+              aria-label="Ver pedido en curso"
+            >
+              <span>
+                <b>{totalItemsEnCarrito}</b> Ver pedido
+              </span>
+              <strong>{formatPrice(totalPrecioCarrito)}</strong>
+            </button>
+          )}
 
-        {/* Navegación inferior persistente */}
-        <nav className="guest-bottom-nav" aria-label="Navegación comensal">
+          {/* Navegación inferior persistente */}
+          <nav className="guest-bottom-nav" aria-label="Navegación comensal">
           <button
             type="button"
             className={state.vista === "carta" ? "active" : ""}
@@ -1240,7 +1241,8 @@ export default function MesaPage() {
             <ComensalIcon name="card" size={20} />
             <span>Cuenta</span>
           </button>
-        </nav>
+          </nav>
+        </div>
 
         {/* Modal de personalización de artículo */}
         {itemParaPersonalizar && !state.cuentaSolicitada && (
