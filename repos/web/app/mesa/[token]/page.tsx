@@ -96,6 +96,9 @@ const INITIAL_STATE: State = {
   pedidoId: null,
 };
 
+const DEMO_SESSION_TTL_MS = 30 * 60 * 1000;
+const DEMO_SESSION_EXPIRES_AT_KEY = "mesa_click_demo_expires_at";
+
 const SESSION_VERSION = 3;
 
 function generarLineKey(articuloId: string, variantes?: VariantePublica[], nota?: string): string {
@@ -376,6 +379,28 @@ function getSessionKey(token: string) {
   return `mesa_click_session_${token}`;
 }
 
+function limpiarSesionDemo() {
+  if (typeof window === "undefined") return;
+
+  window.localStorage.removeItem(getSessionKey("demo"));
+  window.localStorage.removeItem(`mesa_click_resena_demo_${DEMO_MESA.cuenta_version}`);
+  window.localStorage.removeItem(DEMO_SESSION_EXPIRES_AT_KEY);
+  clearComensalIdentity(DEMO_MESA.id);
+}
+
+function asegurarVencimientoDemo() {
+  const now = Date.now();
+  const rawExpiresAt = window.localStorage.getItem(DEMO_SESSION_EXPIRES_AT_KEY);
+  const expiresAt = Number(rawExpiresAt);
+
+  if (Number.isFinite(expiresAt) && expiresAt > now) return expiresAt;
+
+  limpiarSesionDemo();
+  const nextExpiresAt = now + DEMO_SESSION_TTL_MS;
+  window.localStorage.setItem(DEMO_SESSION_EXPIRES_AT_KEY, String(nextExpiresAt));
+  return nextExpiresAt;
+}
+
 function readStoredSession(raw: string): State | null {
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -526,6 +551,8 @@ export default function MesaPage() {
     dispatch({ type: "RESET_SESSION" });
 
     try {
+      if (isDemo) asegurarVencimientoDemo();
+
       const key = getSessionKey(token);
       const rawSession = window.localStorage.getItem(key);
       if (rawSession) {
@@ -541,7 +568,33 @@ export default function MesaPage() {
     }
 
     hydratedTokenRef.current = token;
-  }, [token]);
+  }, [isDemo, token]);
+
+  // La demostración es descartable: transcurridos 30 minutos vuelve al estado
+  // inicial, incluido alias, pedido y cuenta simulados. Las mesas reales no usan
+  // este temporizador ni pierden su sesión local.
+  useEffect(() => {
+    if (!isDemo) return;
+
+    let expiresAt = Date.now() + DEMO_SESSION_TTL_MS;
+    try {
+      expiresAt = asegurarVencimientoDemo();
+    } catch {
+      // Si el navegador bloquea el almacenamiento, igual reiniciamos la demo
+      // cuando vence esta sesión abierta.
+    }
+
+    const timeout = window.setTimeout(() => {
+      try {
+        limpiarSesionDemo();
+      } catch {
+        // El reload siguiente vuelve a cargar los datos mock aunque no se pueda limpiar storage.
+      }
+      window.location.reload();
+    }, Math.max(0, expiresAt - Date.now()));
+
+    return () => window.clearTimeout(timeout);
+  }, [isDemo]);
 
   // 2. Persistir sesión al cambiar
   useEffect(() => {
