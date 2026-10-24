@@ -209,8 +209,8 @@ export default function LoginEquipoPage() {
                 <span className="text-12 font-semibold text-ash-graphite">
                   Usuario o correo electrónico
                 </span>
-                <div className="flex h-44 items-center rounded-lg border border-concrete bg-canvas-white px-12 focus-within:border-plain-green">
-                  <span className="material-symbols-outlined mr-8 text-18 text-sage-green">
+                <div className="relative">
+                  <span className="material-symbols-outlined pointer-events-none absolute top-1/2 left-12 -translate-y-1/2 text-18 text-sage-green">
                     badge
                   </span>
                   <input
@@ -221,15 +221,15 @@ export default function LoginEquipoPage() {
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="Ej: mozo_juan o cocina_1"
-                    className="h-full min-h-0 flex-1 !rounded-none !border-0 !bg-transparent p-0 text-13 text-ash-graphite outline-none"
+                    className="h-44 w-full rounded-lg border border-concrete bg-canvas-white py-0 pr-12 pl-40 text-13 text-ash-graphite outline-none transition-colors focus:border-plain-green"
                   />
                 </div>
               </label>
 
               <label className="block space-y-6">
                 <span className="text-12 font-semibold text-ash-graphite">Contraseña</span>
-                <div className="flex h-44 items-center rounded-lg border border-concrete bg-canvas-white px-12 focus-within:border-plain-green">
-                  <span className="material-symbols-outlined mr-8 text-18 text-sage-green">
+                <div className="relative">
+                  <span className="material-symbols-outlined pointer-events-none absolute top-1/2 left-12 -translate-y-1/2 text-18 text-sage-green">
                     lock
                   </span>
                   <input
@@ -238,12 +238,12 @@ export default function LoginEquipoPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Tu clave de acceso"
-                    className="h-full min-h-0 flex-1 !rounded-none !border-0 !bg-transparent p-0 text-13 text-ash-graphite outline-none"
+                    className="h-44 w-full rounded-lg border border-concrete bg-canvas-white py-0 pr-80 pl-40 text-13 text-ash-graphite outline-none transition-colors focus:border-plain-green"
                   />
                   <button
                     type="button"
                     onClick={() => setMostrarPassword((prev) => !prev)}
-                    className="ml-8 text-12 font-semibold text-sage-green hover:text-ash-graphite"
+                    className="absolute top-1/2 right-12 -translate-y-1/2 text-12 font-semibold text-sage-green hover:text-ash-graphite"
                   >
                     {mostrarPassword ? "Ocultar" : "Ver"}
                   </button>
