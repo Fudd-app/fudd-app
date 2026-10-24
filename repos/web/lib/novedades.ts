@@ -38,8 +38,8 @@ export function formatearFechaVersion(fecha: string): string {
   return `${dia}/${mes}/${anio}`;
 }
 
-// Vercel expone el commit del deploy; en local no existe y no se muestra.
-export const COMMIT_CORTO = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 7);
+// Lo inyecta next.config.ts desde el build de Vercel; en local queda vacío y no se muestra.
+export const COMMIT_CORTO = process.env.NEXT_PUBLIC_COMMIT_SHA?.slice(0, 7) || undefined;
 
 function claveVista(usuarioId: string) {
   return `fudd_novedades_vista_${usuarioId}`;
