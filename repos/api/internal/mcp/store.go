@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/db"
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/evento"
 )
 
 // Store reúne las lecturas SQL del servidor MCP. Todas filtran por tenant.
@@ -20,6 +21,11 @@ type Store interface {
 	UltimaHoraCocina(ctx context.Context, tenantID, sucursalID string, ahora time.Time) (UltimaHora, error)
 	ComensalesAtendidos(ctx context.Context, tenantID, sucursalID string, desde, hasta time.Time) (int, error)
 	ResumenPorHora(ctx context.Context, tenantID, sucursalID string, desde, hasta time.Time, zona string) ([]HoraTurno, error)
+	MesasSucursal(ctx context.Context, tenantID, sucursalID string) ([]MesaRef, error)
+	MesaPorNumero(ctx context.Context, tenantID, sucursalID string, numero int) (*MesaRef, error)
+	PrimerEvento(ctx context.Context, tenantID, sucursalID string) (*time.Time, error)
+	EventosSucursal(ctx context.Context, tenantID, sucursalID string, desde, hasta time.Time) ([]evento.Evento, error)
+	EventosMesa(ctx context.Context, tenantID, sucursalID, mesaID string, desde, hasta time.Time) ([]evento.Evento, error)
 }
 
 type pgStore struct{}

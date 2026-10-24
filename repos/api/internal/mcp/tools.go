@@ -101,6 +101,8 @@ func (h *herramientas) registrar(s *sdk.Server) {
 	sdk.AddTool(s, def("estado_salon", "Estado del salón", descEstadoSalon), h.estadoSalon)
 	sdk.AddTool(s, def("estado_cocina", "Estado de cocina", descEstadoCocina), h.estadoCocina)
 	sdk.AddTool(s, def("resumen_turno", "Resumen del turno", descResumenTurno), h.resumenTurno)
+	sdk.AddTool(s, def("estado_mesas", "Estado de las mesas en un momento", descEstadoMesas), h.estadoMesas)
+	sdk.AddTool(s, def("historial_mesa", "Historial de una mesa", descHistorialMesa), h.historialMesa)
 }
 
 func ubicacionNegocio() *time.Location {
