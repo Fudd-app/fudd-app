@@ -465,6 +465,22 @@ export default function MesaPage() {
   const comensalRef = useRef<ComensalIdentity | null>(null);
 
   useEffect(() => {
+    if (!itemParaPersonalizar && !carritoAbierto) return;
+
+    const html = document.documentElement;
+    const previousHtmlOverflow = html.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+
+    html.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      html.style.overflow = previousHtmlOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [carritoAbierto, itemParaPersonalizar]);
+
+  useEffect(() => {
     comensalRef.current = comensal;
   }, [comensal]);
 
