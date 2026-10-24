@@ -15,7 +15,7 @@
 
 - **A demanda**: no hay release por sprint. Se corta cuando el equipo decide que lo que está en `qa` está listo.
 - **Sin freeze de `qa`**: la rama de release fija el contenido; `qa` sigue recibiendo PRs.
-- **Versión por fecha del corte**: `vAAAA.MM.DD` (ej. `v2026.10.24`). Un segundo corte el mismo día es `vAAAA.MM.DD.1`.
+- **Versión por fecha**: `vAAAA.MM.DD` (ej. `v2026.10.24`), tanto para un release como para un hotfix. Si ese día ya hay una versión, la siguiente es `vAAAA.MM.DD.1`, después `.2`, etc.
 
 ---
 
@@ -28,7 +28,7 @@ gh project item-list 1 --owner Fudd-app --format json --limit 500 \
   --jq '.items[] | select(.status == "🧪 En QA") | "#\(.content.number) \(.content.title)"'
 ```
 
-Cada ítem tiene que estar **validado en `qa.fudd.com.ar`**. Si alguno no lo está: se valida, se revierte en la rama de release, o queda apagado por flag (ej. `MCP_HABILITADO`).
+Cada ítem tiene que estar **validado en `qa.fudd.com.ar`**. Si alguno no lo está: se valida, queda apagado por flag (ej. `MCP_HABILITADO`), o se revierte **en `qa`** con su propio PR antes de cortar (el issue vuelve a `⚡ En Curso`). No se revierte en la rama de release: ese revert volvería a `qa` en el paso 8 y borraría la funcionalidad también ahí.
 
 ## 2. Crear la rama de release
 
@@ -37,7 +37,14 @@ git checkout qa && git pull origin qa
 git checkout -b release/v2026.10.24
 ```
 
-Si `main` tiene commits que no están en `qa` (no debería: ver "Protección de `main`"), primero se mergea `main` en la rama de release.
+**Etiquetar el alcance**: cada issue que entra en el release (US y bugs) lleva la etiqueta `release: vAAAA.MM.DD`. Así se puede buscar en GitHub qué salió en cada versión y en qué versión salió cada issue.
+
+```bash
+gh label create "release: v2026.10.24" --color 0E8A16 --description "Incluido en el release v2026.10.24"
+for n in 84 85 86; do gh issue edit $n --add-label "release: v2026.10.24"; done
+```
+
+`qa` ya contiene todo lo de `main`, porque cada release y cada hotfix termina con un PR `main` → `qa` (paso 8). Si igual `main` tuviera commits que no están en `qa` (`git log --oneline qa..origin/main`), primero se mergea `main` en la rama de release.
 
 ## 3. Novedades y versión
 
@@ -74,8 +81,9 @@ Antes de abrir el PR, completar y pegar en el cuerpo del PR:
 
 - [ ] **Variables de entorno**: comparar las que lee el código en la rama contra `main` y cargar las nuevas en Render (`fudd-app-api-prod`) y Vercel (proyecto prod) **antes** del merge.
   ```bash
-  for r in origin/main HEAD; do git grep -h -o -E 'Getenv\("[A-Z_]+"\)|process\.env\.[A-Z_]+' $r -- repos/api repos/web ':!*_test.go' | sort -u > env_${r//\//_}.txt; done
-  diff env_origin_main.txt env_HEAD.txt
+  tmp=$(mktemp -d)
+  for r in origin/main HEAD; do git grep -h -o -E 'Getenv\("[A-Z_]+"\)|process\.env\.[A-Z_]+' $r -- repos/api repos/web ':!*_test.go' | sort -u > "$tmp/${r//\//_}.txt"; done
+  diff "$tmp/origin_main.txt" "$tmp/HEAD.txt"   # las líneas con ">" son las nuevas
   ```
 - [ ] **Migraciones**: listar las nuevas (`git diff --name-only origin/main -- repos/api/migrations`). Corren solas al arrancar la API y no tienen down. Verificar que el código **anterior** tolere el schema nuevo durante los minutos en que Vercel y Render despliegan a destiempo.
 - [ ] **Backup de la base**: crear un branch en Neon prod llamado `pre-release-vAAAA-MM-DD` (instantáneo).
@@ -86,10 +94,10 @@ Antes de abrir el PR, completar y pegar en el cuerpo del PR:
 
 ```bash
 git push -u origin release/v2026.10.24
-gh pr create --base main --title "Release v2026.10.24" --body-file release.md
+gh pr create --base main --title "Release v2026.10.24" --body-file "$tmp/cuerpo-release.md"
 ```
 
-Cuerpo del PR:
+Cuerpo del PR (escribirlo en un archivo temporal, fuera del repo):
 
 ```markdown
 ## Release v2026.10.24
@@ -130,16 +138,17 @@ Si algo crítico falla: **rollback** (ver abajo) y se abre un bug.
 ## 8. Cierre
 
 ```bash
-git checkout main && git pull origin main
-git tag v2026.10.24 && git push origin v2026.10.24
-gh release create v2026.10.24 --title "v2026.10.24" --notes-file notas.md
-gh pr create --base qa --head release/v2026.10.24 --title "Release v2026.10.24 → qa"
+# El tag se crea sobre el merge commit del PR de release (<nro-pr>), no sobre el main local
+sha=$(gh pr view <nro-pr> --json mergeCommit --jq .mergeCommit.oid)
+gh release create v2026.10.24 --target "$sha" --title "v2026.10.24" --notes-file "$tmp/notas-release.md"
+gh pr create --base qa --head main --title "Sincronizar qa con main tras v2026.10.24" \
+  --body "Lleva a qa el merge del release v2026.10.24 y los commits propios de la rama de release."
 ```
 
-- **GitHub Release**: novedades para el usuario + sección técnica (migraciones, env vars, issues).
+- **GitHub Release**: novedades para el usuario + sección técnica (migraciones, env vars, issues). `gh release create --target` crea el tag.
 - **Tablero**: los ítems del release pasan a `✅ Resuelta`.
-- **PR de vuelta a `qa`**: lleva a `qa` los commits propios de la rama de release (novedades, fixes del pase). No requiere un nuevo review, porque su contenido ya se revisó en el PR de release. Merge commit.
-- Borrar la rama `release/...` después de ese merge.
+- **PR `main` → `qa`**: lleva a `qa` el merge commit del release y los commits propios de la rama (novedades, fixes del pase), así `qa` vuelve a contener todo `main`. No requiere un nuevo review, porque su contenido ya se revisó en el PR de release. Merge commit.
+- Borrar la rama `release/...`.
 
 ---
 
@@ -153,6 +162,8 @@ gh pr create --base qa --head release/v2026.10.24 --title "Release v2026.10.24 �
 
 Después de un rollback, `main` sigue teniendo el código nuevo: el arreglo se hace como hotfix.
 
+**Antes del merge del hotfix, reactivar los deploys automáticos.** El Instant Rollback de Vercel desactiva la asignación automática del dominio de producción, y el rollback de Render desactiva el auto-deploy. Si no se reactivan (Vercel: promover el deploy nuevo o volver a habilitar la asignación de dominios; Render: Settings → Auto-Deploy), el merge a `main` no llega a producción.
+
 ---
 
 ## Hotfix — única excepción al flujo completo
@@ -163,11 +174,11 @@ Lo que se saltea: el refinamiento, la estimación y la validación en `qa` **ant
 
 1. Crear el issue `[web] BUG: ...` o `[api] BUG: ...` en el momento, con el síntoma y la severidad (se completa después), y cargarlo en el tablero en `⚡ En Curso`.
 2. Rama desde **`main`**: `git checkout main && git pull && git checkout -b hotfix/<nro-issue>-descripcion`.
-3. El cambio mínimo que resuelve el problema, con su test si es `[api]`.
+3. El cambio mínimo que resuelve el problema, con su test si es `[api]`. El issue lleva la etiqueta `release: v<versión del hotfix>`. En la misma rama, agregar al inicio de `novedades.json` la entrada de la versión del hotfix (misma convención de fecha): con un ítem `cambio` si el usuario notaba el problema, o con `items: []` si no.
 4. PR hacia **`main`** con `Closes #N`, review (puede ser de otro agente) y CI en verde. Merge commit.
 5. Verificar en producción.
-6. Tag `vAAAA.MM.DD.N` y, si el usuario notaba el problema, entrada en `novedades.json` como `cambio`.
-7. **Llevar el fix a `qa`** en el mismo día: PR `hotfix/<nro-issue>-descripcion` → `qa` (sin nuevo review, ya se revisó), merge commit.
+6. GitHub Release con `gh release create v<versión> --target <merge commit>` (crea el tag).
+7. **Llevar el fix a `qa`** en el mismo día: PR `main` → `qa` (sin nuevo review, ya se revisó), merge commit.
 8. Completar el issue (causa, impacto) y moverlo a `✅ Resuelta`.
 
 ---
