@@ -39,7 +39,7 @@ export type CartItem = {
   comensalNombre?: string;
 };
 
-export type EstadoPedido = "recibido" | "preparando" | "listo" | "cerrado";
+export type EstadoPedido = "recibido" | "confirmado" | "preparando" | "listo" | "entregado" | "cerrado";
 type Vista = "carta" | "seguimiento";
 
 export type PedidoSesion = {
@@ -81,6 +81,7 @@ type Action =
   | { type: "SET_PEDIDOS"; payload: PedidoSesion[] }
   | { type: "UPSERT_PEDIDO"; payload: PedidoSesion }
   | { type: "SET_ESTADO_PEDIDO"; payload: { pedidoId: string; estado: EstadoPedido } }
+  | { type: "RENOMBRAR_COMENSAL"; payload: { comensalId: string; nombre: string } }
   | { type: "SYNC_CUENTA"; payload: { cuentaSolicitada: boolean; pagoHabilitado?: boolean; cuentaVersion: number } }
   | { type: "RESET_SESSION" };
 
@@ -94,6 +95,9 @@ const INITIAL_STATE: State = {
   cuentaVersion: 1,
   pedidoId: null,
 };
+
+const DEMO_SESSION_TTL_MS = 30 * 60 * 1000;
+const DEMO_SESSION_EXPIRES_AT_KEY = "mesa_click_demo_expires_at";
 
 const SESSION_VERSION = 3;
 
@@ -197,6 +201,23 @@ function reducer(state: State, action: Action): State {
         estadoPedido:
           state.pedidoId === action.payload.pedidoId ? action.payload.estado : state.estadoPedido,
       };
+    case "RENOMBRAR_COMENSAL":
+      return {
+        ...state,
+        items: state.items.map((item) =>
+          item.comensalId === action.payload.comensalId
+            ? { ...item, comensalNombre: action.payload.nombre }
+            : item
+        ),
+        pedidos: state.pedidos.map((pedido) => ({
+          ...pedido,
+          items: pedido.items.map((item) =>
+            item.comensalId === action.payload.comensalId
+              ? { ...item, comensalNombre: action.payload.nombre }
+              : item
+          ),
+        })),
+      };
     case "SYNC_CUENTA": {
       const cuentaCambio = state.cuentaVersion !== action.payload.cuentaVersion;
       const tieneSesionAnterior = state.items.length > 0 || state.pedidos.length > 0 || state.cuentaSolicitada;
@@ -227,7 +248,22 @@ function isVista(value: unknown): value is Vista {
 }
 
 function isEstadoPedido(value: unknown): value is EstadoPedido {
-  return value === "recibido" || value === "preparando" || value === "listo" || value === "cerrado";
+  return (
+    value === "recibido" ||
+    value === "confirmado" ||
+    value === "preparando" ||
+    value === "listo" ||
+    value === "entregado" ||
+    value === "cerrado"
+  );
+}
+
+function normalizarBusqueda(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es")
+    .trim();
 }
 
 function parseCartItems(value: unknown): CartItem[] {
@@ -297,7 +333,8 @@ function parseCartItems(value: unknown): CartItem[] {
   });
 }
 
-function pedidoApiToSession(pedido: PedidoAPI): PedidoSesion {
+function pedidoApiToSession(pedido: PedidoAPI, identidad?: ComensalIdentity | null): PedidoSesion {
+  const aliasActual = identidad?.nombre.trim();
   return {
     id: pedido.id,
     estado: pedido.estado,
@@ -309,7 +346,10 @@ function pedidoApiToSession(pedido: PedidoAPI): PedidoSesion {
       cantidad: item.cantidad,
       nota: item.notas?.trim() || "",
       comensalId: item.comensal_id,
-      comensalNombre: item.comensal_nombre?.trim() || undefined,
+      comensalNombre:
+        aliasActual && item.comensal_id === identidad?.id
+          ? aliasActual
+          : item.comensal_nombre?.trim() || undefined,
       variantes: item.variantes?.map((v) => ({
         id: v.variante_id,
         articulo_id: item.articulo_id,
@@ -337,6 +377,28 @@ function parsePedidoSessions(value: unknown): PedidoSesion[] {
 
 function getSessionKey(token: string) {
   return `mesa_click_session_${token}`;
+}
+
+function limpiarSesionDemo() {
+  if (typeof window === "undefined") return;
+
+  window.localStorage.removeItem(getSessionKey("demo"));
+  window.localStorage.removeItem(`mesa_click_resena_demo_${DEMO_MESA.cuenta_version}`);
+  window.localStorage.removeItem(DEMO_SESSION_EXPIRES_AT_KEY);
+  clearComensalIdentity(DEMO_MESA.id);
+}
+
+function asegurarVencimientoDemo() {
+  const now = Date.now();
+  const rawExpiresAt = window.localStorage.getItem(DEMO_SESSION_EXPIRES_AT_KEY);
+  const expiresAt = Number(rawExpiresAt);
+
+  if (Number.isFinite(expiresAt) && expiresAt > now) return expiresAt;
+
+  limpiarSesionDemo();
+  const nextExpiresAt = now + DEMO_SESSION_TTL_MS;
+  window.localStorage.setItem(DEMO_SESSION_EXPIRES_AT_KEY, String(nextExpiresAt));
+  return nextExpiresAt;
 }
 
 function readStoredSession(raw: string): State | null {
@@ -425,6 +487,11 @@ export default function MesaPage() {
   const [resenaCalificadaCuenta, setResenaCalificadaCuenta] = useState<number | null>(null);
 
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
+  const comensalRef = useRef<ComensalIdentity | null>(null);
+
+  useEffect(() => {
+    comensalRef.current = comensal;
+  }, [comensal]);
 
   const resenaYaEnviada = useMemo(() => {
     if (resenaCalificadaCuenta === state.cuentaVersion) return true;
@@ -469,7 +536,7 @@ export default function MesaPage() {
       const pedidosApi = await api.listarPedidosMesa(token);
       dispatch({
         type: "SET_PEDIDOS",
-        payload: (pedidosApi ?? []).map(pedidoApiToSession),
+        payload: (pedidosApi ?? []).map((pedido) => pedidoApiToSession(pedido, comensalRef.current)),
       });
     } catch (error) {
       console.warn("No se pudo sincronizar la cuenta de la mesa:", error);
@@ -484,6 +551,8 @@ export default function MesaPage() {
     dispatch({ type: "RESET_SESSION" });
 
     try {
+      if (isDemo) asegurarVencimientoDemo();
+
       const key = getSessionKey(token);
       const rawSession = window.localStorage.getItem(key);
       if (rawSession) {
@@ -499,7 +568,33 @@ export default function MesaPage() {
     }
 
     hydratedTokenRef.current = token;
-  }, [token]);
+  }, [isDemo, token]);
+
+  // La demostración es descartable: transcurridos 30 minutos vuelve al estado
+  // inicial, incluido alias, pedido y cuenta simulados. Las mesas reales no usan
+  // este temporizador ni pierden su sesión local.
+  useEffect(() => {
+    if (!isDemo) return;
+
+    let expiresAt = Date.now() + DEMO_SESSION_TTL_MS;
+    try {
+      expiresAt = asegurarVencimientoDemo();
+    } catch {
+      // Si el navegador bloquea el almacenamiento, igual reiniciamos la demo
+      // cuando vence esta sesión abierta.
+    }
+
+    const timeout = window.setTimeout(() => {
+      try {
+        limpiarSesionDemo();
+      } catch {
+        // El reload siguiente vuelve a cargar los datos mock aunque no se pueda limpiar storage.
+      }
+      window.location.reload();
+    }, Math.max(0, expiresAt - Date.now()));
+
+    return () => window.clearTimeout(timeout);
+  }, [isDemo]);
 
   // 2. Persistir sesión al cambiar
   useEffect(() => {
@@ -524,6 +619,7 @@ export default function MesaPage() {
     let isMounted = true;
 
     if (isDemo) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- modo demo: carga la carta mock en el mismo efecto que la carga real por QR; separarla queda fuera del alcance de #114
       setMesa(DEMO_MESA);
       const categoriasMock: MenuCategoryView[] = [
         {
@@ -547,6 +643,7 @@ export default function MesaPage() {
       ];
       setMenu(categoriasMock);
       const stored = getComensalIdentity(DEMO_MESA.id, DEMO_MESA.cuenta_version);
+      comensalRef.current = stored;
       setComensal(stored);
       setIdentidadLista(true);
       setLoading(false);
@@ -570,6 +667,7 @@ export default function MesaPage() {
         if (mesaApi.estado === "inactiva") {
           clearComensalIdentity(mesaApi.id);
         }
+        comensalRef.current = identidad;
         setComensal(identidad);
         setEditandoComensal(false);
         setIdentidadLista(true);
@@ -635,13 +733,14 @@ export default function MesaPage() {
 
   // 4. SSE en tiempo real para salón y cocina
   const mesaId = mesa?.id;
-  const mesaEstado = mesa?.estado;
+  const mesaTenantId = mesa?.tenant_id;
+  const mesaSucursalId = mesa?.sucursal_id;
 
   useEffect(() => {
     if (!mesaId || !token || isDemo) return;
 
     const eventSource = new EventSource(
-      api.obtenerEventosMesaUrl(mesaId, mesa?.tenant_id, mesa?.sucursal_id)
+      api.obtenerEventosMesaUrl(mesaId, mesaTenantId, mesaSucursalId)
     );
     eventSource.onopen = () => {
       void sincronizarPedidosMesa();
@@ -652,7 +751,10 @@ export default function MesaPage() {
         const payload: unknown = JSON.parse(event.data);
         if (!isRecord(payload) || typeof payload.id !== "string" || !isEstadoPedido(payload.estado))
           return;
-        dispatch({ type: "UPSERT_PEDIDO", payload: pedidoApiToSession(payload as unknown as PedidoAPI) });
+        dispatch({
+          type: "UPSERT_PEDIDO",
+          payload: pedidoApiToSession(payload as unknown as PedidoAPI, comensalRef.current),
+        });
       } catch (error) {
         console.warn("Error parseando pedido_creado:", error);
       }
@@ -694,6 +796,7 @@ export default function MesaPage() {
 
         if (mesaId) {
           const identidad = getComensalIdentity(mesaId, payload.cuenta_version);
+          comensalRef.current = identidad;
           setComensal(identidad);
           setEditandoComensal(false);
           setIdentidadLista(true);
@@ -732,7 +835,7 @@ export default function MesaPage() {
     return () => {
       eventSource.close();
     };
-  }, [mesaId, isDemo, sincronizarPedidosMesa, token]);
+  }, [mesaId, mesaTenantId, mesaSucursalId, isDemo, sincronizarPedidosMesa, token]);
 
   // 5. Manejo de retorno de Mercado Pago
   useEffect(() => {
@@ -753,24 +856,41 @@ export default function MesaPage() {
   }, [token, isDemo, pagoExitoso, pagoError]);
 
   // 6. Acciones del comensal
+  const volverAlInicioDelTelefono = () => {
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>(".guest-scroll-area")?.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  };
+
   const handleGuardarComensal = (nombre: string) => {
     if (!mesa) return;
+    const nombreLimpio = nombre.trim();
     const identidad = comensal
-      ? { ...comensal, nombre: nombre.trim(), cuentaVersion: mesa.cuenta_version }
-      : createComensalIdentity(nombre, mesa.cuenta_version);
+      ? { ...comensal, nombre: nombreLimpio, cuentaVersion: mesa.cuenta_version }
+      : createComensalIdentity(nombreLimpio, mesa.cuenta_version);
     saveComensalIdentity(identidad, mesa.id);
+    comensalRef.current = identidad;
+    if (comensal) {
+      dispatch({
+        type: "RENOMBRAR_COMENSAL",
+        payload: { comensalId: comensal.id, nombre: nombreLimpio },
+      });
+    }
     setComensal(identidad);
     setEditandoComensal(false);
     setIdentidadLista(true);
+    volverAlInicioDelTelefono();
   };
 
   const handleContinuarSinAlias = () => {
     if (!mesa) return;
     const identidad = createComensalIdentity("", mesa.cuenta_version);
     saveComensalIdentity(identidad, mesa.id);
+    comensalRef.current = identidad;
     setComensal(identidad);
     setEditandoComensal(false);
     setIdentidadLista(true);
+    volverAlInicioDelTelefono();
   };
 
   const handleAddToCart = (
@@ -779,6 +899,7 @@ export default function MesaPage() {
     variantes: VariantePublica[],
     nota: string
   ) => {
+    if (state.cuentaSolicitada) return;
     const recargos = variantes.reduce((acc, v) => acc + (v.precio_adicional || 0), 0);
     const precioUnitario = item.precio + recargos;
 
@@ -958,7 +1079,7 @@ export default function MesaPage() {
   }
 
   // Si el usuario aún no se ha sumado a la mesa (fase Welcome Screen de la maqueta)
-  const yaSeSumo = Boolean(comensal && !editandoComensal);
+  const yaSeSumo = identidadLista && Boolean(comensal);
   if (!yaSeSumo) {
     return (
       <div className="guest-page" data-estilo-visual={theme.visualStyle} style={themeStyle}>
@@ -977,65 +1098,66 @@ export default function MesaPage() {
 
   // Filtrado de carta por categoría y búsqueda
   const categoriasNombres = ["Todos", ...menu.map((c) => c.nombre)];
-  const busquedaQuery = busqueda.trim().toLowerCase();
+  const busquedaQuery = normalizarBusqueda(busqueda);
 
   const articulosFiltrados = menu.flatMap((c) => {
     if (categoriaActiva !== "Todos" && c.nombre !== categoriaActiva) return [];
     return c.items.filter((item) => {
       if (!busquedaQuery) return true;
       return (
-        item.nombre.toLowerCase().includes(busquedaQuery) ||
-        (item.descripcion && item.descripcion.toLowerCase().includes(busquedaQuery))
+        normalizarBusqueda(item.nombre).includes(busquedaQuery) ||
+        (item.descripcion && normalizarBusqueda(item.descripcion).includes(busquedaQuery))
       );
     });
   });
 
   return (
-    <div className="guest-page" data-estilo-visual={theme.visualStyle} style={themeStyle}>
+    <div className="guest-page guest-menu-page" data-estilo-visual={theme.visualStyle} style={themeStyle}>
       <div className="guest-phone menu-view">
-        {/* Cabecera del restaurante y avatar */}
-        <GuestHeader
-          mesa={mesa}
-          dinerName={comensal?.nombre}
-          onOpenCuenta={() => dispatch({ type: "SET_VISTA", payload: "seguimiento" })}
-          onEditDiner={() => setEditandoComensal(true)}
-        />
-
-        {/* Vista: Seguimiento / Estado del pedido */}
-        {state.vista === "seguimiento" ? (
-          <GuestOrderStatusView
-            mesaNumero={mesa.numero}
-            sector={mesa.sector}
-            pedidos={state.pedidos}
-            estadoPedido={state.estadoPedido}
-            cuentaSolicitada={state.cuentaSolicitada}
-            pagoHabilitado={state.pagoHabilitado}
-            mercadopagoHabilitado={Boolean(mesa.mercadopago_habilitado)}
-            comensalId={comensal?.id}
-            comensalNombre={comensal?.nombre}
-            onVolverCarta={() => dispatch({ type: "SET_VISTA", payload: "carta" })}
-            onPedirCuenta={handlePedirCuenta}
-            onPagarMercadoPago={mesa.mercadopago_habilitado ? handlePagarMercadoPago : undefined}
-            pagandoMP={pagandoMP}
-            pagoExitoso={pagoExitoso}
-            pagoError={pagoError}
-            todosListos={
-              state.pedidos.length > 0 &&
-              state.pedidos.every((p) => p.estado === "listo" || p.estado === "cerrado")
-            }
-            yaCalificado={resenaYaEnviada}
-            onCalificar={() => setModalResenaAbierto(true)}
-            formatPrice={formatPrice}
+        <div className="guest-scroll-area">
+          {/* Cabecera del restaurante y avatar */}
+          <GuestHeader
+            mesa={mesa}
+            dinerName={comensal?.nombre}
+            onOpenCuenta={() => dispatch({ type: "SET_VISTA", payload: "seguimiento" })}
+            onEditDiner={() => setEditandoComensal(true)}
           />
-        ) : (
-          /* Vista: Carta / Menú del local */
-          <>
+
+          {/* Vista: Seguimiento / Estado del pedido */}
+          {state.vista === "seguimiento" ? (
+            <GuestOrderStatusView
+              mesaNumero={mesa.numero}
+              sector={mesa.sector}
+              pedidos={state.pedidos}
+              estadoPedido={state.estadoPedido}
+              cuentaSolicitada={state.cuentaSolicitada}
+              pagoHabilitado={state.pagoHabilitado}
+              mercadopagoHabilitado={Boolean(mesa.mercadopago_habilitado)}
+              comensalId={comensal?.id}
+              comensalNombre={comensal?.nombre}
+              onVolverCarta={() => dispatch({ type: "SET_VISTA", payload: "carta" })}
+              onPedirCuenta={handlePedirCuenta}
+              onPagarMercadoPago={mesa.mercadopago_habilitado ? handlePagarMercadoPago : undefined}
+              pagandoMP={pagandoMP}
+              pagoExitoso={pagoExitoso}
+              pagoError={pagoError}
+              todosListos={
+                state.pedidos.length > 0 &&
+                state.pedidos.every((p) => p.estado === "listo" || p.estado === "entregado" || p.estado === "cerrado")
+              }
+              yaCalificado={resenaYaEnviada}
+              onCalificar={() => setModalResenaAbierto(true)}
+              formatPrice={formatPrice}
+            />
+          ) : (
+            /* Vista: Carta / Menú del local */
+            <>
             {/* Buscador y carrusel de categorías sticky */}
             <div className="guest-sticky">
               <label className="guest-search">
                 <ComensalIcon name="search" size={19} />
                 <input
-                  type="search"
+                  type="text"
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
                   placeholder="¿Qué te gustaría comer?"
@@ -1118,30 +1240,35 @@ export default function MesaPage() {
                 </div>
               )}
             </main>
-          </>
-        )}
+            </>
+          )}
+        </div>
 
-        {/* Barra flotante de carrito (cuando hay productos seleccionados) */}
-        {totalItemsEnCarrito > 0 && state.vista === "carta" && (
-          <button
-            type="button"
-            className="cart-bar"
-            onClick={() => setCarritoAbierto(true)}
-            aria-label="Ver pedido en curso"
-          >
-            <span>
-              <b>{totalItemsEnCarrito}</b> Ver pedido
-            </span>
-            <strong>{formatPrice(totalPrecioCarrito)}</strong>
-          </button>
-        )}
+        <div className="guest-bottom-dock">
+          {/* Barra flotante de carrito (cuando hay productos seleccionados) */}
+          {totalItemsEnCarrito > 0 && state.vista === "carta" && (
+            <button
+              type="button"
+              className="cart-bar"
+              onClick={() => setCarritoAbierto(true)}
+              aria-label="Ver pedido en curso"
+            >
+              <span>
+                <b>{totalItemsEnCarrito}</b> Ver pedido
+              </span>
+              <strong>{formatPrice(totalPrecioCarrito)}</strong>
+            </button>
+          )}
 
-        {/* Navegación inferior persistente */}
-        <nav className="guest-bottom-nav" aria-label="Navegación comensal">
+          {/* Navegación inferior persistente */}
+          <nav className="guest-bottom-nav" aria-label="Navegación comensal">
           <button
             type="button"
             className={state.vista === "carta" ? "active" : ""}
             onClick={() => dispatch({ type: "SET_VISTA", payload: "carta" })}
+            disabled={state.cuentaSolicitada}
+            aria-disabled={state.cuentaSolicitada}
+            title={state.cuentaSolicitada ? "La cuenta ya fue solicitada" : "Ver carta"}
           >
             <ComensalIcon name="book" size={20} />
             <span>Carta</span>
@@ -1167,10 +1294,11 @@ export default function MesaPage() {
             <ComensalIcon name="card" size={20} />
             <span>Cuenta</span>
           </button>
-        </nav>
+          </nav>
+        </div>
 
         {/* Modal de personalización de artículo */}
-        {itemParaPersonalizar && (
+        {itemParaPersonalizar && !state.cuentaSolicitada && (
           <GuestDetailSheet
             item={itemParaPersonalizar}
             onClose={() => setItemParaPersonalizar(null)}
@@ -1180,7 +1308,7 @@ export default function MesaPage() {
         )}
 
         {/* Bottom sheet de carrito */}
-        {carritoAbierto && (
+        {carritoAbierto && !state.cuentaSolicitada && (
           <GuestCartSheet
             mesaNumero={mesa.numero}
             dinerName={comensal?.nombre}

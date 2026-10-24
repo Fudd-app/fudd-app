@@ -37,6 +37,7 @@ type mockStore struct {
 	obtenerEstadoCuotasFn       func(ctx context.Context, tenantID string) (*tenant.EstadoCuotas, error)
 	registrarSolicitudUpgradeFn func(ctx context.Context, tenantID, nota string) (*tenant.Tenant, error)
 	slugEnUsoFn                 func(ctx context.Context, slug string) (bool, error)
+	funcionalidadHabilitadaFn   func(ctx context.Context, tenantID string, rec tenant.Recurso, plan string, ahora time.Time) (bool, error)
 }
 
 func (m *mockStore) Crear(ctx context.Context, input tenant.OnboardingInput) (*tenant.Tenant, error) {
@@ -71,6 +72,13 @@ func (m *mockStore) RegistrarSolicitudUpgrade(ctx context.Context, tenantID, not
 		return m.registrarSolicitudUpgradeFn(ctx, tenantID, nota)
 	}
 	return nil, nil
+}
+
+func (m *mockStore) FuncionalidadHabilitada(ctx context.Context, tenantID string, rec tenant.Recurso, plan string, ahora time.Time) (bool, error) {
+	if m.funcionalidadHabilitadaFn != nil {
+		return m.funcionalidadHabilitadaFn(ctx, tenantID, rec, plan, ahora)
+	}
+	return plan == tenant.PlanPro, nil
 }
 
 func TestCrear_Exitoso(t *testing.T) {
@@ -164,6 +172,20 @@ func TestCrear_SlugVacio_Error(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("esperaba error por slug vacío")
+	}
+}
+
+func TestCrear_WhatsappConLetras_Error(t *testing.T) {
+	svc := tenant.NuevoService(&mockStore{})
+	_, err := svc.Crear(context.Background(), tenant.OnboardingInput{
+		Nombre:      "Mi Bar",
+		Slug:        "mi-bar",
+		EmailAdmin:  "admin@mibar.com",
+		NombreAdmin: "Carlos",
+		Whatsapp:    "+54 contacto",
+	})
+	if !errors.Is(err, tenant.ErrValidation) {
+		t.Fatalf("se esperaba ErrValidation para WhatsApp inválido, obtenido: %v", err)
 	}
 }
 
@@ -319,5 +341,30 @@ func TestSlugDisponible_FormatoInvalido(t *testing.T) {
 		if _, err := svc.SlugDisponible(context.Background(), slug); !errors.Is(err, tenant.ErrValidation) {
 			t.Errorf("slug %q: se esperaba ErrValidation, obtenido %v", slug, err)
 		}
+	}
+}
+func TestSlugReservado_NoDisponible(t *testing.T) {
+	svc := tenant.NuevoService(&mockStore{})
+	for _, reservado := range []string{"superadmin", "ADMIN", "platform", "kds", "mesa", "dashboard", "api", "login"} {
+		disponible, err := svc.SlugDisponible(context.Background(), reservado)
+		if err != nil {
+			t.Errorf("slug reservado %q dio error: %v", reservado, err)
+		}
+		if disponible {
+			t.Errorf("slug reservado %q no debe figurar disponible", reservado)
+		}
+	}
+}
+
+func TestCrear_SlugReservado_Error(t *testing.T) {
+	svc := tenant.NuevoService(&mockStore{})
+	_, err := svc.Crear(context.Background(), tenant.OnboardingInput{
+		Nombre:     "Super Admin Bar",
+		Slug:       "superadmin",
+		EmailAdmin: "admin@bar.com",
+		Password:   "clave1234",
+	})
+	if !errors.Is(err, tenant.ErrValidation) {
+		t.Fatalf("se esperaba ErrValidation por slug reservado, obtenido: %v", err)
 	}
 }

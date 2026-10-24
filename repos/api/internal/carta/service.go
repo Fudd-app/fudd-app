@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/notificacion"
 )
@@ -15,6 +16,8 @@ import (
 type Service struct {
 	store Store
 }
+
+const maxDescripcionArticuloRunes = 140
 
 func NuevoService(s Store) *Service { return &Service{store: s} }
 
@@ -49,6 +52,9 @@ func (svc *Service) CrearArticulo(ctx context.Context, tenantID string, input Ar
 	}
 	input.Nombre = strings.TrimSpace(input.Nombre)
 	input.Descripcion = strings.TrimSpace(input.Descripcion)
+	if err := validarDescripcionArticulo(input.Descripcion); err != nil {
+		return nil, err
+	}
 	foto, err := normalizarFotoURL(input.FotoURL)
 	if err != nil {
 		return nil, err
@@ -77,9 +83,19 @@ func (svc *Service) ActualizarArticulo(ctx context.Context, id, tenantID string,
 	}
 	if u.Descripcion != nil {
 		descripcion := strings.TrimSpace(*u.Descripcion)
+		if err := validarDescripcionArticulo(descripcion); err != nil {
+			return nil, err
+		}
 		u.Descripcion = &descripcion
 	}
 	return svc.store.ActualizarArticulo(ctx, id, tenantID, u)
+}
+
+func validarDescripcionArticulo(descripcion string) error {
+	if utf8.RuneCountInString(descripcion) > maxDescripcionArticuloRunes {
+		return fmt.Errorf("la descripción no puede superar los %d caracteres: %w", maxDescripcionArticuloRunes, ErrValidation)
+	}
+	return nil
 }
 
 const maxFotoURLBytes = 380_000

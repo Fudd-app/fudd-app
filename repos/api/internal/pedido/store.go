@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/db"
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/evento"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -13,7 +14,7 @@ type Store interface {
 	Crear(ctx context.Context, input NuevoPedidoInput, sucursalID string, cuentaVersion int) (*Pedido, error)
 	ListarActivos(ctx context.Context, sucursalID, tenantID string) ([]Pedido, error)
 	ListarCuentaActualPorQR(ctx context.Context, qrToken string) ([]Pedido, error)
-	CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado string) (*Pedido, error)
+	CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado, modoEntrega string) (*Pedido, error)
 	CambiarEstadoItem(ctx context.Context, itemID, tenantID, sucursalAlcance, nuevoEstado string) (*Pedido, error)
 	SucursalPerteneceATenant(ctx context.Context, sucursalID, tenantID string) (bool, error)
 	ObtenerSucursalPorMesa(ctx context.Context, mesaID string) (string, int, error)
@@ -53,10 +54,20 @@ func (s *pgStore) Crear(ctx context.Context, input NuevoPedidoInput, sucursalID 
 	}
 	defer tx.Rollback(ctx)
 
+	// Serializa los pedidos de una misma mesa para que "cuenta_abierta" se registre una sola vez.
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM mesas WHERE id = $1 FOR NO KEY UPDATE`, input.MesaID); err != nil {
+		return nil, fmt.Errorf("error bloqueando mesa: %w", err)
+	}
+
+	estadoInicial := input.EstadoInicial
+	if estadoInicial == "" {
+		estadoInicial = "recibido"
+	}
+
 	p := &Pedido{}
 	err = tx.QueryRow(ctx,
 		`INSERT INTO pedidos (mesa_id, sucursal_id, cuenta_version, estado, origen, creado_por_usuario_id, creado_por_nombre)
-		 SELECT $1, $2, $3, 'recibido', $4, NULLIF($5, '')::uuid,
+		 SELECT $1, $2, $3, $7::text, $4, NULLIF($5, '')::uuid,
 		        COALESCE((SELECT nombre FROM usuarios WHERE id=NULLIF($5, '')::uuid), NULLIF($6, ''))
 		 WHERE EXISTS (
 			SELECT 1
@@ -68,7 +79,7 @@ func (s *pgStore) Crear(ctx context.Context, input NuevoPedidoInput, sucursalID 
 			  AND cuenta_version = $3
 		 )
 		 RETURNING id, mesa_id, sucursal_id, cuenta_version, estado, origen, creado_por_usuario_id, creado_por_nombre, created_at, updated_at`,
-		input.MesaID, sucursalID, cuentaVersion, input.Origen, input.CreadoPorUsuarioID, input.CreadoPorNombre,
+		input.MesaID, sucursalID, cuentaVersion, input.Origen, input.CreadoPorUsuarioID, input.CreadoPorNombre, estadoInicial,
 	).Scan(&p.ID, &p.MesaID, &p.SucursalID, &p.CuentaVersion, &p.Estado, &p.Origen, &p.CreadoPorUsuarioID, &p.CreadoPorNombre, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -170,6 +181,38 @@ func (s *pgStore) Crear(ctx context.Context, input NuevoPedidoInput, sucursalID 
 			Estado:         "pendiente",
 			Variantes:      itemVariantes,
 		})
+	}
+
+	var hayPedidosPrevios bool
+	err = tx.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM pedidos WHERE mesa_id = $1 AND cuenta_version = $2 AND id <> $3)`,
+		p.MesaID, p.CuentaVersion, p.ID,
+	).Scan(&hayPedidosPrevios)
+	if err != nil {
+		return nil, fmt.Errorf("error verificando pedidos previos de la cuenta: %w", err)
+	}
+
+	hito := evento.Nuevo{
+		SucursalID: p.SucursalID, MesaID: p.MesaID, CuentaVersion: p.CuentaVersion,
+		PedidoID: p.ID, EstadoNuevo: "recibido", Actor: evento.ActorDesdeContexto(ctx, nil),
+		Detalle: map[string]any{"origen": p.Origen, "items": len(p.Items)},
+	}
+	if !hayPedidosPrevios {
+		hito.Tipo = evento.TipoCuentaAbierta
+		if err := evento.Registrar(ctx, tx, hito); err != nil {
+			return nil, err
+		}
+	}
+	hito.Tipo = evento.TipoPedidoCreado
+	if err := evento.Registrar(ctx, tx, hito); err != nil {
+		return nil, err
+	}
+	if p.Estado != "recibido" {
+		hito.Tipo = evento.TipoPedidoEstado
+		hito.EstadoAnterior, hito.EstadoNuevo = "recibido", p.Estado
+		if err := evento.Registrar(ctx, tx, hito); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -327,28 +370,68 @@ func (s *pgStore) cargarItemsDePedidos(ctx context.Context, pedidos []Pedido) er
 	return vRows.Err()
 }
 
-func (s *pgStore) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado string) (*Pedido, error) {
+func (s *pgStore) CambiarEstado(ctx context.Context, id, tenantID, sucursalAlcance, nuevoEstado, modoEntrega string) (*Pedido, error) {
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error iniciando cambio de estado: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var estadoAnterior string
+	err = tx.QueryRow(ctx,
+		`SELECT estado FROM pedidos
+		 WHERE id = $1
+		   AND sucursal_id IN (SELECT id FROM sucursales WHERE tenant_id = $2)
+		   AND ($3 = '' OR sucursal_id = $3::uuid)
+		 FOR NO KEY UPDATE`,
+		id, tenantID, sucursalAlcance,
+	).Scan(&estadoAnterior)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("error obteniendo estado del pedido: %w", err)
+	}
+	if err := ValidarTransicion(estadoAnterior, nuevoEstado); err != nil {
+		return nil, err
+	}
+
 	p := &Pedido{}
-	err := db.Pool.QueryRow(ctx,
+	err = tx.QueryRow(ctx,
 		`UPDATE pedidos
 		 SET estado = $1,
 		     updated_at = now(),
 		     listo_at = CASE
 		       WHEN $1 = 'listo' THEN COALESCE(listo_at, now())
-		       WHEN $1 IN ('recibido', 'preparando') THEN NULL
+		       WHEN $1 IN ('recibido', 'confirmado', 'preparando') THEN NULL
 		       ELSE listo_at
 		     END
 		 WHERE id = $2
-		   AND sucursal_id IN (SELECT id FROM sucursales WHERE tenant_id = $3)
-		   AND ($4 = '' OR sucursal_id = $4::uuid)
 		 RETURNING id, mesa_id, sucursal_id, cuenta_version, estado, origen, creado_por_usuario_id, creado_por_nombre, created_at, updated_at`,
-		nuevoEstado, id, tenantID, sucursalAlcance,
+		nuevoEstado, id,
 	).Scan(&p.ID, &p.MesaID, &p.SucursalID, &p.CuentaVersion, &p.Estado, &p.Origen, &p.CreadoPorUsuarioID, &p.CreadoPorNombre, &p.CreatedAt, &p.UpdatedAt)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
-		}
 		return nil, fmt.Errorf("error cambiando estado del pedido: %w", err)
+	}
+
+	if estadoAnterior != nuevoEstado {
+		var detalle map[string]any
+		if nuevoEstado == "entregado" {
+			// "entregado" se marca, no se mide: el ts del hito es cuando se lo marcó,
+			// que puede ser posterior a la entrega física.
+			detalle = map[string]any{"modo_entrega": modoEntrega}
+		}
+		if err := evento.Registrar(ctx, tx, evento.Nuevo{
+			SucursalID: p.SucursalID, MesaID: p.MesaID, CuentaVersion: p.CuentaVersion, PedidoID: p.ID,
+			Tipo: evento.TipoPedidoEstado, EstadoAnterior: estadoAnterior, EstadoNuevo: nuevoEstado,
+			Actor: evento.ActorDesdeContexto(ctx, nil), Detalle: detalle,
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("error confirmando cambio de estado: %w", err)
 	}
 	return p, nil
 }
@@ -360,24 +443,31 @@ func (s *pgStore) CambiarEstadoItem(ctx context.Context, itemID, tenantID, sucur
 	}
 	defer tx.Rollback(ctx)
 
-	var pedidoID, estadoPedido string
+	var pedidoID, estadoPedido, estadoItemAnterior, sucursalID, mesaID string
+	var cuentaVersion int
 	err = tx.QueryRow(ctx,
-		`SELECT p.id, p.estado
+		`SELECT p.id, p.estado, pi.estado, p.sucursal_id, p.mesa_id, p.cuenta_version
 		 FROM pedido_items pi
 		 JOIN pedidos p ON p.id = pi.pedido_id
 		 JOIN sucursales su ON su.id = p.sucursal_id
 		 WHERE pi.id = $1 AND su.tenant_id = $2 AND ($3 = '' OR p.sucursal_id = $3::uuid)
-		 FOR UPDATE OF p`,
+		 FOR NO KEY UPDATE OF p`,
 		itemID, tenantID, sucursalAlcance,
-	).Scan(&pedidoID, &estadoPedido)
+	).Scan(&pedidoID, &estadoPedido, &estadoItemAnterior, &sucursalID, &mesaID, &cuentaVersion)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
 		return nil, fmt.Errorf("error obteniendo pedido del item: %w", err)
 	}
-	if estadoPedido == "cerrado" {
+	switch estadoPedido {
+	case "cerrado":
 		return nil, ErrPedidoCerrado
+	case "entregado":
+		// Un pedido entregado ya no vuelve a cocina: reabrirlo retrocedería el flujo.
+		return nil, ErrPedidoEntregado
+	case "recibido":
+		return nil, ErrPedidoSinConfirmar
 	}
 
 	resultado, err := tx.Exec(ctx,
@@ -404,20 +494,43 @@ func (s *pgStore) CambiarEstadoItem(ctx context.Context, itemID, tenantID, sucur
 		return nil, fmt.Errorf("error calculando estado agregado del pedido: %w", err)
 	}
 
-	estadoAgregado := resolverEstadoPedido(total, listos, iniciados)
-	_, err = tx.Exec(ctx,
-		`UPDATE pedidos
-		 SET estado = $1,
-		     updated_at = now(),
-		     listo_at = CASE
-		       WHEN $1 = 'listo' THEN COALESCE(listo_at, now())
-		       ELSE NULL
-		     END
-		 WHERE id = $2 AND estado IS DISTINCT FROM $1`,
-		estadoAgregado, pedidoID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("error actualizando estado agregado del pedido: %w", err)
+	actor := evento.ActorDesdeContexto(ctx, nil)
+	if estadoItemAnterior != nuevoEstado {
+		if err := evento.Registrar(ctx, tx, evento.Nuevo{
+			SucursalID: sucursalID, MesaID: mesaID, CuentaVersion: cuentaVersion,
+			PedidoID: pedidoID, PedidoItemID: itemID,
+			Tipo: evento.TipoItemEstado, EstadoAnterior: estadoItemAnterior, EstadoNuevo: nuevoEstado, Actor: actor,
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	// Los estados del pedido solo avanzan: si la cocina deshace un ítem, el pedido
+	// conserva su estado (p. ej. un "listo" que el mozo marcó no vuelve a "confirmado").
+	estadoAgregado := estadoTrasItems(estadoPedido, total, listos, iniciados)
+	if estadoAgregado != estadoPedido {
+		_, err = tx.Exec(ctx,
+			`UPDATE pedidos
+			 SET estado = $1,
+			     updated_at = now(),
+			     listo_at = CASE
+			       WHEN $1 = 'listo' THEN COALESCE(listo_at, now())
+			       ELSE listo_at
+			     END
+			 WHERE id = $2`,
+			estadoAgregado, pedidoID,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error actualizando estado agregado del pedido: %w", err)
+		}
+
+		if err := evento.Registrar(ctx, tx, evento.Nuevo{
+			SucursalID: sucursalID, MesaID: mesaID, CuentaVersion: cuentaVersion, PedidoID: pedidoID,
+			Tipo: evento.TipoPedidoEstado, EstadoAnterior: estadoPedido, EstadoNuevo: estadoAgregado, Actor: actor,
+			Detalle: map[string]any{"origen": "item", "pedido_item_id": itemID},
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -427,6 +540,16 @@ func (s *pgStore) CambiarEstadoItem(ctx context.Context, itemID, tenantID, sucur
 	return s.obtenerPedidoPorID(ctx, pedidoID, tenantID)
 }
 
+// estadoTrasItems devuelve el estado del pedido luego de un cambio de ítem:
+// el agregado de los ítems solo se aplica si avanza respecto del estado actual.
+func estadoTrasItems(actual string, total, listos, iniciados int) string {
+	agregado := resolverEstadoPedido(total, listos, iniciados)
+	if rangoEstado[agregado] > rangoEstado[actual] {
+		return agregado
+	}
+	return actual
+}
+
 func resolverEstadoPedido(total, listos, iniciados int) string {
 	if total > 0 && listos == total {
 		return "listo"
@@ -434,7 +557,8 @@ func resolverEstadoPedido(total, listos, iniciados int) string {
 	if iniciados > 0 {
 		return "preparando"
 	}
-	return "recibido"
+	// La cocina solo opera pedidos confirmados: sin ítems iniciados el pedido vuelve a "confirmado".
+	return "confirmado"
 }
 
 func (s *pgStore) obtenerPedidoPorID(ctx context.Context, pedidoID, tenantID string) (*Pedido, error) {

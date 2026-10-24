@@ -50,6 +50,17 @@ export function esPlanLimitReached(err: unknown): boolean {
   return false;
 }
 
+export function codigoError(err: unknown): string | undefined {
+  if (typeof err === 'object' && err !== null) {
+    const apiErr = err as { data?: unknown };
+    if (typeof apiErr.data === 'object' && apiErr.data !== null) {
+      const codigo = (apiErr.data as Record<string, unknown>).codigo;
+      if (typeof codigo === 'string') return codigo;
+    }
+  }
+  return undefined;
+}
+
 export function detallePlanLimit(err: unknown): DetallePlanLimit | null {
   if (!esPlanLimitReached(err)) return null;
   const data = (err as { data: Record<string, unknown> }).data;
@@ -277,6 +288,7 @@ export interface OnboardingInput {
   nombre: string;
   nombre_fantasia?: string;
   rubro?: string;
+  descripcion?: string;
   slug: string;
   email_admin: string;
   nombre_admin: string;
@@ -420,6 +432,25 @@ export interface SesionUsuario {
   nombre: string;
   rol: 'admin' | 'encargado' | 'mozo' | 'cocina';
   sucursal_id?: string | null;
+  es_superadmin?: boolean;
+}
+
+export interface SolicitudMcp {
+  id: string;
+  client_name: string;
+  dominio_retorno: string;
+  negocio: string;
+  permisos: string[];
+  solo_lectura: boolean;
+  mismo_navegador: boolean;
+  expira_at: string;
+}
+
+export interface ConexionMcp {
+  id: string;
+  client_name: string;
+  creado_at: string;
+  ultimo_uso_at: string | null;
 }
 
 export interface InvitacionEquipoAPI {
@@ -541,12 +572,15 @@ export interface PedidoItemAPI {
   variantes?: PedidoItemVarianteAPI[];
 }
 
+export type EstadoPedidoAPI = 'recibido' | 'confirmado' | 'preparando' | 'listo' | 'entregado' | 'cerrado';
+export type ModoEntregaPedido = 'mesa' | 'retiro';
+
 export interface PedidoAPI {
   id: string;
   mesa_id: string;
   sucursal_id: string;
   cuenta_version: number;
-  estado: 'recibido' | 'preparando' | 'listo' | 'cerrado';
+  estado: EstadoPedidoAPI;
 	origen?: 'comensal' | 'mozo';
 	creado_por_usuario_id?: string;
 	creado_por_nombre?: string;
@@ -577,8 +611,23 @@ export interface MetricaTurnoAPI {
 }
 
 export interface MetricaEstadoAPI {
-  estado: 'recibido' | 'preparando' | 'listo' | 'cerrado';
+  estado: EstadoPedidoAPI;
   cantidad: number;
+}
+
+export interface MetricaCategoriaAPI {
+  categoria_id: string;
+  nombre: string;
+  unidades: number;
+  monto: number;
+  porcentaje: number;
+}
+
+export interface CeldaCalorAPI {
+  dia_semana: number;
+  hora: number;
+  pedidos: number;
+  monto: number;
 }
 
 export interface MetricasResumenAPI {
@@ -607,6 +656,8 @@ export interface MetricasResumenAPI {
   por_dia: MetricaDiariaAPI[];
   por_turno: MetricaTurnoAPI[];
   por_estado: MetricaEstadoAPI[];
+  por_categoria?: MetricaCategoriaAPI[];
+  mapa_calor?: CeldaCalorAPI[];
 }
 
 export interface NuevoPedidoInput {
@@ -1020,6 +1071,31 @@ export const api = {
 		body: JSON.stringify({ credential, nombre }),
 	}),
 
+  // Asistentes de IA (MCP / OAuth)
+  obtenerSolicitudMcp: async (id: string) => {
+    return apiFetch<SolicitudMcp>(`/oauth/solicitudes/${encodeURIComponent(id)}`);
+  },
+
+  aprobarSolicitudMcp: async (id: string) => {
+    return apiFetch<{ redirect_url: string }>(`/oauth/solicitudes/${encodeURIComponent(id)}/aprobar`, {
+      method: 'POST',
+    });
+  },
+
+  rechazarSolicitudMcp: async (id: string) => {
+    return apiFetch<{ redirect_url: string }>(`/oauth/solicitudes/${encodeURIComponent(id)}/rechazar`, {
+      method: 'POST',
+    });
+  },
+
+  listarConexionesMcp: async () => {
+    return apiFetch<ConexionMcp[]>('/oauth/conexiones');
+  },
+
+  revocarConexionMcp: async (id: string) => {
+    return apiFetch<void>(`/oauth/conexiones/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
+
   // 7. Flujo Público Comensal (US-42, US-43, US-44)
   obtenerMesaPorQR: async (qrToken: string) => {
     return apiFetch<MesaPublica>(`/publica/mesas/${encodeURIComponent(qrToken)}`);
@@ -1056,11 +1132,19 @@ export const api = {
     return apiFetch<PedidoAPI[]>(`/pedidos?sucursal_id=${encodeURIComponent(sucursalId)}`);
   },
 
-  cambiarEstadoPedido: async (pedidoId: string, estado: 'recibido' | 'preparando' | 'listo' | 'cerrado') => {
+  cambiarEstadoPedido: async (pedidoId: string, estado: EstadoPedidoAPI, modoEntrega?: ModoEntregaPedido) => {
     return apiFetch<PedidoAPI>(`/pedidos/${encodeURIComponent(pedidoId)}/estado`, {
       method: 'PATCH',
-      body: JSON.stringify({ estado }),
+      body: JSON.stringify(modoEntrega ? { estado, modo_entrega: modoEntrega } : { estado }),
     });
+  },
+
+  confirmarPedido: async (pedidoId: string) => {
+    return api.cambiarEstadoPedido(pedidoId, 'confirmado');
+  },
+
+  entregarPedido: async (pedidoId: string, modoEntrega: ModoEntregaPedido) => {
+    return api.cambiarEstadoPedido(pedidoId, 'entregado', modoEntrega);
   },
 
   cambiarEstadoItem: async (itemId: string, estado: 'pendiente' | 'preparando' | 'listo') => {
@@ -1159,6 +1243,19 @@ export const api = {
     const query = params.toString();
     return apiFetch<ResenaResumen>(`/resenias/resumen${query ? `?${query}` : ''}`);
   },
+
+  // 13. Telemetría y Superadministración de Plataforma (#62, #63)
+  obtenerStatusPlataforma: async (): Promise<StatusPlataforma> => {
+    return apiFetch<StatusPlataforma>('/api/platform/status');
+  },
+
+  listarTenantsPlataforma: async (): Promise<TenantResumenPlatform[]> => {
+    return apiFetch<TenantResumenPlatform[]>('/api/platform/tenants');
+  },
+
+  obtenerDetalleActividadTenant: async (tenantId: string): Promise<TenantDetalleActividadPlatform> => {
+    return apiFetch<TenantDetalleActividadPlatform>(`/api/platform/tenants/${encodeURIComponent(tenantId)}/actividad`);
+  },
 };
 
 export interface PreferenciaPagoMP {
@@ -1191,4 +1288,77 @@ export interface ErrorFila {
   fila: number;
   motivo: string;
 }
+export interface StatusPlataforma {
+  servicio: string;
+  estado: string;
+  database: string;
+  timestamp: string;
+  uptime_segundos: number;
+  total_tenants: number;
+  total_sucursales: number;
+  total_mesas: number;
+  total_usuarios: number;
+  pedidos_hoy: number;
+  total_ventas_hoy: number;
+  usuarios_online: number;
+  goroutines: number;
+  heap_alloc_mb: number;
+  sse_canales: number;
+  sse_suscriptores: number;
+  pool_stats?: {
+    max_conns: number;
+    total_conns: number;
+    acquired_conns: number;
+    idle_conns: number;
+  };
+}
 
+export interface TenantResumenPlatform {
+  id: string;
+  nombre: string;
+  nombre_fantasia?: string;
+  slug: string;
+  rubro?: string;
+  plan: string;
+  trial_hasta?: string;
+  created_at: string;
+  total_sucursales: number;
+  total_mesas: number;
+  mesas_activas: number;
+  total_usuarios: number;
+  usuarios_por_rol: Record<string, number>;
+  total_pedidos: number;
+  total_ventas: number;
+  ultimo_pedido_at?: string;
+}
+
+export interface UsuarioPresenciaPlatform {
+  id: string;
+  tenant_id: string;
+  sucursal_id?: string;
+  sucursal_nombre?: string;
+  nombre: string;
+  email: string;
+  username?: string;
+  rol: string;
+  estado: string;
+  ultimo_login_at?: string;
+  ultima_actividad_at?: string;
+  estado_presencia: "online" | "inactivo" | "desconectado";
+  created_at: string;
+}
+
+export interface MovimientoPlatform {
+  id: string;
+  tipo: "pedido" | "usuario" | "invitacion" | "resena" | string;
+  descripcion: string;
+  actor: string;
+  fecha: string;
+  detalle?: Record<string, unknown>;
+}
+
+export interface TenantDetalleActividadPlatform {
+  tenant: TenantResumenPlatform;
+  usuarios: UsuarioPresenciaPlatform[];
+  ultimos_movimientos: MovimientoPlatform[];
+}

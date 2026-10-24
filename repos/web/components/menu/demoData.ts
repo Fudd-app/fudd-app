@@ -24,13 +24,14 @@ export const DEMO_MESA: MesaPublica = {
   cuenta_version: 1,
   nombre: "Bajo Limonero",
   nombre_fantasia: "Bajo Limonero",
+  logo_url: "/demo/bajo-limonero-logo.png",
   color_primario: "#f06c4f",
   color_categoria: "#182825",
   color_accion: "#f06c4f",
   estilo_visual: "claro",
   plan: "pro",
   tipo_fuente: "Inter",
-  mostrar_marca_agua: true,
+  mostrar_marca_agua: false,
   mercadopago_habilitado: true,
 };
 

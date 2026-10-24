@@ -1,76 +1,71 @@
 # fudd — API (Backend)
 
-Servicio backend desarrollado en **Go** para la gestión de pedidos, carta digital y administración de negocios gastronómicos.
+Servicio backend en **Go** para la gestión de negocios gastronómicos: tenants y planes Free/Pro, sucursales, mesas y QR, carta, pedidos y cocina en tiempo real (SSE), equipo y sesiones, métricas, reseñas y pagos con Mercado Pago.
 
-## Estado del desarrollo: Fase 2 Completada
+## Estado del desarrollo
 
-La **Fase 2 (Backend)** está 100% completada y testeada (Sprints 3, 4, 5 y 6). El backend utiliza una arquitectura basada en servicios internos, comunicación en tiempo real mediante SSE y cuenta con su suite de pruebas unitarias e integración en CI.
+Fase 4 — Evolución, Monetización & Analítica. El sprint en curso está en [`AGENTS.md`](../../AGENTS.md) y los issues de este repo (prefijo `[api]`) en el tablero [Fudd APP](https://github.com/orgs/Fudd-app/projects/1).
 
 ## Stack Tecnológico
 
-- **Lenguaje:** Go 1.22+
-- **Base de Datos:** PostgreSQL 16+
+- **Lenguaje:** Go 1.26
+- **Base de Datos:** PostgreSQL (Neon en prod y qa)
 - **Driver DB:** `pgx/v5`
 - **Logging:** `slog` (estándar)
-- **Ruteo:** `net/http` (Mux estándar de Go 1.22)
-- **Migraciones:** Sistema propio basado en SQL puro (idempotente)
+- **Ruteo:** `net/http` (Mux estándar)
+- **Migraciones:** sistema propio basado en SQL puro (idempotente)
 
 ## Estructura del Repositorio
 
 ```
 repos/api/
-├── main.go            ← Entry point: carga env, conecta DB y corre migraciones
-├── rutas.go           ← Definición centralizada de endpoints
+├── main.go              ← entry point: carga env, conecta DB, corre migraciones y levanta HTTP
+├── rutas.go             ← definición centralizada de endpoints
 ├── internal/
-│   ├── db/            ← Gestión del pool de conexiones y lógica de migraciones
-│   ├── auth/          ← Lógica de Magic Link y JWT
-│   ├── tenant/        ← CRUD de negocios
-│   ├── sucursal/      ← CRUD de sucursales y sectores
-│   ├── mesa/          ← CRUD de mesas y generación de QR tokens
-│   ├── carta/         ← CRUD de categorías, artículos y variantes
-│   ├── pedido/        ← Gestión de pedidos y estados
-│   └── notificacion/  ← Broker SSE y comunicación en tiempo real
-├── migrations/        ← Archivos .sql numerados (001 → 012)
-├── .env.example       ← Plantilla de configuración
-└── Dockerfile         ← Imagen para despliegue y desarrollo local
+│   ├── db/              ← pool de conexiones y migraciones
+│   ├── auth/            ← Google Identity, magic link, JWT y sesiones
+│   ├── tenant/          ← negocios, planes Free/Pro y middleware de cuotas
+│   ├── sucursal/        ← sucursales, sectores y horarios
+│   ├── mesa/            ← mesas y QR tokens
+│   ├── carta/           ← categorías, artículos, variantes, disponibilidad y carga masiva
+│   ├── pedido/          ← pedidos y estados por ítem
+│   ├── notificacion/    ← broker SSE
+│   ├── usuario/         ← equipo, invitaciones y ciclo de vida del staff
+│   ├── metrica/         ← agregaciones para el dashboard de KPIs
+│   ├── resenia/         ← reseñas y Smart Google Funnel
+│   └── mercadopago/     ← pago de cuenta (Checkout Pro)
+├── cmd/
+│   ├── seed-demo/       ← siembra datos demo
+│   └── loadtest/        ← generador de carga
+├── migrations/          ← archivos .sql numerados (001 → 033)
+├── .env.example         ← plantilla de configuración
+└── Dockerfile           ← imagen para despliegue y desarrollo local
 ```
 
 ## Guía de Inicio Rápido
 
-### 1. Requisitos
-- Go instalado.
-- Instancia de PostgreSQL activa.
+Lo recomendado es levantar todo el sistema con Docker desde la raíz (`npm run setup` / `npm run dev`, ver [`LOCAL_DEV.md`](../../LOCAL_DEV.md)). Para correr solo la API:
 
-### 2. Configuración
-> 💡 **Para el equipo (Mateo y Martín):** Pedir el archivo `.env` configurado directamente a **Pablo Aguirre**, o crearlo copiando la plantilla:
+1. **Configuración:** pedir el `.env` a **Pablo Aguirre** o crearlo desde la plantilla:
+   ```bash
+   cp .env.example .env
+   ```
+2. **Ejecución:**
+   ```bash
+   go run .
+   ```
+   El servidor corre automáticamente las migraciones pendientes al iniciar.
+3. **Verificación:** `GET /health` devuelve el estado del servidor y la base de datos.
 
-```bash
-cp .env.example .env
-```
+## Convenciones de Desarrollo
 
-### 3. Ejecución
-```bash
-go run .
-```
-El servidor correrá automáticamente las migraciones pendientes al iniciar.
-
-## Endpoints de Verificación
-
-- **Health Check:** `GET /health`
-  Retorna el estado del servidor y la base de datos.
-
-## Convenciones de Desarrollo y Git Workflow
-
-1. **Logs:** Usar `slog.Info`, `slog.Error`, etc. con atributos para logging estructurado.
-2. **Errores:** Seguir el patrón de retorno de errores estándar de Go. En handlers, usar `http.Error` o responder con JSON estructurado.
-3. **Migraciones:** No modificar archivos `.sql` existentes en `migrations/`. Si se requiere un cambio en el esquema, crear un nuevo archivo numerado.
-4. **Contexto:** Respetar los tiempos de expiración y el manejo de contextos en las queries a la base de datos.
-5. **Git Workflow Obligatorio:**
-   - Todo trabajo arranca desde `qa`: `git checkout qa && git pull origin qa`
-   - Crear rama de trabajo: `git checkout -b feat/US-XX-descripcion` o `git checkout -b fix/descripcion`
-   - Probar y verificar tests (`go test ./...`)
-   - PR y validación en `qa`
-   - Una vez aprobado en `qa`, merge a `main` (despliegue automático en **Render** como `mesa-click-api` con Docker en Ohio, servicio Free Web Service).
+1. **Logs:** usar `slog.Info`, `slog.Error`, etc. con atributos para logging estructurado.
+2. **Errores:** patrón de retorno de errores estándar de Go. En handlers, responder con JSON estructurado.
+3. **Migraciones:** no modificar archivos `.sql` existentes en `migrations/`. Todo cambio de esquema va en un archivo nuevo numerado.
+4. **Contexto:** respetar los tiempos de expiración y el manejo de contextos en las queries.
+5. **Tests:** `go test ./...` en verde antes de cada PR; todo bug se corrige con un test que lo reproduce.
+6. **Flujo de trabajo:** issues y PRs con prefijo `[api]`, ramas desde `qa` y code review antes del merge ([`docs/proceso/flujo-de-trabajo.md`](../../docs/proceso/flujo-de-trabajo.md)). Si un cambio altera un contrato (ruta, payload, error, evento SSE), se crea el issue `[web]` para sus consumidores.
+7. **Despliegue:** Render — `qa` → `fidd-app-api-qa`, `main` → `fudd-app-api-prod` ([`docs/deploy/README.md`](../../docs/deploy/README.md)).
 
 ---
 fudd — Práctica Profesionalizante I.

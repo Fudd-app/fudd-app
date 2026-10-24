@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -198,6 +199,63 @@ func TestRequerirCuota(t *testing.T) {
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status: obtenido %d, esperado %d", rec.Code, http.StatusOK)
+		}
+	})
+
+	t.Run("Plan Free sin personalización devuelve mensaje propio, no el de carga masiva", func(t *testing.T) {
+		store := &mockStore{
+			obtenerEstadoCuotasFn: func(ctx context.Context, tenantID string) (*tenant.EstadoCuotas, error) {
+				return &tenant.EstadoCuotas{Plan: tenant.PlanFree}, nil
+			},
+		}
+		mw := tenant.RequerirCuota(store, tenant.RecursoPersonalizacion)
+
+		req := httptest.NewRequest("PATCH", "/carta/categorias/c-1/icono", nil)
+		req = req.WithContext(auth.ContextConClaims(req.Context(), &auth.Claims{TenantID: "t-1"}))
+		rec := httptest.NewRecorder()
+
+		mw(nextOK).ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("status: obtenido %d, esperado %d", rec.Code, http.StatusForbidden)
+		}
+		var payload struct {
+			Error string `json:"error"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decodificando respuesta: %v", err)
+		}
+		if strings.Contains(payload.Error, "carga masiva") {
+			t.Errorf("el mensaje no debe mencionar carga masiva: %q", payload.Error)
+		}
+		if !strings.Contains(payload.Error, "personalización visual") {
+			t.Errorf("el mensaje debe mencionar personalización visual: %q", payload.Error)
+		}
+	})
+
+	t.Run("Plan Free en carga masiva mantiene el mensaje original", func(t *testing.T) {
+		store := &mockStore{
+			obtenerEstadoCuotasFn: func(ctx context.Context, tenantID string) (*tenant.EstadoCuotas, error) {
+				return &tenant.EstadoCuotas{Plan: tenant.PlanFree}, nil
+			},
+		}
+		mw := tenant.RequerirCuota(store, tenant.RecursoCargaMasiva)
+
+		req := httptest.NewRequest("POST", "/carta/importar", nil)
+		req = req.WithContext(auth.ContextConClaims(req.Context(), &auth.Claims{TenantID: "t-1"}))
+		rec := httptest.NewRecorder()
+
+		mw(nextOK).ServeHTTP(rec, req)
+
+		var payload struct {
+			Error string `json:"error"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decodificando respuesta: %v", err)
+		}
+		esperado := "La carga masiva es una funcionalidad exclusiva del plan Pro."
+		if payload.Error != esperado {
+			t.Errorf("error: obtenido %q, esperado %q", payload.Error, esperado)
 		}
 	})
 }

@@ -21,6 +21,8 @@ const ICONOS_CATEGORIA = [
   'local_cafe', 'local_bar', 'liquor', 'emoji_food_beverage',
 ] as const;
 
+const MAX_DESCRIPCION_ARTICULO = 140;
+
 type SelectorFranjaCategoriaProps = {
   categoria: CategoriaConItems;
   franjas: FranjaHorariaAPI[];
@@ -922,12 +924,19 @@ export default function CartaSection() {
               )}
             </div>
           </div>
-          <input
-            className="h-44 w-full rounded-lg border border-concrete bg-canvas-white px-10 text-13 outline-none focus:border-plain-green"
-            placeholder="Descripción (opcional)"
-            value={nuevoItem.descripcion}
-            onChange={e => setNuevoItem(p => ({ ...p, descripcion: e.target.value }))}
-          />
+          <div className="space-y-4">
+            <input
+              className="h-44 w-full rounded-lg border border-concrete bg-canvas-white px-10 text-13 outline-none focus:border-plain-green"
+              placeholder="Descripción (opcional)"
+              value={nuevoItem.descripcion}
+              maxLength={MAX_DESCRIPCION_ARTICULO}
+              aria-describedby="descripcion-articulo-contador"
+              onChange={e => setNuevoItem(p => ({ ...p, descripcion: e.target.value }))}
+            />
+            <p id="descripcion-articulo-contador" className="text-right text-10 text-sage-green" aria-live="polite">
+              {Array.from(nuevoItem.descripcion).length}/{MAX_DESCRIPCION_ARTICULO} caracteres
+            </p>
+          </div>
           <div className="flex flex-col gap-10 rounded-xl border border-dashed border-concrete bg-ghost-fog/35 p-12 sm:flex-row sm:items-center">
             <div className="flex h-[88px] w-full shrink-0 items-center justify-center overflow-hidden rounded-lg border border-concrete bg-canvas-white sm:w-[116px]">
               {nuevoItem.fotoUrl ? (

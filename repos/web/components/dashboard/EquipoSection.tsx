@@ -105,6 +105,7 @@ export default function EquipoSection({
   const [guardandoReset, setGuardandoReset] = useState(false);
 
   const esDuenio = !sesion || sesion.rol === "admin";
+  const sucursalSesionId = sesion?.sucursal_id;
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -129,7 +130,7 @@ export default function EquipoSection({
 
       if (sedesRes.status === "fulfilled" && Array.isArray(sedesRes.value)) {
         setSucursales(sedesRes.value);
-        const defaultSuc = sesion?.sucursal_id || sedesRes.value[0]?.id || "";
+        const defaultSuc = sucursalSesionId || sedesRes.value[0]?.id || "";
         setSucursalId((actual) => actual || defaultSuc);
       }
 
@@ -141,7 +142,7 @@ export default function EquipoSection({
     } finally {
       setLoading(false);
     }
-  }, [sesion?.sucursal_id]);
+  }, [sucursalSesionId]);
 
   useEffect(() => {
     void Promise.resolve().then(cargar);
@@ -601,10 +602,12 @@ export default function EquipoSection({
                   <span className="text-12 font-semibold text-ash-graphite">
                     Nombre de usuario (Alias) *
                   </span>
-                  <div className="flex h-44 items-center rounded-lg border border-concrete bg-canvas-white px-12 focus-within:border-plain-green">
-                    <span className="mr-4 font-mono text-13 text-sage-green">@</span>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute top-1/2 left-12 -translate-y-1/2 font-mono text-13 text-sage-green">
+                      @
+                    </span>
                     <input
-                      className="h-full flex-1 bg-transparent font-mono text-13 outline-none"
+                      className="h-44 w-full rounded-lg border border-concrete bg-canvas-white py-0 pr-12 pl-28 font-mono text-13 outline-none transition-colors focus:border-plain-green"
                       placeholder="mozo_juan"
                       value={username}
                       onChange={(e) => {
@@ -640,7 +643,6 @@ export default function EquipoSection({
                       value={sucursalId}
                       onChange={(e) => setSucursalId(e.target.value)}
                     >
-                      <option value="">Sucursal…</option>
                       {sucursales.map((s) => (
                         <option key={s.id} value={s.id}>
                           {s.nombre}
@@ -671,10 +673,10 @@ export default function EquipoSection({
                   Contraseña inicial *
                 </span>
                 <div className="flex flex-col gap-8 sm:flex-row sm:items-center">
-                  <div className="flex h-44 flex-1 items-center rounded-lg border border-concrete bg-canvas-white px-12 focus-within:border-plain-green">
+                  <div className="relative flex-1">
                     <input
                       type={mostrarPassword ? "text" : "password"}
-                      className="h-full flex-1 bg-transparent font-mono text-13 outline-none"
+                      className="h-44 w-full rounded-lg border border-concrete bg-canvas-white py-0 pr-80 pl-12 font-mono text-13 outline-none transition-colors focus:border-plain-green"
                       placeholder="Mínimo 8 caracteres (letras y números)"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -682,7 +684,7 @@ export default function EquipoSection({
                     <button
                       type="button"
                       onClick={() => setMostrarPassword((p) => !p)}
-                      className="ml-8 text-11 font-semibold text-sage-green hover:text-ash-graphite"
+                      className="absolute top-1/2 right-12 -translate-y-1/2 text-11 font-semibold text-sage-green hover:text-ash-graphite"
                     >
                       {mostrarPassword ? "Ocultar" : "Ver"}
                     </button>
@@ -726,7 +728,6 @@ export default function EquipoSection({
                   onChange={(e) => setSucursalId(e.target.value)}
                   className="h-44 rounded-lg border border-concrete bg-white px-10 text-13"
                 >
-                  <option value="">Sucursal…</option>
                   {sucursales.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.nombre}
@@ -1098,17 +1099,17 @@ export default function EquipoSection({
               <div className="space-y-6">
                 <label className="text-12 font-semibold text-ash-graphite">Nueva contraseña</label>
                 <div className="flex items-center gap-8">
-                  <div className="flex h-44 flex-1 items-center rounded-lg border border-concrete bg-canvas-white px-12 focus-within:border-plain-green">
+                  <div className="relative flex-1">
                     <input
                       type={mostrarPasswordReset ? "text" : "password"}
                       value={nuevaPasswordReset}
                       onChange={(e) => setNuevaPasswordReset(e.target.value)}
-                      className="h-full flex-1 bg-transparent font-mono text-13 outline-none"
+                      className="h-44 w-full rounded-lg border border-concrete bg-canvas-white py-0 pr-80 pl-12 font-mono text-13 outline-none transition-colors focus:border-plain-green"
                     />
                     <button
                       type="button"
                       onClick={() => setMostrarPasswordReset((p) => !p)}
-                      className="text-11 font-semibold text-sage-green"
+                      className="absolute top-1/2 right-12 -translate-y-1/2 text-11 font-semibold text-sage-green hover:text-ash-graphite"
                     >
                       {mostrarPasswordReset ? "Ocultar" : "Ver"}
                     </button>

@@ -33,7 +33,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version-file: repos/api/go.mod
 
       - name: Build and run backend tests
         env:
@@ -55,10 +55,11 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: repos/web/package.json
 
-      - name: Install dependencies & build frontend
+      - name: Install dependencies, lint & build frontend
         run: |
           cd repos/web
           npm ci
+          npm run lint
           npm run build

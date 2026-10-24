@@ -153,6 +153,16 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--color-plain-green);
 }
 
+/* El navegador suele pintar los datos autocompletados de azul. Conservamos el
+   mismo fondo que el resto del control para que no parezca un segundo campo. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--color-ash-graphite);
+  -webkit-box-shadow: 0 0 0 1000px var(--color-canvas-white) inset;
+  box-shadow: 0 0 0 1000px var(--color-canvas-white) inset;
+}
+
 /* Material Symbols is bundled locally from the official Google font. */
 .material-symbols-outlined {
   font-family: var(--font-material-symbols-outlined);
@@ -186,9 +196,16 @@ input:focus, select:focus, textarea:focus {
   min-height: 44px;
 }
 
-:where(button, [role="button"], a, input, select, textarea, summary):focus-visible {
+:where(button, [role="button"], a, select, textarea, summary):focus-visible {
   outline: 3px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+/* Los campos ya comunican foco mediante su borde. En los campos compuestos
+   (ícono o prefijo + input), el foco lo muestra el contenedor y no el input
+   interno, evitando dos contornos superpuestos. */
+input:focus-visible {
+  outline: none;
 }
 
 button,

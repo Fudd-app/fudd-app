@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -227,6 +228,8 @@ func (h *Handlers) MiSesion(w http.ResponseWriter, r *http.Request) {
 		"nombre":      usuario.Nombre,
 		"rol":         usuario.Rol,
 		"sucursal_id": usuario.SucursalID,
+		// Solo informativo para el frontend; la autorización real la aplica RequerirSuperadmin.
+		"es_superadmin": EsSuperadmin(usuario.Email),
 	})
 }
 
@@ -278,6 +281,10 @@ func EscribirSesion(w http.ResponseWriter, r *http.Request, usuario *UsuarioAuth
 		Path:        "/",
 		MaxAge:      60 * 60 * 24 * 30,
 	})
+
+	go func(uid string) {
+		_ = RegistrarLoginUsuario(context.Background(), uid)
+	}(usuario.ID)
 
 	uname := ""
 	if usuario.Username != nil {

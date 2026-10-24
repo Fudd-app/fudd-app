@@ -289,11 +289,11 @@ export default function ImportarCartaModal({ isOpen, onClose, onImportacionCompl
               <div className="grid grid-cols-2 gap-10">
                 <div className="rounded-xl border border-concrete bg-success/10 p-16 text-center">
                   <p className="text-32 font-bold text-ash-graphite">{resultado.creados}</p>
-                  <p className="text-12 text-stone mt-4">artículos importados</p>
+                  <p className="text-12 text-stone mt-4">productos agregados</p>
                 </div>
                 <div className={`rounded-xl border p-16 text-center ${resultado.omitidos > 0 ? "border-alert-red/30 bg-warm-pink/10" : "border-concrete bg-ghost-fog"}`}>
                   <p className="text-32 font-bold text-ash-graphite">{resultado.omitidos}</p>
-                  <p className="text-12 text-stone mt-4">filas omitidas</p>
+                  <p className="text-12 text-stone mt-4">productos o filas ignorados</p>
                 </div>
               </div>
 
@@ -307,7 +307,7 @@ export default function ImportarCartaModal({ isOpen, onClose, onImportacionCompl
               {resultado.errores.length > 0 && (
                 <div className="space-y-8">
                   <p className="text-12 font-bold uppercase tracking-wide text-stone">
-                    Detalle de filas rechazadas
+                    Detalle de filas con errores
                   </p>
                   <div className="max-h-[200px] overflow-y-auto rounded-lg border border-concrete">
                     <table className="w-full text-12">

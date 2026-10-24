@@ -7,10 +7,11 @@ import EquipoSection from "./EquipoSection";
 import PlanesSection from "./PlanesSection";
 import UpgradeModal from "./UpgradeModal";
 import AparienciaMenuPreview from "./AparienciaMenuPreview";
+import AsistentesIaTab from "./AsistentesIaTab";
 
 /* ─────────────────────────── contenedor ─────────────────────────── */
 
-const TABS = ["negocio", "apariencia", "equipo", "sucursales", "planes", "mercadopago"] as const;
+const TABS = ["negocio", "apariencia", "equipo", "sucursales", "planes", "mercadopago", "asistentes"] as const;
 type Tab = (typeof TABS)[number];
 const TAB_LABELS: Record<Tab, string> = {
   negocio: "Negocio",
@@ -19,6 +20,7 @@ const TAB_LABELS: Record<Tab, string> = {
   sucursales: "Sucursales",
   planes: "Planes y Suscripción",
   mercadopago: "Mercado Pago",
+  asistentes: "Asistentes de IA",
 };
 
 export default function ConfiguracionSection({
@@ -68,7 +70,7 @@ export default function ConfiguracionSection({
   const sucursalSel = sucursales.find((s) => s.id === sucursalSelId) ?? null;
 
   return (
-    <div className="mx-auto h-full w-full max-w-[1440px] space-y-20 overflow-y-auto bg-[#F4F6F7] p-16 font-inter sm:p-24 md:p-32">
+    <div className="h-full w-full space-y-20 overflow-y-auto bg-canvas-white p-16 font-inter sm:p-24 md:p-32">
       <header className="flex flex-col gap-12 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
           <h2 className="text-24 font-semibold tracking-[-0.02em] text-ash-graphite sm:text-32">Configuración</h2>
@@ -127,6 +129,7 @@ export default function ConfiguracionSection({
         />
       )}
       {tab === "equipo" && <EquipoTab />}
+      {tab === "asistentes" && <AsistentesIaTab />}
       {tab === "sucursales" && (
         <SucursalesTab
           key={sucursalSelId || "sin-sucursal"}
@@ -473,6 +476,12 @@ type AparienciaForm = {
 };
 
 const COLOR_DEFAULT = DEFAULT_MESA_PRIMARY;
+const FUENTES_CARTA = [
+  { value: "Inter", label: "Inter", detail: "Moderna", family: "var(--font-inter), sans-serif" },
+  { value: "Space Grotesk", label: "Space Grotesk", detail: "Técnica / urbana", family: "var(--font-space-grotesk), sans-serif" },
+  { value: "Playfair Display", label: "Playfair Display", detail: "Elegante / clásica", family: "var(--font-playfair-display), serif" },
+  { value: "system-ui", label: "Sistema", detail: "Nativa del dispositivo", family: "system-ui, sans-serif" },
+] as const;
 
 function esColorHex(valor: string) {
   return /^#[0-9a-fA-F]{6}$/.test(valor);
@@ -659,6 +668,7 @@ function AparienciaTab({
     const guardada = leerAparienciaGuardada(storageKey, fallback);
     aparienciaHidratadaKey.current = storageKey;
     saltarGuardadoInicial.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-hidrata desde localStorage al cambiar de sucursal; leerlo en el render rompe la hidratación
     setApariencia(guardada);
     setOk(false);
     setError(null);
@@ -759,25 +769,43 @@ function AparienciaTab({
             {/* Tipografía de la carta */}
             <Campo label="Tipografía de la carta digital">
               {esPro ? (
-                <select
-                  className={INPUT}
-                  value={tipoFuente}
-                  onChange={(e) => {
-                    setApariencia((prev) => ({ ...prev, tipoFuente: e.target.value }));
-                    setOk(false);
-                  }}
-                >
-                  <option value="Inter">Inter (Predeterminada / Moderna)</option>
-                  <option value="Space Grotesk">Space Grotesk (Técnica / Urbana)</option>
-                  <option value="Playfair Display">Playfair Display (Elegante / Carta Clásica)</option>
-                  <option value="system-ui">Sistema (system-ui / Nativa)</option>
-                </select>
+                <div className="grid grid-cols-1 gap-8 sm:grid-cols-2" role="radiogroup" aria-label="Tipografía de la carta digital">
+                  {FUENTES_CARTA.map((fuente) => {
+                    const activa = tipoFuente === fuente.value;
+                    return (
+                      <button
+                        key={fuente.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={activa}
+                        onClick={() => {
+                          setApariencia((prev) => ({ ...prev, tipoFuente: fuente.value }));
+                          setOk(false);
+                        }}
+                        className={`flex min-h-56 items-center justify-between rounded-lg border px-12 py-8 text-left transition-colors ${
+                          activa
+                            ? "border-plain-green bg-plain-green/5 text-ash-graphite"
+                            : "border-concrete bg-canvas-white text-sage-green hover:border-stone"
+                        }`}
+                        style={{ fontFamily: fuente.family }}
+                      >
+                        <span>
+                          <strong className="block text-14 font-semibold">{fuente.label}</strong>
+                          <small className="mt-1 block text-10 opacity-75">{fuente.detail}</small>
+                        </span>
+                        <span className={`material-symbols-outlined text-18 ${activa ? "text-plain-green" : "text-concrete"}`} aria-hidden="true">
+                          {activa ? "check_circle" : "circle"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               ) : (
                 <div
                   onClick={() => setModalUpgradeOpen(true)}
                   className="h-44 w-full px-12 rounded-lg border border-concrete/70 bg-ghost-fog/40 flex items-center justify-between cursor-pointer group"
                 >
-                  <span className="text-13 text-sage-green font-sans">Inter (Moderna)</span>
+                  <span className="text-13 text-sage-green" style={{ fontFamily: "var(--font-inter), sans-serif" }}>Inter (Moderna)</span>
                   <div className="flex items-center gap-4 text-stone group-hover:text-ash-graphite">
                     <span className="text-10 font-mono uppercase font-semibold">Pro</span>
                     <span className="material-symbols-outlined text-16">lock</span>

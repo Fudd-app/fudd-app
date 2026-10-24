@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
 	"time"
@@ -17,8 +18,10 @@ type VerificadorGoogle interface {
 }
 
 type Service struct {
-	store  Store
-	google VerificadorGoogle
+	store           Store
+	google          VerificadorGoogle
+	ahora           func() time.Time
+	funcionalidades cacheFuncionalidades
 }
 
 func NuevoService(s Store) *Service { return &Service{store: s} }
@@ -27,6 +30,40 @@ var colorHexPattern = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 var slugPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
+var slugsReservados = map[string]struct{}{
+	"admin":         {},
+	"superadmin":    {},
+	"platform":      {},
+	"dashboard":     {},
+	"login":         {},
+	"logout":        {},
+	"auth":          {},
+	"kds":           {},
+	"cocina":        {},
+	"mesa":          {},
+	"mesas":         {},
+	"api":           {},
+	"public":        {},
+	"publica":       {},
+	"static":        {},
+	"pedidos":       {},
+	"pedido":        {},
+	"carta":         {},
+	"menu":          {},
+	"onboarding":    {},
+	"terminos":      {},
+	"privacidad":    {},
+	"ayuda":         {},
+	"status":        {},
+	"health":        {},
+	"configuracion": {},
+}
+
+func EsSlugReservado(slug string) bool {
+	_, reservado := slugsReservados[strings.ToLower(strings.TrimSpace(slug))]
+	return reservado
+}
+
 func NuevoServiceConGoogle(s Store, google VerificadorGoogle) *Service {
 	return &Service{store: s, google: google}
 }
@@ -34,6 +71,9 @@ func NuevoServiceConGoogle(s Store, google VerificadorGoogle) *Service {
 func (svc *Service) Crear(ctx context.Context, input OnboardingInput) (*Tenant, error) {
 	if input.Slug == "" {
 		return nil, fmt.Errorf("%w: slug requerido", ErrValidation)
+	}
+	if EsSlugReservado(input.Slug) {
+		return nil, fmt.Errorf("%w: el nombre en URL está reservado por el sistema", ErrValidation)
 	}
 	if strings.TrimSpace(input.GoogleCredential) != "" {
 		if err := svc.aplicarIdentidadGoogle(ctx, &input); err != nil {
@@ -57,12 +97,16 @@ func (svc *Service) Crear(ctx context.Context, input OnboardingInput) (*Tenant, 
 	input.Password = ""
 	input.GoogleCredential = ""
 	input.Rubro = normalizarRubro(input.Rubro)
+	input.Descripcion = strings.TrimSpace(input.Descripcion)
 	// Los métodos de acceso buscan al usuario por email; guardarlo siempre en
 	// minúsculas evita que un registro con mayúsculas quede inaccesible.
 	input.EmailAdmin = auth.NormalizarEmail(input.EmailAdmin)
 	input.EmailSucursal = auth.NormalizarEmail(input.EmailSucursal)
 	input.SucursalNombre = strings.TrimSpace(input.SucursalNombre)
 	input.Whatsapp = strings.TrimSpace(input.Whatsapp)
+	if input.Whatsapp != "" && !whatsappValido(input.Whatsapp) {
+		return nil, fmt.Errorf("%w: el WhatsApp solo puede contener números, espacios y un + inicial", ErrValidation)
+	}
 	if input.SucursalNombre == "" {
 		input.SucursalNombre = "Casa central"
 	}
@@ -196,6 +240,9 @@ func (svc *Service) SlugDisponible(ctx context.Context, slug string) (bool, erro
 	if !slugPattern.MatchString(slug) {
 		return false, fmt.Errorf("%w: nombre en URL inválido", ErrValidation)
 	}
+	if EsSlugReservado(slug) {
+		return false, nil
+	}
 
 	enUso, err := svc.store.SlugEnUso(ctx, slug)
 	if err != nil {
@@ -246,6 +293,16 @@ func normalizarRubro(r string) string {
 	}
 }
 
+func whatsappValido(value string) bool {
+	for index, char := range value {
+		if (char >= '0' && char <= '9') || char == ' ' || (char == '+' && index == 0) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
 type EstadoPlanDTO struct {
 	Plan                string          `json:"plan"`
 	PlanDesde           *time.Time      `json:"plan_desde"`
@@ -263,6 +320,7 @@ type EstadoPlanDTO struct {
 	Uso                 map[string]int  `json:"uso"`
 	Disponibles         map[string]int  `json:"disponibles"`
 	Alcanzado           map[string]bool `json:"alcanzado"`
+	Funcionalidades     map[string]bool `json:"funcionalidades,omitempty"`
 }
 
 func (svc *Service) EstadoPlan(ctx context.Context, tenantID string) (*EstadoPlanDTO, error) {
@@ -293,6 +351,15 @@ func (svc *Service) EstadoPlan(ctx context.Context, tenantID string) (*EstadoPla
 		diasRestantesPrueba = &dias
 	}
 
+	// Es información adicional: si falla, el resto del estado del plan sigue siendo válido.
+	var funcionalidades map[string]bool
+	accesoMCP, err := svc.AccesoFuncionalidad(ctx, tenantID, RecursoMCP)
+	if err != nil {
+		slog.ErrorContext(ctx, "error consultando funcionalidades del plan", "tenant_id", tenantID, "error", err)
+	} else {
+		funcionalidades = map[string]bool{string(RecursoMCP): accesoMCP}
+	}
+
 	usoMesas := cuotas.Uso[RecursoMesas]
 	usoProductos := cuotas.Uso[RecursoProductos]
 	usoSucursales := cuotas.Uso[RecursoSucursales]
@@ -310,6 +377,7 @@ func (svc *Service) EstadoPlan(ctx context.Context, tenantID string) (*EstadoPla
 		MesesPrueba:         MesesPruebaInicial,
 		UpgradeSolicitadoAt: cuotas.UpgradeSolicitadoAt,
 		UpgradeNota:         cuotas.UpgradeNota,
+		Funcionalidades:     funcionalidades,
 		Uso: map[string]int{
 			string(RecursoMesas):      usoMesas,
 			string(RecursoProductos):  usoProductos,

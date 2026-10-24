@@ -11,9 +11,30 @@ var (
 	ErrMesaCerrada      = errors.New("mesa cerrada")
 	ErrCuentaSolicitada = errors.New("cuenta solicitada")
 	ErrPedidoCerrado    = errors.New("pedido cerrado")
+	ErrPedidoEntregado  = errors.New("pedido entregado")
+
+	// Errores del flujo de estados; el handler los traduce a un código de error estable.
+	ErrSinPermiso          = errors.New("sin permisos para esta transición")
+	ErrTransicionInvalida  = errors.New("transición de estado inválida")
+	ErrModoEntregaInvalido = errors.New("modo_entrega inválido")
+	ErrPedidoSinConfirmar  = errors.New("el pedido todavía no fue confirmado")
 )
 
-var EstadosValidos = []string{"recibido", "preparando", "listo", "cerrado"}
+// Códigos de error que el cliente puede distinguir en el campo "codigo".
+const (
+	CodigoSinPermiso          = "SIN_PERMISO"
+	CodigoTransicionInvalida  = "TRANSICION_INVALIDA"
+	CodigoModoEntregaInvalido = "MODO_ENTREGA_INVALIDO"
+	CodigoPedidoSinConfirmar  = "PEDIDO_SIN_CONFIRMAR"
+	CodigoPedidoEntregado     = "PEDIDO_ENTREGADO"
+)
+
+const (
+	ModoEntregaMesa   = "mesa"
+	ModoEntregaRetiro = "retiro"
+)
+
+var EstadosValidos = []string{"recibido", "confirmado", "preparando", "listo", "entregado", "cerrado"}
 var EstadosItemValidos = []string{"pendiente", "preparando", "listo"}
 
 type Pedido struct {
@@ -56,6 +77,8 @@ type NuevoPedidoInput struct {
 	Origen             string           `json:"-"`
 	CreadoPorUsuarioID string           `json:"-"`
 	CreadoPorNombre    string           `json:"-"`
+	// EstadoInicial es "recibido" salvo que quien lo carga pueda confirmarlo (mozo).
+	EstadoInicial string `json:"-"`
 }
 
 type PedidoAsistidoInput struct {
@@ -75,6 +98,8 @@ type NuevoItemInput struct {
 
 type CambiarEstadoInput struct {
 	Estado string `json:"estado"`
+	// ModoEntrega es obligatorio solo al pasar a "entregado": "mesa" o "retiro".
+	ModoEntrega string `json:"modo_entrega,omitempty"`
 }
 
 type CambiarEstadoItemInput struct {

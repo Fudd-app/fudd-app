@@ -12,6 +12,7 @@ const (
 	RecursoSucursales      Recurso = "sucursales"
 	RecursoCargaMasiva     Recurso = "carga_masiva"    // Pro only
 	RecursoPersonalizacion Recurso = "personalizacion" // Pro only
+	RecursoMCP             Recurso = "mcp"             // configurable por plan y por negocio
 )
 
 const (
@@ -131,6 +132,8 @@ func NombreRecurso(rec Recurso) string {
 		return "carga masiva"
 	case RecursoPersonalizacion:
 		return "personalización visual"
+	case RecursoMCP:
+		return "La conexión con asistentes de IA"
 	default:
 		return string(rec)
 	}

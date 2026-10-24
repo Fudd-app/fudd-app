@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/evento"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/mesa"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/notificacion"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/pedido"
@@ -180,11 +181,11 @@ func (s *Service) ConfirmarPago(ctx context.Context, qrToken string, paymentID s
 	}
 	if existe {
 		return &RegistroPago{
-			MesaID:    mp.ID,
-			PagoID:    paymentID,
-			Monto:     pagoMP.TransactionAmount,
-			Moneda:    "ARS",
-			Estado:    "aprobado",
+			MesaID: mp.ID,
+			PagoID: paymentID,
+			Monto:  pagoMP.TransactionAmount,
+			Moneda: "ARS",
+			Estado: "aprobado",
 		}, nil
 	}
 
@@ -194,7 +195,7 @@ func (s *Service) ConfirmarPago(ctx context.Context, qrToken string, paymentID s
 	}
 
 	// Cerrar la cuenta de la mesa automáticamente
-	if _, err := s.mesaSvc.CerrarCuenta(ctx, mp.ID, mp.TenantID); err != nil {
+	if _, err := s.mesaSvc.CerrarCuenta(evento.ContextoConActor(ctx, evento.MercadoPago()), mp.ID, mp.TenantID); err != nil {
 		slog.ErrorContext(ctx, "error cerrando cuenta de mesa tras pago", "mesa_id", mp.ID, "err", err)
 	}
 
@@ -280,7 +281,7 @@ func (s *Service) ProcesarWebhook(ctx context.Context, query url.Values, dataID 
 	}
 
 	// Cerrar la cuenta de la mesa
-	if _, err := s.mesaSvc.CerrarCuenta(ctx, mesaID, tenantID); err != nil {
+	if _, err := s.mesaSvc.CerrarCuenta(evento.ContextoConActor(ctx, evento.MercadoPago()), mesaID, tenantID); err != nil {
 		slog.ErrorContext(ctx, "error cerrando cuenta desde webhook", "mesa_id", mesaID, "err", err)
 	}
 

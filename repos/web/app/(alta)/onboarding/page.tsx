@@ -8,7 +8,7 @@ import { api, getErrorMessage } from "@/lib/api";
 import LandingIcon, { type LandingIconName } from "@/components/landing/LandingIcon";
 import RegistroBrand from "@/components/registro/RegistroBrand";
 import { useRegistro } from "@/components/registro/RegistroContext";
-import { emailValido, esErrorDeConexion, generarSlug, limpiarSlugEscrito, SLUG_RE } from "@/components/registro/validaciones";
+import { emailValido, esErrorDeConexion, esSlugReservado, generarSlug, limpiarSlugEscrito, SLUG_RE } from "@/components/registro/validaciones";
 import { formatearPrecioPlan, PLAN_MONEDA, PLAN_PRUEBA_MESES } from "@/lib/planes";
 
 const TOTAL_PASOS = 3;
@@ -36,6 +36,12 @@ const HORARIO_ESTANDAR = Object.fromEntries(
 
 type EstadoSlug = "vacio" | "invalido" | "verificando" | "disponible" | "en-uso" | "sin-verificar";
 
+function normalizarWhatsapp(value: string) {
+  const sinInvalidos = value.replace(/[^\d+ ]/g, "");
+  const soloUnPrefijo = sinInvalidos.replace(/\+/g, (signo, offset) => (offset === 0 ? signo : ""));
+  return soloUnPrefijo.replace(/ {2,}/g, " ").slice(0, 25);
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
   const { cuenta, setCuenta } = useRegistro();
@@ -44,6 +50,7 @@ export default function OnboardingPage() {
   const [enviado, setEnviado] = useState(false);
   const [nombreNegocio, setNombreNegocio] = useState("");
   const [rubro, setRubro] = useState(RUBROS[0].valor);
+  const [rubroDetalle, setRubroDetalle] = useState("");
   const [slugManual, setSlugManual] = useState<string | null>(null);
   const [editandoSlug, setEditandoSlug] = useState(false);
   const [resultadoSlug, setResultadoSlug] = useState<{ slug: string; estado: EstadoSlug } | null>(null);
@@ -54,6 +61,7 @@ export default function OnboardingPage() {
   const [creando, setCreando] = useState("");
   const [magicLinkEnviado, setMagicLinkEnviado] = useState<{ email: string; devLink?: string } | null>(null);
   const [error, setError] = useState("");
+  const [negocioCreado, setNegocioCreado] = useState(false);
 
   // Sin datos de cuenta (recarga o acceso directo) no se puede crear el negocio.
   useEffect(() => {
@@ -65,7 +73,8 @@ export default function OnboardingPage() {
 
   // Verifica el nombre en URL con una pequeña espera mientras se escribe.
   useEffect(() => {
-    if (!slugValido) return;
+    // Los slugs reservados se resuelven en estadoSlug sin consultar la API.
+    if (!slugValido || esSlugReservado(slug)) return;
     let cancelado = false;
     const timer = setTimeout(async () => {
       try {
@@ -85,7 +94,9 @@ export default function OnboardingPage() {
     ? "vacio"
     : !slugValido
       ? "invalido"
-      : resultadoSlug?.slug === slug
+      : esSlugReservado(slug)
+        ? "en-uso"
+        : resultadoSlug?.slug === slug
         ? resultadoSlug.estado
         : "verificando";
 
@@ -114,39 +125,43 @@ export default function OnboardingPage() {
 
   const crearNegocio = async () => {
     setError("");
-    setCreando("Creando tu negocio…");
-    try {
-      await api.crearTenant({
-        nombre: nombreNegocio.trim(),
-        nombre_fantasia: nombreNegocio.trim(),
-        slug,
-        rubro,
-        email_admin: cuenta.email,
-        nombre_admin: cuenta.nombre,
-        password: cuenta.usarMagicLink || cuenta.googleCredential ? undefined : cuenta.password,
-        google_credential: cuenta.googleCredential || undefined,
-        sucursal_nombre: nombreSucursal.trim(),
-        whatsapp: whatsapp.trim(),
-        email_sucursal: emailSucursal.trim(),
-        horarios: HORARIO_ESTANDAR,
-      });
-    } catch (err: unknown) {
-      setCreando("");
-      const mensaje = getErrorMessage(err, "No pudimos crear el negocio. Revisá los datos e intentá nuevamente.");
-      const normalizado = mensaje.toLowerCase();
-      if (normalizado.includes("nombre en url")) {
-        setResultadoSlug({ slug, estado: "en-uso" });
-        setEditandoSlug(true);
-        irAPaso(1);
-        setError("Ese nombre en URL ya está en uso. Elegí otro para continuar.");
+    if (!negocioCreado) {
+      setCreando("Creando tu negocio…");
+      try {
+        await api.crearTenant({
+          nombre: nombreNegocio.trim(),
+          nombre_fantasia: nombreNegocio.trim(),
+          slug,
+          rubro,
+          descripcion: rubro === "otro" ? rubroDetalle.trim() : undefined,
+          email_admin: cuenta.email,
+          nombre_admin: cuenta.nombre,
+          password: cuenta.usarMagicLink || cuenta.googleCredential ? undefined : cuenta.password,
+          google_credential: cuenta.googleCredential || undefined,
+          sucursal_nombre: nombreSucursal.trim(),
+          whatsapp: whatsapp.trim(),
+          email_sucursal: emailSucursal.trim(),
+          horarios: HORARIO_ESTANDAR,
+        });
+        setNegocioCreado(true);
+      } catch (err: unknown) {
+        setCreando("");
+        const mensaje = getErrorMessage(err, "No pudimos crear el negocio. Revisá los datos e intentá nuevamente.");
+        const normalizado = mensaje.toLowerCase();
+        if (normalizado.includes("nombre en url")) {
+          setResultadoSlug({ slug, estado: "en-uso" });
+          setEditandoSlug(true);
+          irAPaso(1);
+          setError("Ese nombre en URL ya está en uso. Elegí otro para continuar.");
+          return;
+        }
+        if (normalizado.includes("correo de acceso") || normalizado.includes("cuenta de google")) {
+          setError(`${mensaje} Volvé a crear tu cuenta para continuar.`);
+          return;
+        }
+        setError(mensaje);
         return;
       }
-      if (normalizado.includes("correo de acceso") || normalizado.includes("cuenta de google")) {
-        setError(`${mensaje} Volvé a crear tu cuenta para continuar.`);
-        return;
-      }
-      setError(mensaje);
-      return;
     }
 
     // Si el usuario eligió enlace mágico, se solicita el link y se muestra pantalla de confirmación.
@@ -173,8 +188,8 @@ export default function OnboardingPage() {
         await api.autenticarConPassword(cuenta.email, cuenta.password || "");
       }
     } catch {
-      setCuenta(null);
-      router.replace("/login");
+      setCreando("");
+      setError("Tu negocio ya fue creado, pero no pudimos iniciar sesión automáticamente. Podés reintentar o ingresar con tu correo y contraseña.");
       return;
     }
 
@@ -191,7 +206,6 @@ export default function OnboardingPage() {
       console.warn("No se pudieron crear todas las mesas del registro:", err);
     }
 
-    setCuenta(null);
     router.replace("/dashboard");
   };
 
@@ -266,6 +280,19 @@ export default function OnboardingPage() {
                 </div>
               </fieldset>
 
+              {rubro === "otro" && (
+                <label className="onboarding-field">
+                  <span>¿Qué tipo de negocio es? <em>Opcional</em></span>
+                  <input
+                    value={rubroDetalle}
+                    onChange={(event) => setRubroDetalle(event.target.value.slice(0, 120))}
+                    placeholder="Ej: panadería artesanal, food truck…"
+                    autoFocus
+                  />
+                  <small>Nos ayuda a adaptar mejor la experiencia; podés completarlo después.</small>
+                </label>
+              )}
+
               <div className="slug-preview">
                 <span className="onboarding-icon small"><LandingIcon name="book" size={18} /></span>
                 <div>
@@ -320,7 +347,14 @@ export default function OnboardingPage() {
               <div className="onboarding-field-row">
                 <label className="onboarding-field">
                   <span>WhatsApp <em>Opcional</em></span>
-                  <input value={whatsapp} onChange={(event) => setWhatsapp(event.target.value)} placeholder="+54 9 11 1234 5678" inputMode="tel" />
+                  <input
+                    value={whatsapp}
+                    onChange={(event) => setWhatsapp(normalizarWhatsapp(event.target.value))}
+                    placeholder="+54 9 11 1234 5678"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    aria-label="WhatsApp del local"
+                  />
                 </label>
                 <label className="onboarding-field">
                   <span>Correo del local <em>Opcional</em></span>
@@ -436,10 +470,11 @@ export default function OnboardingPage() {
                     <div role="alert" className="auth-alert">
                       {error}
                       {(error.includes("correo") || error.includes("Google")) && <> <Link href="/registro">Volver a crear la cuenta</Link></>}
+                      {negocioCreado && <> <Link href={`/login?email=${encodeURIComponent(cuenta.email)}`}>Ir a iniciar sesión</Link></>}
                     </div>
                   )}
                   <button type="button" className="onboarding-primary finish" onClick={crearNegocio} disabled={Boolean(creando)}>
-                    {creando || "Crear mi negocio"}
+                    {creando || (negocioCreado ? "Reintentar inicio de sesión" : "Crear mi negocio")}
                   </button>
                   <small>Tu prueba Pro de {PLAN_PRUEBA_MESES} meses comienza al crear el negocio. Después te guiamos para cargar tu primer plato.</small>
                 </div>

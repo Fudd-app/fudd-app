@@ -4,6 +4,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import CartaSection from "@/components/dashboard/CartaSection";
+import NovedadesCampana from "@/components/dashboard/NovedadesCampana";
 import Logo from "@/components/brand/Logo";
 import { api, cerrarSesion, SesionUsuario, Tenant } from "@/lib/api";
 import { ToastProvider, ConfirmProvider } from "@/components/ui";
@@ -18,7 +19,7 @@ const EquipoSection = dynamic(() => import("@/components/dashboard/EquipoSection
 const OnboardingTour = dynamic(() => import("@/components/dashboard/OnboardingTour"), { ssr: false });
 
 type Section = 'carta' | 'mesas' | 'recepcionista' | 'equipo' | 'metricas' | 'resenas' | 'configuracion';
-type ConfiguracionTab = "negocio" | "apariencia" | "equipo" | "sucursales" | "planes" | "mercadopago";
+type ConfiguracionTab = "negocio" | "apariencia" | "equipo" | "sucursales" | "planes" | "mercadopago" | "asistentes";
 
 const DASHBOARD_TOUR_VERSION = "2026-10";
 
@@ -128,7 +129,7 @@ export default function DashboardPage() {
   return (
     <ConfirmProvider>
     <ToastProvider>
-    <div className="flex h-screen flex-col overflow-hidden bg-ghost-fog/45 font-inter">
+    <div className="flex h-[calc(100dvh-var(--qa-banner-offset,0px))] flex-col overflow-hidden bg-ghost-fog/45 font-inter">
       <a
         href="#dashboard-main"
         className="sr-only focus:not-sr-only focus:fixed focus:top-8 focus:left-8 focus:z-50 focus:rounded-lg focus:bg-ash-graphite focus:px-16 focus:py-8 focus:text-13 focus:font-semibold focus:text-canvas-white"
@@ -159,9 +160,6 @@ export default function DashboardPage() {
           </span>
 			{tenant && sesion?.rol === 'admin' && (
             <>
-              <span className="hidden rounded-full border border-concrete bg-ghost-fog px-8 py-2 text-10 font-mono text-sage-green lg:inline-block">
-                /{tenant.slug}
-              </span>
               <button
                 type="button"
                 onClick={() => {
@@ -182,13 +180,13 @@ export default function DashboardPage() {
           )}
         </div>
         <div className="flex shrink-0 items-center gap-4 sm:gap-8">
-          <button
-            type="button"
-            className="flex h-44 w-44 items-center justify-center rounded-lg text-ash-graphite transition-colors hover:bg-ghost-fog"
-            aria-label="Notificaciones"
-          >
-            <span className="material-symbols-outlined text-20" aria-hidden="true">notifications</span>
-          </button>
+          {sesion ? (
+            <NovedadesCampana usuarioId={sesion.id} rol={sesion.rol} />
+          ) : (
+            <span className="flex h-44 w-44 items-center justify-center text-ash-graphite" aria-hidden="true">
+              <span className="material-symbols-outlined text-20">notifications</span>
+            </span>
+          )}
           <div className="relative">
             <button
               type="button"
@@ -212,7 +210,17 @@ export default function DashboardPage() {
                     <p className="truncate text-13 font-semibold text-ash-graphite">{tenant ? tenant.nombre : "Administrador"}</p>
                     <p className="mt-2 truncate text-11 text-sage-green">Sesión activa</p>
                   </div>
-                  <UserMenuItem icon="account_circle" label="Perfil" />
+                  {sesion?.rol === "admin" && (
+                    <UserMenuItem
+                      icon="account_circle"
+                      label="Perfil"
+                      onClick={() => {
+                        setConfiguracionTab("negocio");
+                        setActiveSection("configuracion");
+                        setIsUserMenuOpen(false);
+                      }}
+                    />
+                  )}
 					{sesion?.rol === 'admin' && (
                     <UserMenuItem
                       icon="credit_card"
@@ -227,6 +235,11 @@ export default function DashboardPage() {
 					{sesion?.rol !== 'mozo' && (
                     <Link href="/kds" target="_blank" onClick={() => setIsUserMenuOpen(false)}>
                       <UserMenuItem icon="skillet" label="Pantalla Cocina (KDS) ↗" asSpan />
+                    </Link>
+                  )}
+                  {sesion?.es_superadmin === true && (
+                    <Link href="/superadmin" onClick={() => setIsUserMenuOpen(false)}>
+                      <UserMenuItem icon="admin_panel_settings" label="Control Tower" asSpan />
                     </Link>
                   )}
                   <UserMenuItem
@@ -308,7 +321,7 @@ export default function DashboardPage() {
             >
               <span className="material-symbols-outlined text-20" aria-hidden="true">skillet</span>
               <span className="flex-1 text-13 font-medium">Cocina (KDS)</span>
-              <span className="rounded border border-concrete bg-ghost-fog px-6 py-1 text-10 font-bold text-sage-green">PRO ↗</span>
+			  <span className="material-symbols-outlined text-16" aria-hidden="true">open_in_new</span>
 			</Link>}
 			{(sesion?.rol === 'admin' || sesion?.rol === 'encargado') && <NavItem
               icon="monitoring"
@@ -381,7 +394,7 @@ export default function DashboardPage() {
               {isExpanded && (
                 <div className="flex items-center justify-between flex-1 min-w-0">
                   <span className="text-13 font-medium whitespace-nowrap">Cocina (KDS)</span>
-                  <span className="rounded border border-concrete bg-ghost-fog px-6 py-1 text-10 font-bold text-sage-green">PRO ↗</span>
+                  <span className="material-symbols-outlined text-16" aria-hidden="true">open_in_new</span>
                 </div>
               )}
 			</Link>}

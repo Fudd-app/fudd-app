@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net"
@@ -14,11 +15,14 @@ import (
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/auth"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/carta"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/db"
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/mcp"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/mercadopago"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/mesa"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/metrica"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/notificacion"
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/oauth"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/pedido"
+	"github.com/aguirrepablo-iresm/mesa-click/api/internal/platform"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/resenia"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/sucursal"
 	"github.com/aguirrepablo-iresm/mesa-click/api/internal/tenant"
@@ -95,6 +99,8 @@ func registrarRutas(mux *http.ServeMux) {
 		slog.Warn("sin proveedor de email configurado: el magic link solo se escribe en el log",
 			"produccion", esProduccion)
 	}
+
+	auth.RegistrarHookActividad(platform.InstanciaTracker.RegistrarActividad)
 
 	authStore := auth.NuevoStore()
 	authSvc := auth.NuevoService(authStore, emailSender)
@@ -209,7 +215,7 @@ func registrarRutas(mux *http.ServeMux) {
 	mux.HandleFunc("POST /pedidos", pedidoH.Crear)
 	mux.Handle("POST /pedidos/asistido", conRoles(pedidoH.CrearAsistido, auth.RolDuenio, auth.RolEncargado, auth.RolMozo))
 	mux.Handle("GET /pedidos", conRoles(pedidoH.ListarActivos, auth.RolDuenio, auth.RolEncargado, auth.RolMozo))
-	mux.Handle("PATCH /pedidos/{id}/estado", conRoles(pedidoH.CambiarEstado, auth.RolDuenio, auth.RolEncargado, auth.RolMozo))
+	mux.Handle("PATCH /pedidos/{id}/estado", conRoles(pedidoH.CambiarEstado, auth.RolDuenio, auth.RolEncargado, auth.RolMozo, auth.RolCocinero))
 	mux.Handle("PATCH /pedidos/items/{id}/estado", conRoles(pedidoH.CambiarEstadoItem, auth.RolDuenio, auth.RolEncargado, auth.RolCocinero))
 	mux.Handle("GET /kds/eventos", conRoles(pedidoH.EventosKDS, auth.RolDuenio, auth.RolEncargado, auth.RolCocinero))
 
@@ -239,6 +245,35 @@ func registrarRutas(mux *http.ServeMux) {
 	mux.HandleFunc("POST /publica/mesas/{qr_token}/resena", reseniaH.Crear)
 	mux.HandleFunc("PATCH /publica/mesas/{qr_token}/resena/google-click", reseniaH.RegistrarClickGoogle)
 
+	// OAuth 2.1 para clientes MCP (#55)
+	if oauthCfg, err := oauth.ConfigDesdeEntorno(); err != nil {
+		slog.Error("OAuth MCP deshabilitado", "error", err)
+	} else {
+		oauthSvc := oauth.NuevoService(oauth.NuevoStore(), authStore, negociosOAuth{tenantStore}, tenantSvc, oauthCfg)
+		oauthH := oauth.NuevosHandlers(oauthSvc)
+		mux.HandleFunc("GET /.well-known/oauth-protected-resource", oauthH.MetadataRecurso)
+		mux.HandleFunc("GET /.well-known/oauth-protected-resource/mcp", oauthH.MetadataRecurso)
+		mux.HandleFunc("GET /.well-known/oauth-authorization-server", oauthH.MetadataServidor)
+		mux.HandleFunc("POST /oauth/register", oauthH.Registrar)
+		mux.HandleFunc("GET /oauth/authorize", oauthH.Autorizar)
+		mux.Handle("GET /oauth/solicitudes/{id}", requerirSesion(http.HandlerFunc(oauthH.VerSolicitud)))
+		mux.Handle("POST /oauth/solicitudes/{id}/aprobar", requerirSesion(http.HandlerFunc(oauthH.Aprobar)))
+		mux.Handle("POST /oauth/solicitudes/{id}/rechazar", requerirSesion(http.HandlerFunc(oauthH.Rechazar)))
+		mux.HandleFunc("POST /oauth/token", oauthH.Token)
+		mux.HandleFunc("POST /oauth/revoke", oauthH.Revocar)
+		mux.Handle("GET /oauth/conexiones", requerirSesion(http.HandlerFunc(oauthH.ListarConexiones)))
+		mux.Handle("DELETE /oauth/conexiones/{id}", requerirSesion(http.HandlerFunc(oauthH.RevocarConexion)))
+
+		// Servidor MCP de solo lectura (#56); se habilita con MCP_HABILITADO=true
+		mux.Handle("/mcp", mcp.NuevoHandler(oauthSvc, mcp.Dependencias{
+			Store:    mcp.NuevoStore(),
+			Metricas: metricaSvc,
+			Acceso:   tenantSvc,
+			AppURL:   oauthCfg.AppURL,
+			Ahora:    time.Now,
+		}))
+	}
+
 	// Mercado Pago (Sandbox / Producción)
 	mpAccessToken := os.Getenv("MERCADOPAGO_ACCESS_TOKEN")
 	appURL := os.Getenv("APP_URL")
@@ -251,6 +286,30 @@ func registrarRutas(mux *http.ServeMux) {
 	mux.HandleFunc("POST /publica/mesas/{qr_token}/pago/mercadopago", mpH.CrearPreferencia)
 	mux.HandleFunc("POST /publica/mesas/{qr_token}/pago/mercadopago/confirmar", mpH.ConfirmarPago)
 	mux.HandleFunc("POST /publica/pago/mercadopago/webhook", mpH.Webhook)
+
+	// Superadmin / Telemetría y Control de Plataforma
+	platformStore := platform.NuevoStore()
+	platformSvc := platform.NuevoService(platformStore, platform.InstanciaTracker)
+	platformH := platform.NuevosHandlers(platformSvc)
+	requerirSuper := auth.RequerirSuperadmin(authStore)
+
+	mux.Handle("GET /api/platform/status", requerirSuper(http.HandlerFunc(platformH.Status)))
+	mux.Handle("GET /api/platform/tenants", requerirSuper(http.HandlerFunc(platformH.ListarTenants)))
+	mux.Handle("GET /api/platform/tenants/{id}/actividad", requerirSuper(http.HandlerFunc(platformH.DetalleActividad)))
+}
+
+// negociosOAuth adapta el store de tenants a oauth.Negocios.
+type negociosOAuth struct{ store tenant.Store }
+
+func (n negociosOAuth) NombreNegocio(ctx context.Context, tenantID string) (string, error) {
+	t, err := n.store.ObtenerPorID(ctx, tenantID)
+	if err != nil {
+		return "", err
+	}
+	if t.NombreFantasia != "" {
+		return t.NombreFantasia, nil
+	}
+	return t.Nombre, nil
 }
 
 func handlerHealth(w http.ResponseWriter, r *http.Request) {

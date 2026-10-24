@@ -343,10 +343,32 @@
 }
 
 /* ──────────────── Menu View ──────────────── */
-.menu-view {
-  padding-bottom: 142px;
-  min-height: 100vh;
-  min-height: 100dvh;
+.guest-phone.menu-view {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.guest-menu-page {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.guest-scroll-area {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding-bottom: calc(142px + env(safe-area-inset-bottom));
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.guest-scroll-area::-webkit-scrollbar {
+  display: none;
 }
 
 .guest-header {
@@ -366,7 +388,24 @@
 
 .guest-header > div:first-child {
   display: flex;
+}
+
+.guest-identity {
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.guest-identity > div:last-child {
+  min-width: 0;
+  display: flex;
   flex-direction: column;
+}
+
+.guest-header-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
 }
 
 .guest-venue {
@@ -382,7 +421,7 @@
   text-align: left;
 }
 
-.guest-header > div:first-child > span {
+.guest-identity > div:last-child > span {
   margin-top: 2px;
   color: var(--muted);
   font-size: 10.5px;
@@ -573,7 +612,7 @@
 }
 
 .food-card {
-  min-height: 154px;
+  height: 154px;
   padding: 13px;
   display: grid;
   grid-template-columns: 1fr 122px;
@@ -581,6 +620,7 @@
   border: 1px solid var(--line);
   border-radius: 16px;
   background: var(--surface);
+  overflow: hidden;
   transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
@@ -635,6 +675,7 @@
   font-weight: 700;
   color: var(--ink);
   line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .food-info p {
@@ -642,10 +683,10 @@
   color: var(--muted);
   font-size: 10.5px;
   line-height: 1.45;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  max-height: 2.9em;
   overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .food-info strong {
@@ -721,13 +762,23 @@
   font-size: 13px;
 }
 
-/* ──────────────── Bottom Navigation ──────────────── */
-.guest-bottom-nav {
-  position: fixed;
+/* ──────────────── Bottom Dock ──────────────── */
+.guest-bottom-dock {
+  position: absolute;
   z-index: 25;
-  left: 0;
   right: 0;
+  left: 0;
   bottom: 0;
+  pointer-events: none;
+}
+
+.guest-bottom-dock > * {
+  pointer-events: auto;
+}
+
+.guest-bottom-nav {
+  position: relative;
+  width: 100%;
   height: 70px;
   padding: 8px 24px 10px;
   display: flex;
@@ -735,6 +786,7 @@
   border-top: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.97);
   backdrop-filter: blur(12px);
+  box-sizing: border-box;
 }
 
 .guest-page[data-estilo-visual="oscuro"] .guest-bottom-nav {
@@ -760,6 +812,11 @@
   color: var(--ink);
 }
 
+.guest-bottom-nav button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .guest-bottom-nav button.active {
   color: var(--brand);
 }
@@ -782,11 +839,12 @@
 
 /* ──────────────── Floating Cart Bar ──────────────── */
 .cart-bar {
-  position: fixed;
-  z-index: 26;
-  left: max(14px, calc(50% - 200px));
-  right: max(14px, calc(50% - 200px));
+  position: absolute;
+  z-index: 1;
+  right: 14px;
+  left: 14px;
   bottom: 78px;
+  width: auto;
   height: 54px;
   padding: 0 18px;
   display: flex;
@@ -836,14 +894,16 @@
 
 /* ──────────────── Sheets & Modals ──────────────── */
 .guest-sheet-layer {
-  position: fixed;
+  position: absolute;
   z-index: 50;
   inset: 0;
+  width: auto;
   display: flex;
   align-items: flex-end;
   justify-content: center;
   background: rgba(12, 29, 33, 0.55);
   backdrop-filter: blur(4px);
+  overflow: hidden;
 }
 
 .guest-sheet {
@@ -853,6 +913,7 @@
   border-radius: 24px 24px 0 0;
   background: var(--surface);
   overflow-y: auto;
+  overscroll-behavior: contain;
   animation: sheetUp 0.24s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -916,6 +977,10 @@
   color: var(--muted);
   font-size: 12px;
   line-height: 1.5;
+  max-height: 3em;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .option-title {
@@ -1229,21 +1294,20 @@
 
 @media (min-width: 700px) {
   .guest-page {
+    height: 100vh;
+    height: 100dvh;
     padding: 28px 0;
-  }
-  .guest-phone {
-    min-height: calc(100vh - 56px);
-    height: calc(100vh - 56px);
-    border-radius: 28px;
     overflow: hidden;
   }
-  .guest-bottom-nav,
-  .cart-bar {
-    position: absolute;
+  .guest-phone.menu-view {
+    height: calc(100vh - 56px);
+    height: calc(100dvh - 56px);
+    border-radius: 28px;
+  }
+  .guest-bottom-nav {
+    border-radius: 0 0 28px 28px;
   }
   .guest-sheet-layer {
-    position: absolute;
     border-radius: 28px;
-    overflow: hidden;
   }
 }

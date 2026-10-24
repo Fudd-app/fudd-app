@@ -141,7 +141,7 @@ Sucursal ──── Articulo (opcional: carta por sucursal)
 | `id` | UUID | PK |
 | `mesa_id` | UUID | FK → mesas |
 | `sucursal_id` | UUID | FK → sucursales |
-| `estado` | TEXT | `recibido`, `preparando`, `listo`, `cerrado` |
+| `estado` | TEXT | `recibido`, `confirmado`, `preparando`, `listo`, `entregado`, `cerrado` |
 | `created_at` | TIMESTAMPTZ | |
 | `updated_at` | TIMESTAMPTZ | |
 

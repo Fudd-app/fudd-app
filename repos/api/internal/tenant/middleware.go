@@ -54,7 +54,7 @@ func RequerirCuota(store Store, rec Recurso) func(http.Handler) http.Handler {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusForbidden)
 					_ = json.NewEncoder(w).Encode(ErrorCuotaEnvelope{
-						Error:  "La carga masiva es una funcionalidad exclusiva del plan Pro.",
+						Error:  fmt.Sprintf("La %s es una funcionalidad exclusiva del plan Pro.", NombreRecurso(rec)),
 						Codigo: "PLAN_LIMIT_REACHED",
 						Detalle: DetalleErrorCuota{
 							Recurso: string(rec),
