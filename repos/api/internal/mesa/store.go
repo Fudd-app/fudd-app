@@ -256,7 +256,7 @@ func (s *pgStore) ObtenerPorQRToken(ctx context.Context, token string) (*MesaPub
 		        COALESCE(t.plan, 'free') AS plan,
 		        CASE
 		            WHEN COALESCE(t.plan, 'free') = 'pro' AND (t.plan_hasta IS NULL OR t.plan_hasta > NOW())
-		            THEN COALESCE(t.mostrar_marca_agua, true)
+		            THEN false
 		            ELSE true
 		        END AS mostrar_marca_agua,
 		        CASE WHEN COALESCE(t.plan, 'free') = 'pro' AND (t.plan_hasta IS NULL OR t.plan_hasta > NOW()) THEN t.color_secundario END,
