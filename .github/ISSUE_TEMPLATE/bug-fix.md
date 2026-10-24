@@ -10,6 +10,7 @@ assignees: []
 Flujo completo: docs/proceso/flujo-de-trabajo.md
 - Título: [web] o [api] según dónde está la falla. Si requiere cambios en ambos, crear dos issues.
 - Al crearlo: agregarlo al proyecto Fudd APP y completar Status, Estimación, Sprint, Tipo (Bug / Fix) y Rama.
+- Hotfix (bug en producción que bloquea la operación o expone datos): rama hotfix/<nro-issue>-... desde main. Ver docs/proceso/release.md.
 -->
 
 > **Repo**: `[web] repos/web` | `[api] repos/api`  
@@ -54,3 +55,15 @@ Qué está fallando y en qué pantalla o endpoint ocurre.
 - [ ] Suite completa en verde: `cd repos/api && go test ./...` | `cd repos/web && npm run build`.
 - [ ] Regresión verificada sobre lo listado en la sección 4.
 - [ ] Validado en `qa.fudd.com.ar`.
+
+---
+
+## 6. Novedad para el usuario
+
+<!-- Se usa al cortar un release (docs/proceso/release.md) para armar repos/web/content/novedades.json.
+Solo si suma valor o cambia algo que el usuario ya usaba; nada técnico (dependencias, migraciones, CI, refactors). -->
+
+- **Tipo**: `cambio` (si el usuario notaba el problema) | `No aplica`
+- **Título**: ...
+- **Descripción** (en segunda persona, con las etiquetas que se ven en pantalla): ...
+- **Roles**: `admin` | `encargado` | `mozo` | `cocina`

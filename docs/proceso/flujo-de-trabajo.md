@@ -15,10 +15,12 @@
  3. Crear issue(s) [web] / [api] + proyecto     7. Desarrollar + testear + regresión
  4. Estimar                                     8. Commit + PR hacia qa (sigue En Curso)
                                                 9. Code review del PR
-                                               10. Merge a qa (En QA) → main (Resuelta)
+                                               10. Merge a qa (En QA) → release (Resuelta)
 ```
 
-Ningún desarrollo empieza sin un issue refinado, estimado y cargado en el proyecto.
+Ningún desarrollo empieza sin un issue refinado, estimado y cargado en el proyecto. Esto aplica a **todo** cambio, también a docs y plantillas. La única excepción es un **hotfix** de producción, que sigue el camino rápido de [`release.md`](release.md#hotfix--única-excepción-al-flujo-completo).
+
+El pase de `qa` a producción se hace con el [proceso de release](release.md).
 
 ---
 
@@ -30,6 +32,7 @@ Cada issue toca **un solo** repo interno. El repo va como prefijo del título:
 |---|---|---|
 | `[web]` | `repos/web` (Next.js) | `cd repos/web && npm run build` |
 | `[api]` | `repos/api` (Go) | `cd repos/api && go vet ./... && go test ./...` |
+| `[docs]` | `docs/`, `.github/` y archivos de agentes (`AGENTS.md`, etc.), sin código | Links relativos verificados |
 
 Formatos:
 
@@ -85,7 +88,7 @@ Campos del proyecto a completar en el ítem:
 | **Estimación** | Story points Fibonacci: `1`, `2`, `3`, `5`, `8`. **Más de 8 → dividir el ítem** |
 | **Sprint** | Sprint en el que se planifica. Vacío = backlog (todavía no planificado) |
 | **Tipo** | `Frontend` para `[web]`, `Backend` para `[api]`, `Bug / Fix` para bugs |
-| **Rama** | `feat/<nro-issue>-descripcion-corta` o `fix/<nro-issue>-descripcion-corta` |
+| **Rama** | `feat/<nro-issue>-descripcion-corta`, `fix/<nro-issue>-descripcion-corta` o `docs/<nro-issue>-descripcion-corta` |
 
 Guía de puntos: `1` cambio trivial y localizado · `2` cambio chico en 1–2 archivos · `3` feature chica con tests · `5` feature con varias piezas o migración · `8` feature grande o con incertidumbre.
 
@@ -165,7 +168,7 @@ Los hallazgos se corrigen en la misma rama y se vuelve a pedir review.
 ### 10. Merge y cierre
 
 - PR aprobado + CI verde → merge a `qa` → Status `🧪 En QA`. Validar en `qa.fudd.com.ar`.
-- Validado en QA → PR `qa` → `main` → Status `✅ Resuelta` (el issue se cierra por `Closes #`).
+- Validado en QA → el ítem viaja en el próximo [release](release.md) → Status `✅ Resuelta` (el issue se cierra por el `Closes #` del PR de release; los PRs a `qa` no cierran issues porque `qa` no es la rama default).
 
 ---
 
@@ -177,4 +180,4 @@ Los hallazgos se corrigen en la misma rama y se vuelve a pedir review.
 | `📋 Pendiente` | Refinado y estimado, listo para tomar | Quien refina |
 | `⚡ En Curso` | Asignado, rama creada | Quien lo toma |
 | `🧪 En QA` | Mergeado en `qa`, en validación | Quien mergea |
-| `✅ Resuelta` | En `main` / producción | Quien promueve a `main` |
+| `✅ Resuelta` | En `main` / producción | Quien hace el release |

@@ -94,6 +94,7 @@ mesa-click/
 │   └── web/          ← Frontend Next.js
 ├── docs/
 │   ├── proceso/flujo-de-trabajo.md        ← flujo obligatorio: requerimiento → issue → PR → review
+│   ├── proceso/release.md                 ← pase a producción a demanda, novedades, rollback y hotfix
 │   ├── deploy/README.md                   ← ambientes prod y qa (Vercel, Render, Neon, DNS)
 │   ├── presentations/
 │   │   ├── parte-1/                       ← presentación y status reports 01–03 (1er cuatrimestre)
@@ -150,7 +151,7 @@ Los cambios de UI inspirados en la maqueta siguen la regla general: solo dentro 
 - **KDS (cocina)**: La pantalla de cocina es una vista independiente del dashboard de mozo. Los estados por ítem se propagan por SSE; la impresión térmica (ESC/POS 58/80 mm) debe tolerar fallos con reintento manual.
 - **Disponibilidad & Franjas horarias**: La carta visible del comensal se resuelve combinando disponibilidad del ítem (86), franja horaria de la sucursal y estado de apertura en una sola consulta.
 - **Reseñas & Reputación (Smart Google Funnel)**: Calificación 1 a 5★ + comentario post-consumo (estado "Listo"). Comensales satisfechos (4-5★) reciben CTA directo para recomendar en Google Reviews vía Place ID; valoraciones bajas (1-3★) se retienen internamente como feedback privado y alertan en tiempo real al encargado.
-- **Sprints semanales**: Cada sprint dura 1 semana y culmina con un release desplegado (ver [ambientes](docs/deploy/README.md)).
+- **Sprints semanales**: Cada sprint dura 1 semana. El pase a producción no está atado al sprint: se hace a demanda con el [proceso de release](docs/proceso/release.md) (ver [ambientes](docs/deploy/README.md)).
 - Mantener cobertura de tests en Go y validar compilación con `go test ./...` y `npm run build` en web antes de cada merge.
 
 ---
@@ -170,14 +171,16 @@ Ambos ambientes se despliegan automáticamente al pushear a su rama. Detalle de 
    - `git checkout qa && git pull`
    - `git checkout -b feat/<nro-issue>-descripcion` (features)
    - `git checkout -b fix/<nro-issue>-descripcion` (correcciones de bugs)
+   - `git checkout -b docs/<nro-issue>-descripcion` (docs, plantillas y archivos de agentes)
 2. **Integración en QA**: Al finalizar, abrir PR hacia **`qa`**; se mergea solo después del code review (ver [flujo de trabajo](docs/proceso/flujo-de-trabajo.md)).
-3. **Pase a Producción**: Una vez testeado y validado en `qa`, se mergea hacia **`main`**, lo que despliega automáticamente producción (Vercel + Render).
+3. **Pase a Producción**: a demanda, con una rama `release/vAAAA.MM.DD` cortada desde `qa` y un PR hacia **`main`** (merge commit), que despliega automáticamente producción (Vercel + Render). Incluye pre-flight, novedades para el usuario en `repos/web/content/novedades.json`, tag y GitHub Release. Ver [`docs/proceso/release.md`](docs/proceso/release.md).
+4. **Hotfix**: única excepción al flujo completo. Bug en producción que bloquea la operación o expone datos → rama `hotfix/<nro-issue>-descripcion` desde **`main`**, PR a `main` con review y CI, y PR de vuelta a `qa` en el mismo día.
 
 ---
 
 ## Convenciones generales
-- **Issues y PRs**: el título lleva el repo que toca: `[web]` o `[api]` (ej. `[api] Título`, `[web] BUG: ...`); el número es el que asigna GitHub (`#88`), no se agrega `US-N` en el título. Un ítem toca un solo repo; si necesita ambos, se divide.
-- **Branches**: `feat/<nro-issue>-descripcion` o `fix/<nro-issue>-descripcion` (creadas **siempre y sin excepción** a partir de `qa`). **Nunca commitear directo en `main`**.
+- **Issues y PRs**: el título lleva el repo que toca: `[web]`, `[api]` o `[docs]` (ej. `[api] Título`, `[web] BUG: ...`); el número es el que asigna GitHub (`#88`), no se agrega `US-N` en el título. Un ítem toca un solo repo; si necesita ambos, se divide. Todo cambio, también de docs, lleva issue.
+- **Branches**: `feat/`, `fix/` o `docs/<nro-issue>-descripcion`, creadas a partir de `qa`; la única excepción es `hotfix/*`, que sale de `main`. **Nunca commitear directo en `main`**: solo recibe PRs de `release/*` y `hotfix/*`.
 - **Commits**: Conventional Commits con scope del repo (`feat(web): ...`, `fix(api): ...`). Explicar el "por qué" en lugar del "qué".
 - **Variables de entorno (`.env`)**: Solicitar credenciales y `.env` para la API directamente a **Pablo Aguirre**.
 - **No duplicar lógica**: Si algo ya está en el backend, el frontend solo lo consume.
