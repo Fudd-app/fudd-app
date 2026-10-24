@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
+import { useValorCliente } from "@/lib/useValorCliente";
 
 const QA_HOST_PATTERN = /(^|[-./])(qa|staging)([-./:]|$)/i;
 
@@ -15,31 +16,25 @@ function isQaFromEnv(): boolean {
   return QA_HOST_PATTERN.test(appUrl) || QA_HOST_PATTERN.test(apiUrl);
 }
 
+function isQaEnCliente(): boolean {
+  return isQaFromEnv() || QA_HOST_PATTERN.test(window.location.hostname);
+}
+
 export default function QaBanner() {
-  const [isQa, setIsQa] = useState<boolean>(() => isQaFromEnv());
+  // En el servidor solo se conoce el env; en el cliente también el hostname.
+  const isQa = useValorCliente(isQaEnCliente, isQaFromEnv);
 
   useEffect(() => {
-    const detected =
-      isQaFromEnv() ||
-      (typeof window !== "undefined" &&
-        QA_HOST_PATTERN.test(window.location.hostname));
-
-    setIsQa(detected);
-
-    if (typeof document !== "undefined") {
-      if (detected) {
-        document.documentElement.style.setProperty("--qa-banner-offset", "32px");
-      } else {
-        document.documentElement.style.removeProperty("--qa-banner-offset");
-      }
+    if (isQa) {
+      document.documentElement.style.setProperty("--qa-banner-offset", "32px");
+    } else {
+      document.documentElement.style.removeProperty("--qa-banner-offset");
     }
 
     return () => {
-      if (typeof document !== "undefined") {
-        document.documentElement.style.removeProperty("--qa-banner-offset");
-      }
+      document.documentElement.style.removeProperty("--qa-banner-offset");
     };
-  }, []);
+  }, [isQa]);
 
   if (!isQa) {
     return null;

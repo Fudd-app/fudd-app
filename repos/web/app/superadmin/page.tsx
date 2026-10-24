@@ -129,8 +129,30 @@ export default function SuperadminPage() {
 
   // Detalle / Auditoría
   const [tenantSeleccionadoId, setTenantSeleccionadoId] = useState<string | null>(null);
-  const [detalleActividad, setDetalleActividad] = useState<TenantDetalleActividadPlatform | null>(null);
-  const [cargandoDetalle, setCargandoDetalle] = useState(false);
+  // Se guarda junto al id del tenant para derivar "cargando" y no mostrar el detalle de otro.
+  // data null = la carga falló.
+  const [resultadoDetalle, setResultadoDetalle] = useState<{
+    tenantId: string;
+    data: TenantDetalleActividadPlatform | null;
+  } | null>(null);
+  const detalleActividad =
+    resultadoDetalle && resultadoDetalle.tenantId === tenantSeleccionadoId ? resultadoDetalle.data : null;
+  const cargandoDetalle = tenantSeleccionadoId !== null && resultadoDetalle?.tenantId !== tenantSeleccionadoId;
+  const errorDetalle = tenantSeleccionadoId !== null && !cargandoDetalle && detalleActividad === null;
+  // Cambiarlo vuelve a disparar la carga del detalle para el mismo tenant.
+  const [intentoDetalle, setIntentoDetalle] = useState(0);
+
+  // Al cerrar se descarta el detalle: al reabrir el mismo tenant se muestra "cargando"
+  // en vez de datos viejos que el superadmin podría tomar como actuales.
+  const cerrarDetalle = () => {
+    setTenantSeleccionadoId(null);
+    setResultadoDetalle(null);
+  };
+
+  const reintentarDetalle = () => {
+    setResultadoDetalle(null);
+    setIntentoDetalle((n) => n + 1);
+  };
 
   const mostrarToast = useCallback((msg: string) => {
     setToastMensaje(msg);
@@ -195,27 +217,22 @@ export default function SuperadminPage() {
 
   // 3. Cargar detalle al seleccionar un tenant
   useEffect(() => {
-    if (!tenantSeleccionadoId) {
-      setDetalleActividad(null);
-      return;
-    }
+    if (!tenantSeleccionadoId) return;
+    const tenantId = tenantSeleccionadoId;
     let cancelado = false;
-    setCargandoDetalle(true);
     api
-      .obtenerDetalleActividadTenant(tenantSeleccionadoId)
+      .obtenerDetalleActividadTenant(tenantId)
       .then((data) => {
-        if (!cancelado) setDetalleActividad(data);
+        if (!cancelado) setResultadoDetalle({ tenantId, data });
       })
       .catch((err) => {
         console.error("Error al obtener detalle del tenant", err);
-      })
-      .finally(() => {
-        if (!cancelado) setCargandoDetalle(false);
+        if (!cancelado) setResultadoDetalle({ tenantId, data: null });
       });
     return () => {
       cancelado = true;
     };
-  }, [tenantSeleccionadoId]);
+  }, [tenantSeleccionadoId, intentoDetalle]);
 
   // Contadores por plan
   const conteoPlanes = useMemo(() => {
@@ -983,7 +1000,7 @@ export default function SuperadminPage() {
       {tenantSeleccionadoId && (
         <div
           onClick={(e) => {
-            if (e.target === e.currentTarget) setTenantSeleccionadoId(null);
+            if (e.target === e.currentTarget) cerrarDetalle();
           }}
           className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-xs transition-opacity"
         >
@@ -996,7 +1013,11 @@ export default function SuperadminPage() {
                     Auditoría de comercio
                   </span>
                   <h3 className="mt-1 text-2xl font-bold tracking-tight text-neutral-900">
-                    {detalleActividad ? detalleActividad.tenant.nombre : "Cargando comercio..."}
+                    {detalleActividad
+                      ? detalleActividad.tenant.nombre
+                      : errorDetalle
+                        ? "No pudimos cargar el comercio"
+                        : "Cargando comercio..."}
                   </h3>
                   {detalleActividad && (
                     <div className="flex items-center gap-2 text-xs text-neutral-500 font-mono mt-1">
@@ -1006,7 +1027,7 @@ export default function SuperadminPage() {
                 </div>
 
                 <button
-                  onClick={() => setTenantSeleccionadoId(null)}
+                  onClick={cerrarDetalle}
                   className="rounded-lg p-1.5 text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100 transition"
                 >
                   <span className="material-symbols-outlined text-xl">close</span>
@@ -1212,12 +1233,25 @@ export default function SuperadminPage() {
                     </div>
                   </div>
                 </div>
-              ) : null}
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <span className="material-symbols-outlined text-3xl text-neutral-300">cloud_off</span>
+                  <p className="mt-3 text-sm text-neutral-600">
+                    No pudimos obtener la actividad de este comercio.
+                  </p>
+                  <button
+                    onClick={reintentarDetalle}
+                    className="mt-4 rounded-xl border border-neutral-200 bg-white px-4 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-100 transition"
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="pt-4 border-t border-neutral-200 flex justify-end">
               <button
-                onClick={() => setTenantSeleccionadoId(null)}
+                onClick={cerrarDetalle}
                 className="rounded-xl border border-neutral-200 bg-neutral-100 px-4 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-200 transition"
               >
                 Cerrar Auditoría

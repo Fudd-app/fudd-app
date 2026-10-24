@@ -566,6 +566,7 @@ export default function MesaPage() {
     let isMounted = true;
 
     if (isDemo) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- modo demo: carga la carta mock en el mismo efecto que la carga real por QR; separarla queda fuera del alcance de #114
       setMesa(DEMO_MESA);
       const categoriasMock: MenuCategoryView[] = [
         {

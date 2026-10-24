@@ -105,6 +105,7 @@ export default function EquipoSection({
   const [guardandoReset, setGuardandoReset] = useState(false);
 
   const esDuenio = !sesion || sesion.rol === "admin";
+  const sucursalSesionId = sesion?.sucursal_id;
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -129,7 +130,7 @@ export default function EquipoSection({
 
       if (sedesRes.status === "fulfilled" && Array.isArray(sedesRes.value)) {
         setSucursales(sedesRes.value);
-        const defaultSuc = sesion?.sucursal_id || sedesRes.value[0]?.id || "";
+        const defaultSuc = sucursalSesionId || sedesRes.value[0]?.id || "";
         setSucursalId((actual) => actual || defaultSuc);
       }
 
@@ -141,7 +142,7 @@ export default function EquipoSection({
     } finally {
       setLoading(false);
     }
-  }, [sesion?.sucursal_id]);
+  }, [sucursalSesionId]);
 
   useEffect(() => {
     void Promise.resolve().then(cargar);

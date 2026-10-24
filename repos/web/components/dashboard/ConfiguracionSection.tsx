@@ -668,6 +668,7 @@ function AparienciaTab({
     const guardada = leerAparienciaGuardada(storageKey, fallback);
     aparienciaHidratadaKey.current = storageKey;
     saltarGuardadoInicial.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-hidrata desde localStorage al cambiar de sucursal; leerlo en el render rompe la hidratación
     setApariencia(guardada);
     setOk(false);
     setError(null);

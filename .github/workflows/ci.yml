@@ -57,8 +57,9 @@ jobs:
         with:
           node-version-file: repos/web/package.json
 
-      - name: Install dependencies & build frontend
+      - name: Install dependencies, lint & build frontend
         run: |
           cd repos/web
           npm ci
+          npm run lint
           npm run build

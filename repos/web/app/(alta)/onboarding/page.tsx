@@ -72,11 +72,8 @@ export default function OnboardingPage() {
 
   // Verifica el nombre en URL con una pequeña espera mientras se escribe.
   useEffect(() => {
-    if (!slugValido) return;
-    if (esSlugReservado(slug)) {
-      setResultadoSlug({ slug, estado: "en-uso" });
-      return;
-    }
+    // Los slugs reservados se resuelven en estadoSlug sin consultar la API.
+    if (!slugValido || esSlugReservado(slug)) return;
     let cancelado = false;
     const timer = setTimeout(async () => {
       try {
@@ -96,7 +93,9 @@ export default function OnboardingPage() {
     ? "vacio"
     : !slugValido
       ? "invalido"
-      : resultadoSlug?.slug === slug
+      : esSlugReservado(slug)
+        ? "en-uso"
+        : resultadoSlug?.slug === slug
         ? resultadoSlug.estado
         : "verificando";
 
