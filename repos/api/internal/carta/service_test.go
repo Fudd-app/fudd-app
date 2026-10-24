@@ -130,6 +130,37 @@ func TestCrearArticulo_RechazaFotoNoRaster(t *testing.T) {
 		t.Fatalf("se esperaba ErrValidation para SVG, obtenido %v", err)
 	}
 }
+
+func TestCrearYActualizarArticulo_ValidanLongitudDescripcion(t *testing.T) {
+	svc := carta.NuevoService(&mockStore{})
+	descripcionEnLimite := strings.Repeat("á", 160)
+	descripcionExcedida := strings.Repeat("á", 161)
+
+	if _, err := svc.CrearArticulo(context.Background(), "t-1", carta.ArticuloInput{
+		CategoriaID: "cat-1",
+		Nombre:      "Producto",
+		Descripcion: " " + descripcionEnLimite + " ",
+		Precio:      100,
+	}); err != nil {
+		t.Fatalf("la descripción en el límite debería aceptarse: %v", err)
+	}
+
+	if _, err := svc.CrearArticulo(context.Background(), "t-1", carta.ArticuloInput{
+		CategoriaID: "cat-1",
+		Nombre:      "Producto",
+		Descripcion: descripcionExcedida,
+		Precio:      100,
+	}); !errors.Is(err, carta.ErrValidation) {
+		t.Fatalf("se esperaba ErrValidation al crear con descripción excedida, obtenido %v", err)
+	}
+
+	if _, err := svc.ActualizarArticulo(context.Background(), "art-1", "t-1", carta.ArticuloUpdate{
+		Descripcion: &descripcionExcedida,
+	}); !errors.Is(err, carta.ErrValidation) {
+		t.Fatalf("se esperaba ErrValidation al actualizar con descripción excedida, obtenido %v", err)
+	}
+}
+
 func (m *mockStore) ActualizarArticulo(ctx context.Context, id, tenantID string, u carta.ArticuloUpdate) (*carta.Articulo, error) {
 	return &carta.Articulo{ID: id}, nil
 }
