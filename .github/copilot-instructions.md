@@ -28,4 +28,5 @@ Este repositorio utiliza **AGENTS.md** como la fuente principal de verdad y regl
 
 5. **Frontend (Next.js)**:
    - Next.js App Router (v16+), React 19+, Tailwind CSS v4+, TypeScript estricto (no `any`).
+   - Node.js 24 (fijado en `engines.node` de `repos/web/package.json`).
    - El cliente escanea mesas con código QR, por ende la vista de mesa es mobile-first.

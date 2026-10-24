@@ -37,7 +37,7 @@ mesa-click/
 
 ## Desarrollo local
 
-Requisitos: Docker, Node.js 24+ y (opcional, para correr la API fuera de Docker) Go 1.26+.
+Requisitos: Docker, Node.js 24 y (opcional, para correr la API fuera de Docker) Go 1.26+.
 
 ```powershell
 npm run setup   # primera vez: levanta PostgreSQL, API y web con Docker y siembra datos demo
@@ -57,7 +57,7 @@ cd repos/web; npm run build
 
 | Capa | Tecnología |
 |---|---|
-| Frontend | Next.js 16 (App Router), React 19, Tailwind CSS v4, TypeScript |
+| Frontend | Next.js 16 (App Router), React 19, Tailwind CSS v4, TypeScript, Node.js 24 |
 | Backend | Go 1.26, `net/http` estándar, `slog`, `pgx/v5` |
 | Base de datos | PostgreSQL (Neon en prod y qa) |
 | Auth | Google Identity + magic link/contraseña heredados para admins; JWT en cookie HttpOnly |

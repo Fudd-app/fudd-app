@@ -55,7 +55,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version-file: repos/web/package.json
 
       - name: Install dependencies & build frontend
         run: |

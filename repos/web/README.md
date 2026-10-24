@@ -22,6 +22,7 @@ Disponible en [http://localhost:3000](http://localhost:3000).
 ## Stack
 
 - **Framework**: Next.js 16 (App Router)
+- **Runtime**: Node.js 24 (`engines.node`)
 - **UI**: React 19, Tailwind CSS v4
 - **Lenguaje**: TypeScript estricto
 

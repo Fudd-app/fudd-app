@@ -77,7 +77,7 @@ Estas reglas aplican a cualquier agente de IA (Claude, Gemini, CLI, etc.) que tr
 
 | Capa | Tecnología |
 |---|---|
-| Frontend | Next.js (v16+), React 19+, Tailwind CSS v4+, TypeScript |
+| Frontend | Next.js (v16+), React 19+, Tailwind CSS v4+, TypeScript, Node.js 24 |
 | Backend | Go 1.26, PostgreSQL (`pgx/v5`), net/http estándar |
 | Logging | `slog` (estructurado) |
 | Auth | Google Identity (dueño y staff) + magic link/contraseña heredados para admins; JWT en cookie HttpOnly |
