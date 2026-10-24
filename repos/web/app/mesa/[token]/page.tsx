@@ -465,22 +465,6 @@ export default function MesaPage() {
   const comensalRef = useRef<ComensalIdentity | null>(null);
 
   useEffect(() => {
-    if (!itemParaPersonalizar && !carritoAbierto) return;
-
-    const html = document.documentElement;
-    const previousHtmlOverflow = html.style.overflow;
-    const previousBodyOverflow = document.body.style.overflow;
-
-    html.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      html.style.overflow = previousHtmlOverflow;
-      document.body.style.overflow = previousBodyOverflow;
-    };
-  }, [carritoAbierto, itemParaPersonalizar]);
-
-  useEffect(() => {
     comensalRef.current = comensal;
   }, [comensal]);
 
@@ -821,8 +805,7 @@ export default function MesaPage() {
   // 6. Acciones del comensal
   const volverAlInicioDelTelefono = () => {
     requestAnimationFrame(() => {
-      document.querySelector<HTMLElement>(".guest-phone")?.scrollTo({ top: 0 });
-      window.scrollTo({ top: 0 });
+      document.querySelector<HTMLElement>(".guest-scroll-area")?.scrollTo({ top: 0, behavior: "smooth" });
     });
   };
 
@@ -1078,43 +1061,44 @@ export default function MesaPage() {
   return (
     <div className="guest-page" data-estilo-visual={theme.visualStyle} style={themeStyle}>
       <div className="guest-phone menu-view">
-        {/* Cabecera del restaurante y avatar */}
-        <GuestHeader
-          mesa={mesa}
-          dinerName={comensal?.nombre}
-          onOpenCuenta={() => dispatch({ type: "SET_VISTA", payload: "seguimiento" })}
-          onEditDiner={() => setEditandoComensal(true)}
-        />
-
-        {/* Vista: Seguimiento / Estado del pedido */}
-        {state.vista === "seguimiento" ? (
-          <GuestOrderStatusView
-            mesaNumero={mesa.numero}
-            sector={mesa.sector}
-            pedidos={state.pedidos}
-            estadoPedido={state.estadoPedido}
-            cuentaSolicitada={state.cuentaSolicitada}
-            pagoHabilitado={state.pagoHabilitado}
-            mercadopagoHabilitado={Boolean(mesa.mercadopago_habilitado)}
-            comensalId={comensal?.id}
-            comensalNombre={comensal?.nombre}
-            onVolverCarta={() => dispatch({ type: "SET_VISTA", payload: "carta" })}
-            onPedirCuenta={handlePedirCuenta}
-            onPagarMercadoPago={mesa.mercadopago_habilitado ? handlePagarMercadoPago : undefined}
-            pagandoMP={pagandoMP}
-            pagoExitoso={pagoExitoso}
-            pagoError={pagoError}
-            todosListos={
-              state.pedidos.length > 0 &&
-              state.pedidos.every((p) => p.estado === "listo" || p.estado === "entregado" || p.estado === "cerrado")
-            }
-            yaCalificado={resenaYaEnviada}
-            onCalificar={() => setModalResenaAbierto(true)}
-            formatPrice={formatPrice}
+        <div className="guest-scroll-area">
+          {/* Cabecera del restaurante y avatar */}
+          <GuestHeader
+            mesa={mesa}
+            dinerName={comensal?.nombre}
+            onOpenCuenta={() => dispatch({ type: "SET_VISTA", payload: "seguimiento" })}
+            onEditDiner={() => setEditandoComensal(true)}
           />
-        ) : (
-          /* Vista: Carta / Menú del local */
-          <>
+
+          {/* Vista: Seguimiento / Estado del pedido */}
+          {state.vista === "seguimiento" ? (
+            <GuestOrderStatusView
+              mesaNumero={mesa.numero}
+              sector={mesa.sector}
+              pedidos={state.pedidos}
+              estadoPedido={state.estadoPedido}
+              cuentaSolicitada={state.cuentaSolicitada}
+              pagoHabilitado={state.pagoHabilitado}
+              mercadopagoHabilitado={Boolean(mesa.mercadopago_habilitado)}
+              comensalId={comensal?.id}
+              comensalNombre={comensal?.nombre}
+              onVolverCarta={() => dispatch({ type: "SET_VISTA", payload: "carta" })}
+              onPedirCuenta={handlePedirCuenta}
+              onPagarMercadoPago={mesa.mercadopago_habilitado ? handlePagarMercadoPago : undefined}
+              pagandoMP={pagandoMP}
+              pagoExitoso={pagoExitoso}
+              pagoError={pagoError}
+              todosListos={
+                state.pedidos.length > 0 &&
+                state.pedidos.every((p) => p.estado === "listo" || p.estado === "entregado" || p.estado === "cerrado")
+              }
+              yaCalificado={resenaYaEnviada}
+              onCalificar={() => setModalResenaAbierto(true)}
+              formatPrice={formatPrice}
+            />
+          ) : (
+            /* Vista: Carta / Menú del local */
+            <>
             {/* Buscador y carrusel de categorías sticky */}
             <div className="guest-sticky">
               <label className="guest-search">
@@ -1203,8 +1187,9 @@ export default function MesaPage() {
                 </div>
               )}
             </main>
-          </>
-        )}
+            </>
+          )}
+        </div>
 
         {/* Barra flotante de carrito (cuando hay productos seleccionados) */}
         {totalItemsEnCarrito > 0 && state.vista === "carta" && (
