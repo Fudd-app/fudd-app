@@ -62,3 +62,15 @@ Funcionalidades existentes que toca o podría romper (pantallas, endpoints, tabl
 ## 6. Archivos Clave Involucrados
 
 - `repos/...`
+
+---
+
+## 7. Novedad para el usuario
+
+<!-- Se usa al cortar un release (docs/proceso/release.md) para armar repos/web/content/novedades.json.
+Solo si suma valor o cambia algo que el usuario ya usaba; nada técnico (dependencias, migraciones, CI, refactors). -->
+
+- **Tipo**: `nuevo` | `cambio` | `No aplica`
+- **Título**: ...
+- **Descripción** (en segunda persona, con las etiquetas que se ven en pantalla): ...
+- **Roles**: `admin` | `encargado` | `mozo` | `cocina`

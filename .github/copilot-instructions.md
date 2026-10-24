@@ -4,15 +4,16 @@ Este repositorio utiliza **AGENTS.md** como la fuente principal de verdad y regl
 
 > Consultar siempre y seguir las pautas detalladas en [AGENTS.md](../AGENTS.md).
 >
-> Todo requerimiento, bug o PR sigue el [flujo de trabajo](../docs/proceso/flujo-de-trabajo.md): refinar → issue `[web]`/`[api]` en el proyecto → estimar → rama desde `qa` → tests y regresión → PR → code review → merge.
+> Todo requerimiento, bug o PR sigue el [flujo de trabajo](../docs/proceso/flujo-de-trabajo.md): refinar → issue `[web]`/`[api]`/`[docs]` en el proyecto → estimar → rama desde `qa` → tests y regresión → PR → code review → merge. Aplica también a docs; la única excepción es un hotfix.
 
 ## Reglas clave indispensables:
 
 1. **Git Workflow obligatorio**:
-   - **NUNCA** commitear directo en `main`.
-   - Toda nueva rama de feature (`feat/*`) o corrección (`fix/*`) **DEBE crearse a partir de `qa`** (`git checkout qa && git pull origin qa`).
+   - **NUNCA** commitear directo en `main`: solo recibe PRs de `release/*` y `hotfix/*`.
+   - Toda nueva rama de feature (`feat/*`), corrección (`fix/*`) o docs (`docs/*`) **DEBE crearse a partir de `qa`** (`git checkout qa && git pull origin qa`).
    - Al finalizar el desarrollo y las pruebas, abrir Pull Request hacia `qa`.
-   - Una vez testeado y validado en `qa`, se mergea hacia `main`.
+   - El pase a producción es a demanda, con el [proceso de release](../docs/proceso/release.md): rama `release/vAAAA.MM.DD` desde `qa`, novedades en `repos/web/content/novedades.json`, PR a `main`, tag y GitHub Release.
+   - Hotfix (bug en producción que bloquea la operación o expone datos): rama `hotfix/*` desde `main`, PR a `main` y de vuelta a `qa`.
 
 2. **Entornos y Despliegue** (detalle en `docs/deploy/README.md`):
    - `main` → producción: web en Vercel (`fudd.com.ar`), API en Render (`fudd-app-api-prod`), DB en Neon.
