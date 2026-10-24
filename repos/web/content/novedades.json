@@ -1,0 +1,50 @@
+[
+  {
+    "version": "2026.10.24",
+    "fecha": "2026-10-24",
+    "items": [
+      {
+        "tipo": "nuevo",
+        "titulo": "Confirmá los pedidos antes de que pasen a cocina",
+        "descripcion": "Los pedidos que hacen los comensales aparecen en Recepción como \"Por confirmar\", con el tiempo que llevan esperando. Recién cuando los confirmás llegan a la cocina, así no se prepara nada que el local todavía no aceptó.",
+        "roles": ["admin", "encargado", "mozo"]
+      },
+      {
+        "tipo": "nuevo",
+        "titulo": "Marcá los pedidos como entregados",
+        "descripcion": "Cuando la cocina termina un pedido, Recepción lo muestra en \"Listos para retirar\". Marcalo como \"Entregado en mesa\" o \"Retirado por el cliente\" para cerrar el circuito de cada pedido.",
+        "roles": ["admin", "encargado", "mozo"]
+      },
+      {
+        "tipo": "cambio",
+        "titulo": "La cocina solo ve pedidos confirmados",
+        "descripcion": "La pantalla de cocina muestra únicamente los pedidos que Recepción ya confirmó. Al terminar todos los ítems, el pedido queda como \"Listo para retirar\" y sale de la pantalla cuando se entrega.",
+        "roles": ["admin", "encargado", "mozo", "cocina"]
+      },
+      {
+        "tipo": "cambio",
+        "titulo": "Las mesas con consumo siguen visibles en Recepción",
+        "descripcion": "Una mesa con pedidos entregados queda visible en Recepción hasta que se cierra la cuenta, para que puedas ver qué consumió, sumar pedidos, cobrar y liberarla. En la carta del comensal, el botón ahora dice \"Confirmar pedido\".",
+        "roles": ["admin", "encargado", "mozo"]
+      },
+      {
+        "tipo": "nuevo",
+        "titulo": "Ventas por categoría y mapa de calor",
+        "descripcion": "En Métricas vas a ver cuánto factura cada categoría de la carta y un mapa de calor con los días y horarios de más demanda, para organizar personal e insumos.",
+        "roles": ["admin", "encargado"]
+      },
+      {
+        "tipo": "nuevo",
+        "titulo": "Filtros por fecha y exportación a Excel y PDF",
+        "descripcion": "Filtrá las métricas por hoy, ayer, esta semana, este mes o un rango propio, y descargá el reporte en Excel o como informe PDF.",
+        "roles": ["admin", "encargado"]
+      },
+      {
+        "tipo": "nuevo",
+        "titulo": "Conectá fudd a tu asistente de IA",
+        "descripcion": "Con el plan Pro podés conectar Claude u otros asistentes de IA para consultar el estado del salón, la cocina y el turno conversando. El acceso es de solo lectura y lo administrás desde Configuración → Asistentes de IA.",
+        "roles": ["admin"]
+      }
+    ]
+  }
+]

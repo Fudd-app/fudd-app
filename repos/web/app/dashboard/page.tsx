@@ -4,6 +4,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import CartaSection from "@/components/dashboard/CartaSection";
+import NovedadesCampana from "@/components/dashboard/NovedadesCampana";
 import Logo from "@/components/brand/Logo";
 import { api, cerrarSesion, SesionUsuario, Tenant } from "@/lib/api";
 import { ToastProvider, ConfirmProvider } from "@/components/ui";
@@ -179,13 +180,13 @@ export default function DashboardPage() {
           )}
         </div>
         <div className="flex shrink-0 items-center gap-4 sm:gap-8">
-          <button
-            type="button"
-            className="flex h-44 w-44 items-center justify-center rounded-lg text-ash-graphite transition-colors hover:bg-ghost-fog"
-            aria-label="Notificaciones"
-          >
-            <span className="material-symbols-outlined text-20" aria-hidden="true">notifications</span>
-          </button>
+          {sesion ? (
+            <NovedadesCampana usuarioId={sesion.id} rol={sesion.rol} />
+          ) : (
+            <span className="flex h-44 w-44 items-center justify-center text-ash-graphite" aria-hidden="true">
+              <span className="material-symbols-outlined text-20">notifications</span>
+            </span>
+          )}
           <div className="relative">
             <button
               type="button"
