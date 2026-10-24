@@ -432,7 +432,11 @@ function MesaCard({
         <div className="mt-10 flex items-center justify-between gap-12 border-t border-ghost-fog pt-8">
           <span className="flex min-w-0 items-center gap-6 text-10 text-sage-green">
             <span className="material-symbols-outlined text-15" aria-hidden="true">schedule</span>
-            {ultimaHora ? `Último pedido ${ultimaHora}` : 'Pedido activo'}
+            {ultimaHora
+              ? `Último pedido ${ultimaHora}`
+              : cuentaSolicitada
+                ? 'Cuenta solicitada sin productos'
+                : 'Sin pedidos cargados'}
           </span>
           <span className="shrink-0 font-mono text-14 font-semibold text-ash-graphite">${total.toLocaleString()}</span>
         </div>
@@ -550,6 +554,8 @@ function MesaDetalleModal({
     0,
   );
   const estadoMesa = calcularEstadoMesa(grupo.pedidos);
+  const sinPedidos = grupo.pedidos.length === 0;
+  const etiquetaEstado = sinPedidos && grupo.cuentaSolicitada ? 'Cuenta solicitada' : ESTADO_LABELS[estadoMesa];
   // "Todo listo" solo aplica a pedidos que cocina ya tiene (confirmados o en preparación).
   const hayPendientesDeCocina = grupo.pedidos.some(p => p.estado === 'confirmado' || p.estado === 'preparando');
   const gruposComensales = useMemo(
@@ -595,8 +601,8 @@ function MesaDetalleModal({
               <h2 id={`mesa-detalle-${grupo.key}`} className="text-18 font-semibold text-ash-graphite">
                 Mesa {grupo.mesa}
               </h2>
-              <span className={`shrink-0 rounded-full border px-10 py-3 text-11 font-semibold ${ESTADO_STYLES[estadoMesa]}`}>
-                {ESTADO_LABELS[estadoMesa]}
+              <span className={`shrink-0 rounded-full border px-10 py-3 text-11 font-semibold ${sinPedidos && grupo.cuentaSolicitada ? MESA_CARD_TONES.account.badge : ESTADO_STYLES[estadoMesa]}`}>
+                {etiquetaEstado}
               </span>
             </div>
             <p className="mt-2 text-11 font-mono text-sage-green">
@@ -678,6 +684,11 @@ function MesaDetalleModal({
             <span className="text-13 font-medium text-ash-graphite">Total acumulado de la mesa</span>
             <span className="shrink-0 font-mono text-16 font-semibold text-ash-graphite">${total.toLocaleString()}</span>
           </div>
+          {sinPedidos && (
+            <div className="border-b border-ghost-fog px-16 py-14 text-12 leading-relaxed text-sage-green sm:px-20">
+              Esta mesa solicitó la cuenta sin productos cargados. Podés cerrarla para dejarla disponible nuevamente.
+            </div>
+          )}
           {gruposComensales.length > 0 && (
             <div className="border-b border-ghost-fog px-16 py-14 sm:px-20">
               <h3 className="text-13 font-semibold text-ash-graphite">Cuenta por comensal</h3>
@@ -1229,8 +1240,21 @@ export default function RecepcionistaSection() {
       });
     });
 
+    Object.values(mesas)
+      .filter(mesa => mesa.sucursal_id === sucursal?.id && mesa.cuenta_solicitada && !grupos.has(mesa.id))
+      .forEach(mesa => {
+        grupos.set(mesa.id, {
+          key: mesa.id,
+          mesa: mesa.numero,
+          mesaId: mesa.id,
+          pedidos: [],
+          cuentaSolicitada: true,
+          pagoHabilitado: Boolean(mesa.pago_habilitado),
+        });
+      });
+
     return Array.from(grupos.values());
-  }, [mesas, pedidos]);
+  }, [mesas, pedidos, sucursal?.id]);
   const mesaDetalle = mesasAgrupadas.find(grupo => grupo.key === mesaDetalleKey);
   const conAlerta = mesasAgrupadas.filter(grupo => grupo.cuentaSolicitada);
   const porConfirmar = useMemo(
@@ -1403,7 +1427,7 @@ export default function RecepcionistaSection() {
         </section>
       )}
 
-      {!loading && pedidos.length === 0 && (
+      {!loading && mesasAgrupadas.length === 0 && (
         <EmptyState
           icon={sseConectado ? "receipt_long" : "wifi_off"}
           title="Sin pedidos activos"
