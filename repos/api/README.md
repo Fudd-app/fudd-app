@@ -8,7 +8,7 @@ Fase 4 — Evolución, Monetización & Analítica. El sprint en curso está en [
 
 ## Stack Tecnológico
 
-- **Lenguaje:** Go 1.25
+- **Lenguaje:** Go 1.26
 - **Base de Datos:** PostgreSQL (Neon en prod y qa)
 - **Driver DB:** `pgx/v5`
 - **Logging:** `slog` (estándar)

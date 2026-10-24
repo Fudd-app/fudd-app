@@ -56,12 +56,34 @@ func ParsearCSV(r io.Reader) ([]FilaImportacion, []ErrorFila) {
 	return parsearRegistros(registros)
 }
 
+// limiteDescompresionXLSX acota el tamaño descomprimido del XLSX. El handler
+// limita la subida a 5 MB comprimidos, pero un zip bomb de ese tamaño puede
+// expandirse a varios GB (el default de excelize es 16 GB).
+// Es variable para que los tests usen un límite chico.
+var limiteDescompresionXLSX int64 = 50 << 20 // 50 MB
+
+const (
+	// maxFilasXLSX acota las filas recorridas. excelize rellena cada fila hasta
+	// su última celda: una celda en la columna XFD cuesta ~1 MB por fila aunque
+	// el archivo pese pocos KB, y un número de fila enorme genera millones de
+	// filas vacías. Una carta real no se acerca a este máximo.
+	maxFilasXLSX = 2000
+	// maxColumnasXLSX es cuántas columnas por fila se conservan; el resto se
+	// descarta para no retener filas de 16384 celdas.
+	maxColumnasXLSX = 26 // A–Z
+)
+
 // ParsearXLSX lee un Reader con contenido XLSX y devuelve las filas válidas.
 // Lee la primera hoja del libro.
 func ParsearXLSX(r io.Reader) ([]FilaImportacion, []ErrorFila) {
-	f, err := excelize.OpenReader(r)
+	f, err := excelize.OpenReader(r, excelize.Options{UnzipSizeLimit: limiteDescompresionXLSX})
 	if err != nil {
-		return nil, []ErrorFila{{Fila: 0, Motivo: "archivo Excel malformado: " + err.Error()}}
+		// excelize no exporta este error, solo se distingue por el mensaje.
+		if strings.Contains(err.Error(), "unzip size exceeds") {
+			return nil, []ErrorFila{{Fila: 0, Motivo: fmt.Sprintf(
+				"el archivo Excel es demasiado grande: descomprimido supera los %d MB", limiteDescompresionXLSX>>20)}}
+		}
+		return nil, []ErrorFila{{Fila: 0, Motivo: "archivo Excel malformado o dañado"}}
 	}
 	defer f.Close()
 
@@ -70,15 +92,47 @@ func ParsearXLSX(r io.Reader) ([]FilaImportacion, []ErrorFila) {
 		return nil, []ErrorFila{{Fila: 0, Motivo: "el archivo Excel no tiene hojas"}}
 	}
 
-	filas, err := f.GetRows(hojas[0])
-	if err != nil {
-		return nil, []ErrorFila{{Fila: 0, Motivo: "error leyendo filas del Excel: " + err.Error()}}
+	filas, errFila := leerFilasXLSX(f, hojas[0])
+	if errFila != nil {
+		return nil, []ErrorFila{*errFila}
 	}
 	if len(filas) == 0 {
 		return nil, []ErrorFila{{Fila: 0, Motivo: "la hoja de cálculo está vacía"}}
 	}
 
 	return parsearRegistros(filas)
+}
+
+// leerFilasXLSX recorre la hoja fila por fila aplicando maxFilasXLSX y
+// maxColumnasXLSX. Reemplaza a f.GetRows, que no tiene ninguno de los dos.
+func leerFilasXLSX(f *excelize.File, hoja string) ([][]string, *ErrorFila) {
+	rows, err := f.Rows(hoja)
+	if err != nil {
+		return nil, &ErrorFila{Fila: 0, Motivo: "no se pudieron leer las filas del Excel"}
+	}
+	defer rows.Close()
+
+	var filas [][]string
+	for n := 1; rows.Next(); n++ {
+		if n > maxFilasXLSX {
+			return nil, &ErrorFila{Fila: 0, Motivo: fmt.Sprintf(
+				"el archivo Excel supera el máximo de %d filas", maxFilasXLSX)}
+		}
+		columnas, err := rows.Columns()
+		if err != nil {
+			return nil, &ErrorFila{Fila: 0, Motivo: "no se pudieron leer las filas del Excel"}
+		}
+		if len(columnas) > maxColumnasXLSX {
+			columnas = columnas[:maxColumnasXLSX]
+		}
+		// Copia para soltar el arreglo original, que puede tener 16384 celdas.
+		filas = append(filas, append([]string(nil), columnas...))
+	}
+	if err := rows.Error(); err != nil {
+		return nil, &ErrorFila{Fila: 0, Motivo: "no se pudieron leer las filas del Excel"}
+	}
+
+	return filas, nil
 }
 
 // parsearRegistros convierte la matriz de strings (cabecera + filas) en FilaImportacion.
@@ -249,61 +303,5 @@ func estaVacia(fila []string) bool {
 // ImportarCarta ejecuta la importación en la base de datos.
 // Es llamado desde el Service para separar la lógica de parseo de la de persistencia.
 func (svc *Service) ImportarCarta(ctx context.Context, tenantID string, filas []FilaImportacion) (ResultadoImportacion, error) {
-	resultado := ResultadoImportacion{
-		Errores: []ErrorFila{},
-	}
-
-	if len(filas) == 0 {
-		return resultado, nil
-	}
-
-	// Cache en memoria: nombre de categoría → ID (evita queries repetidas)
-	catCache := map[string]string{}
-
-	for _, fila := range filas {
-		// Resolver categoría
-		catID, err := svc.resolverCategoria(ctx, tenantID, fila.Categoria, catCache)
-		if err != nil {
-			resultado.Errores = append(resultado.Errores, ErrorFila{
-				Fila:   fila.Numero,
-				Motivo: fmt.Sprintf("error resolviendo categoría %q: %v", fila.Categoria, err),
-			})
-			resultado.Omitidos++
-			continue
-		}
-
-		// Crear artículo
-		_, err = svc.store.CrearArticulo(ctx, tenantID, ArticuloInput{
-			CategoriaID: catID,
-			Nombre:      fila.Nombre,
-			Descripcion: fila.Descripcion,
-			Precio:      fila.Precio,
-		})
-		if err != nil {
-			resultado.Errores = append(resultado.Errores, ErrorFila{
-				Fila:   fila.Numero,
-				Motivo: fmt.Sprintf("error creando artículo %q: %v", fila.Nombre, err),
-			})
-			resultado.Omitidos++
-			continue
-		}
-		resultado.Creados++
-	}
-
-	return resultado, nil
-}
-
-// resolverCategoria busca o crea la categoría por nombre, con cache.
-func (svc *Service) resolverCategoria(ctx context.Context, tenantID, nombre string, cache map[string]string) (string, error) {
-	clave := strings.ToLower(strings.TrimSpace(nombre))
-	if id, ok := cache[clave]; ok {
-		return id, nil
-	}
-
-	id, err := svc.store.BuscarOCrearCategoria(ctx, tenantID, nombre)
-	if err != nil {
-		return "", err
-	}
-	cache[clave] = id
-	return id, nil
+	return svc.store.ImportarCartaAtomica(ctx, tenantID, filas)
 }

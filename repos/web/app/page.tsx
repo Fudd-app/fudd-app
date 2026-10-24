@@ -11,7 +11,7 @@ import "@/components/landing/landing.css";
 
 export default function LandingPage() {
   return (
-    <div className="landing font-inter antialiased">
+    <div id="inicio" className="landing font-inter antialiased">
       <LandingHeader />
       <main>
         <LandingHero />

@@ -311,17 +311,11 @@ export default function AparienciaMenuPreview({
     plan: "pro",
     tipo_fuente: tipoFuente,
   });
-  const previewFont =
-    tipoFuente === "system-ui"
-      ? "system-ui, sans-serif"
-      : tipoFuente
-        ? `${tipoFuente}, sans-serif`
-        : "inherit";
   const screenStyle = {
     ...tema.style,
     background: "var(--mesa-background)",
     color: "var(--mesa-text)",
-    fontFamily: previewFont,
+    fontFamily: "var(--mesa-font, var(--font-inter), sans-serif)",
   } as CSSProperties;
 
   return (

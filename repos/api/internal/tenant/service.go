@@ -97,12 +97,16 @@ func (svc *Service) Crear(ctx context.Context, input OnboardingInput) (*Tenant, 
 	input.Password = ""
 	input.GoogleCredential = ""
 	input.Rubro = normalizarRubro(input.Rubro)
+	input.Descripcion = strings.TrimSpace(input.Descripcion)
 	// Los métodos de acceso buscan al usuario por email; guardarlo siempre en
 	// minúsculas evita que un registro con mayúsculas quede inaccesible.
 	input.EmailAdmin = auth.NormalizarEmail(input.EmailAdmin)
 	input.EmailSucursal = auth.NormalizarEmail(input.EmailSucursal)
 	input.SucursalNombre = strings.TrimSpace(input.SucursalNombre)
 	input.Whatsapp = strings.TrimSpace(input.Whatsapp)
+	if input.Whatsapp != "" && !whatsappValido(input.Whatsapp) {
+		return nil, fmt.Errorf("%w: el WhatsApp solo puede contener números, espacios y un + inicial", ErrValidation)
+	}
 	if input.SucursalNombre == "" {
 		input.SucursalNombre = "Casa central"
 	}
@@ -287,6 +291,16 @@ func normalizarRubro(r string) string {
 	default:
 		return "otro"
 	}
+}
+
+func whatsappValido(value string) bool {
+	for index, char := range value {
+		if (char >= '0' && char <= '9') || char == ' ' || (char == '+' && index == 0) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 type EstadoPlanDTO struct {

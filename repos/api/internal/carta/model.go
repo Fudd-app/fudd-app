@@ -4,8 +4,9 @@ import "errors"
 
 // Sentinel errors
 var (
-	ErrNotFound   = errors.New("recurso no encontrado")
-	ErrValidation = errors.New("datos inválidos")
+	ErrNotFound        = errors.New("recurso no encontrado")
+	ErrValidation      = errors.New("datos inválidos")
+	ErrFranjaDuplicada = errors.New("ya existe una franja horaria con ese nombre")
 )
 
 type Categoria struct {

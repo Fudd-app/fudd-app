@@ -284,6 +284,8 @@ func (h *Handlers) AsignarFranjaArticulo(w http.ResponseWriter, r *http.Request)
 
 func (h *Handlers) responderErrorFranja(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
+	case errors.Is(err, ErrFranjaDuplicada):
+		jsonError(w, ErrFranjaDuplicada.Error(), http.StatusConflict)
 	case errors.Is(err, ErrValidation):
 		jsonError(w, err.Error(), http.StatusBadRequest)
 	case errors.Is(err, ErrNotFound):
@@ -418,6 +420,16 @@ func (h *Handlers) ImportarCarta(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, erroresParseo[0].Motivo, http.StatusBadRequest)
 		return
 	}
+	// La carga masiva es todo-o-nada: si alguna fila es inválida, se informa
+	// el reporte completo sin persistir las filas válidas del mismo archivo.
+	if len(erroresParseo) > 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(ResultadoImportacion{
+			Omitidos: len(filas) + len(erroresParseo),
+			Errores:  erroresParseo,
+		})
+		return
+	}
 
 	claims := auth.ClaimsFromContext(r.Context())
 	resultado, err := h.svc.ImportarCarta(r.Context(), claims.TenantID, filas)
@@ -426,10 +438,6 @@ func (h *Handlers) ImportarCarta(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "error interno durante la importación", http.StatusInternalServerError)
 		return
 	}
-
-	// Agregar los errores de parseo a los errores de importación
-	resultado.Errores = append(erroresParseo, resultado.Errores...)
-	resultado.Omitidos += len(erroresParseo)
 
 	slog.InfoContext(r.Context(), "importación completada",
 		"tenant_id", claims.TenantID,
