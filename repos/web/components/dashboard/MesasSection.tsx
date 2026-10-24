@@ -18,13 +18,25 @@ interface QRCanvasProps {
 const origenCliente = () => process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, '') || window.location.origin;
 const origenServidor = () => '';
 
+// Si NEXT_PUBLIC_APP_URL viene mal formada (p. ej. sin esquema) no se genera el QR,
+// en vez de tirar un error durante el render y voltear toda la sección.
+function construirUrlPublica(origin: string, token: string): URL | null {
+  if (!origin) return null;
+  try {
+    return new URL(`/mesa/${encodeURIComponent(token)}`, `${origin}/`);
+  } catch {
+    return null;
+  }
+}
+
 function QRCanvas({ token, mesaNumero, compacto = false, estado, onTomarPedido }: QRCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const toast = useToast();
 
   const origin = useValorCliente(origenCliente, origenServidor);
-  const publicUrl = origin ? new URL(`/mesa/${encodeURIComponent(token)}`, `${origin}/`).toString() : '';
-  const hostname = publicUrl ? new URL(publicUrl).hostname : '';
+  const urlPublica = construirUrlPublica(origin, token);
+  const publicUrl = urlPublica?.toString() ?? '';
+  const hostname = urlPublica?.hostname ?? '';
   const usaOrigenLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
 
   useEffect(() => {

@@ -613,6 +613,9 @@ export default function MetricasSection() {
   const [presetRango, setPresetRango] = useState<PresetRango>("esta_semana");
   const [fechaDesdePersonalizada, setFechaDesdePersonalizada] = useState(() => formatearFechaISO(new Date()));
   const [fechaHastaPersonalizada, setFechaHastaPersonalizada] = useState(() => formatearFechaISO(new Date()));
+  // Los inputs editan un borrador; el rango aplicado (y la consulta) cambia recién con "Aplicar filtro".
+  const [borradorDesde, setBorradorDesde] = useState(fechaDesdePersonalizada);
+  const [borradorHasta, setBorradorHasta] = useState(fechaHastaPersonalizada);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
   const [actualizadoA, setActualizadoA] = useState<Date | null>(null);
@@ -635,22 +638,19 @@ export default function MetricasSection() {
   // cambia de filtro rápido, una respuesta lenta del filtro anterior pisa la nueva.
   const ultimaConsulta = useRef(0);
 
+  // Se dispara sola desde el efecto cuando cambia un filtro aplicado; los handlers solo
+  // cambian el estado, para no consultar dos veces.
   const cargarMetricas = useCallback(
-    async (
-      sucursalSeleccionada = sucursalId,
-      presetSeleccionado = presetRango,
-      desdePersonalizado = fechaDesdePersonalizada,
-      hastaPersonalizado = fechaHastaPersonalizada
-    ) => {
+    async () => {
       const consulta = ++ultimaConsulta.current;
       setCargando(true);
       setError("");
       try {
-        const rango = calcularRango(presetSeleccionado, desdePersonalizado, hastaPersonalizado);
+        const rango = calcularRango(presetRango, fechaDesdePersonalizada, fechaHastaPersonalizada);
         const data = await api.obtenerMetricasResumen({
           desde: rango.desde,
           hasta: rango.hasta,
-          sucursalId: sucursalSeleccionada || undefined,
+          sucursalId: sucursalId || undefined,
         });
         if (consulta !== ultimaConsulta.current) return;
         setResumen(data);
@@ -746,12 +746,7 @@ export default function MetricasSection() {
                 <button
                   key={preset.id}
                   type="button"
-                  onClick={() => {
-                    setPresetRango(preset.id);
-                    if (preset.id !== "personalizado") {
-                      void cargarMetricas(sucursalId, preset.id);
-                    }
-                  }}
+                  onClick={() => setPresetRango(preset.id)}
                   className={`rounded-md px-10 py-5 text-11 font-semibold transition-all ${
                     presetRango === preset.id
                       ? "bg-ash-graphite text-canvas-white shadow-xs"
@@ -770,11 +765,7 @@ export default function MetricasSection() {
             <select
               id="filtro-sucursal-metricas"
               value={sucursalId}
-              onChange={(event) => {
-                const siguienteSucursal = event.target.value;
-                setSucursalId(siguienteSucursal);
-                void cargarMetricas(siguienteSucursal, presetRango);
-              }}
+              onChange={(event) => setSucursalId(event.target.value)}
               className="h-40 min-w-[180px] rounded-lg border border-concrete bg-canvas-white px-12 text-12 text-ash-graphite shadow-xs"
             >
               <option value="">Todo el negocio</option>
@@ -836,9 +827,9 @@ export default function MetricasSection() {
                 <span>Desde:</span>
                 <input
                   type="date"
-                  value={fechaDesdePersonalizada}
-                  max={fechaHastaPersonalizada}
-                  onChange={(e) => setFechaDesdePersonalizada(e.target.value)}
+                  value={borradorDesde}
+                  max={borradorHasta}
+                  onChange={(e) => setBorradorDesde(e.target.value)}
                   className="h-36 rounded-lg border border-concrete bg-ghost-fog px-10 text-12 text-ash-graphite"
                 />
               </div>
@@ -846,22 +837,18 @@ export default function MetricasSection() {
                 <span>Hasta:</span>
                 <input
                   type="date"
-                  value={fechaHastaPersonalizada}
-                  min={fechaDesdePersonalizada}
-                  onChange={(e) => setFechaHastaPersonalizada(e.target.value)}
+                  value={borradorHasta}
+                  min={borradorDesde}
+                  onChange={(e) => setBorradorHasta(e.target.value)}
                   className="h-36 rounded-lg border border-concrete bg-ghost-fog px-10 text-12 text-ash-graphite"
                 />
               </div>
               <button
                 type="button"
-                onClick={() =>
-                  void cargarMetricas(
-                    sucursalId,
-                    "personalizado",
-                    fechaDesdePersonalizada,
-                    fechaHastaPersonalizada
-                  )
-                }
+                onClick={() => {
+                  setFechaDesdePersonalizada(borradorDesde);
+                  setFechaHastaPersonalizada(borradorHasta);
+                }}
                 className="h-36 rounded-lg bg-ash-graphite px-14 text-12 font-semibold text-canvas-white transition-opacity hover:opacity-90"
               >
                 Aplicar filtro

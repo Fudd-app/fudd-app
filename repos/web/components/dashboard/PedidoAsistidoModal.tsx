@@ -50,8 +50,11 @@ export default function PedidoAsistidoModal({ abierto, mesas, mesaInicialId, onC
   }, [articuloId]);
 
   const articulo = useMemo(() => articulos.find((a) => a.id === articuloId), [articuloId, articulos]);
-  // Si la mesa elegida deja de estar activa, se cae a la primera disponible.
-  const mesaSeleccionada = mesas.some((mesa) => mesa.id === mesaId) ? mesaId : mesas[0]?.id ?? '';
+  // Sin mesa elegida se propone la primera activa. Si la elegida deja de estar activa
+  // (SSE, polling) no se cambia en silencio por otra: queda vacía y el mozo vuelve a elegir.
+  const mesaElegidaActiva = mesas.some((mesa) => mesa.id === mesaId);
+  const mesaNoDisponible = mesaId !== '' && !mesaElegidaActiva;
+  const mesaSeleccionada = mesaId === '' ? mesas[0]?.id ?? '' : mesaElegidaActiva ? mesaId : '';
   if (!abierto) return null;
 
   const enviar = async (event: React.FormEvent) => {
@@ -70,7 +73,7 @@ export default function PedidoAsistidoModal({ abierto, mesas, mesaInicialId, onC
     <form onSubmit={enviar} className="max-h-[92vh] w-full max-w-[620px] overflow-y-auto rounded-t-2xl border border-concrete bg-canvas-white p-20 shadow-2xl sm:rounded-2xl sm:p-24">
       <div className="flex items-start justify-between gap-12"><div><p className="text-11 font-mono uppercase tracking-[0.14em] text-sage-green">Origen: mozo</p><h3 className="mt-4 text-22 font-semibold text-ash-graphite">Cargar pedido para una mesa</h3><p className="mt-4 text-12 text-sage-green">Usa la carta, validaciones y circuito KDS reales.</p></div><button type="button" onClick={onClose} className="h-40 w-40 rounded-lg hover:bg-ghost-fog"><span className="material-symbols-outlined">close</span></button></div>
       <div className="mt-20 grid gap-12 sm:grid-cols-2">
-        <label className="text-12 font-semibold">Mesa<select value={mesaSeleccionada} onChange={(e) => setMesaId(e.target.value)} className="mt-6 h-44 w-full rounded-lg border border-concrete bg-white px-10 text-13">{mesas.map((m) => <option key={m.id} value={m.id}>Mesa {m.numero}</option>)}</select></label>
+        <label className="text-12 font-semibold">Mesa<select value={mesaSeleccionada} onChange={(e) => setMesaId(e.target.value)} className="mt-6 h-44 w-full rounded-lg border border-concrete bg-white px-10 text-13">{mesaSeleccionada === '' && <option value="" disabled>Elegí una mesa</option>}{mesas.map((m) => <option key={m.id} value={m.id}>Mesa {m.numero}</option>)}</select>{mesaNoDisponible && <span role="alert" className="mt-4 block text-11 font-normal text-alert-red">La mesa elegida ya no está activa. Elegí otra.</span>}</label>
         <label className="text-12 font-semibold">Alias del cliente (opcional)<input value={alias} onChange={(e) => setAlias(e.target.value)} className="mt-6 h-44 w-full rounded-lg border border-concrete px-10 text-13" placeholder="Ej. Juli" /></label>
         <label className="text-12 font-semibold sm:col-span-2">Producto<select value={articuloId} onChange={(e) => { setArticuloId(e.target.value); setSeleccionadas([]); setVariantes([]); }} className="mt-6 h-44 w-full rounded-lg border border-concrete bg-white px-10 text-13">{articulos.map((a) => <option key={a.id} value={a.id}>{a.nombre} · ${a.precio.toLocaleString()}</option>)}</select></label>
         <label className="text-12 font-semibold">Cantidad<input type="number" min={1} value={cantidad} onChange={(e) => setCantidad(Number(e.target.value))} className="mt-6 h-44 w-full rounded-lg border border-concrete px-10 text-13" /></label>
