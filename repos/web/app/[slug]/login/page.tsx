@@ -221,7 +221,7 @@ export default function LoginEquipoPage() {
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="Ej: mozo_juan o cocina_1"
-                    className="h-full min-h-0 flex-1 rounded-none border-0 bg-transparent p-0 text-13 text-ash-graphite outline-none"
+                    className="h-full min-h-0 flex-1 !rounded-none !border-0 !bg-transparent p-0 text-13 text-ash-graphite outline-none"
                   />
                 </div>
               </label>
@@ -238,7 +238,7 @@ export default function LoginEquipoPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Tu clave de acceso"
-                    className="h-full min-h-0 flex-1 rounded-none border-0 bg-transparent p-0 text-13 text-ash-graphite outline-none"
+                    className="h-full min-h-0 flex-1 !rounded-none !border-0 !bg-transparent p-0 text-13 text-ash-graphite outline-none"
                   />
                   <button
                     type="button"

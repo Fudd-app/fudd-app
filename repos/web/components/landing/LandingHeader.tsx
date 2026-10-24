@@ -1,13 +1,12 @@
 import React from "react";
-import Link from "next/link";
 import Logo from "@/components/brand/Logo";
 import { LandingHeaderActions } from "@/components/landing/SessionCta";
 
 export function LandingBrand() {
   return (
-    <Link href="/" className="landing-brand" aria-label="fudd">
+    <a href="#inicio" className="landing-brand" aria-label="Ir al inicio de fudd">
       <Logo mark="full" className="h-28 w-auto" />
-    </Link>
+    </a>
   );
 }
 

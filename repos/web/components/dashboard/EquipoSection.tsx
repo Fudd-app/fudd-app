@@ -605,7 +605,7 @@ export default function EquipoSection({
                   <div className="flex h-44 items-center rounded-lg border border-concrete bg-canvas-white px-12 focus-within:border-plain-green">
                     <span className="mr-4 font-mono text-13 text-sage-green">@</span>
                     <input
-                      className="h-full min-h-0 flex-1 rounded-none border-0 bg-transparent p-0 font-mono text-13 outline-none"
+                      className="h-full min-h-0 flex-1 !rounded-none !border-0 !bg-transparent p-0 font-mono text-13 outline-none"
                       placeholder="mozo_juan"
                       value={username}
                       onChange={(e) => {
@@ -674,7 +674,7 @@ export default function EquipoSection({
                   <div className="flex h-44 flex-1 items-center rounded-lg border border-concrete bg-canvas-white px-12 focus-within:border-plain-green">
                     <input
                       type={mostrarPassword ? "text" : "password"}
-                      className="h-full min-h-0 flex-1 rounded-none border-0 bg-transparent p-0 font-mono text-13 outline-none"
+                      className="h-full min-h-0 flex-1 !rounded-none !border-0 !bg-transparent p-0 font-mono text-13 outline-none"
                       placeholder="Mínimo 8 caracteres (letras y números)"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
@@ -1102,7 +1102,7 @@ export default function EquipoSection({
                       type={mostrarPasswordReset ? "text" : "password"}
                       value={nuevaPasswordReset}
                       onChange={(e) => setNuevaPasswordReset(e.target.value)}
-                      className="h-full flex-1 bg-transparent font-mono text-13 outline-none"
+                      className="h-full flex-1 !rounded-none !border-0 !bg-transparent p-0 font-mono text-13 outline-none"
                     />
                     <button
                       type="button"
