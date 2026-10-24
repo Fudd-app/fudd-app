@@ -1,10 +1,11 @@
 "use client";
-import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import QRCode from "qrcode";
 import { api, MesaAPI, Sucursal, EstadoPlan, esPlanLimitReached, detallePlanLimit, getErrorMessage } from "@/lib/api";
 import { EmptyState, Skeleton, useToast, useConfirm } from "@/components/ui";
 import UpgradeModal from "./UpgradeModal";
 import PedidoAsistidoModal from "./PedidoAsistidoModal";
+import { useValorCliente } from "@/lib/useValorCliente";
 
 interface QRCanvasProps {
   token: string;
@@ -14,8 +15,6 @@ interface QRCanvasProps {
   onTomarPedido?: () => void;
 }
 
-// El origen de la app no cambia durante la sesión: no hace falta suscribirse a nada.
-const sinSuscripcion = () => () => {};
 const origenCliente = () => process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, '') || window.location.origin;
 const origenServidor = () => '';
 
@@ -23,7 +22,7 @@ function QRCanvas({ token, mesaNumero, compacto = false, estado, onTomarPedido }
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const toast = useToast();
 
-  const origin = useSyncExternalStore(sinSuscripcion, origenCliente, origenServidor);
+  const origin = useValorCliente(origenCliente, origenServidor);
   const publicUrl = origin ? new URL(`/mesa/${encodeURIComponent(token)}`, `${origin}/`).toString() : '';
   const hostname = publicUrl ? new URL(publicUrl).hostname : '';
   const usaOrigenLocal = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';

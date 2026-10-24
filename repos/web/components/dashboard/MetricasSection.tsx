@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   CeldaCalorAPI,
@@ -631,6 +631,10 @@ export default function MetricasSection() {
     };
   }, []);
 
+  // Numera las consultas: solo la última aplica su resultado. Sin esto, si el usuario
+  // cambia de filtro rápido, una respuesta lenta del filtro anterior pisa la nueva.
+  const ultimaConsulta = useRef(0);
+
   const cargarMetricas = useCallback(
     async (
       sucursalSeleccionada = sucursalId,
@@ -638,6 +642,7 @@ export default function MetricasSection() {
       desdePersonalizado = fechaDesdePersonalizada,
       hastaPersonalizado = fechaHastaPersonalizada
     ) => {
+      const consulta = ++ultimaConsulta.current;
       setCargando(true);
       setError("");
       try {
@@ -647,18 +652,22 @@ export default function MetricasSection() {
           hasta: rango.hasta,
           sucursalId: sucursalSeleccionada || undefined,
         });
+        if (consulta !== ultimaConsulta.current) return;
         setResumen(data);
         setActualizadoA(new Date());
       } catch (err) {
+        if (consulta !== ultimaConsulta.current) return;
         setError(getErrorMessage(err, "No pudimos calcular las métricas del negocio."));
       } finally {
-        setCargando(false);
+        if (consulta === ultimaConsulta.current) setCargando(false);
       }
     },
     [sucursalId, presetRango, fechaDesdePersonalizada, fechaHastaPersonalizada]
   );
 
   useEffect(() => {
+    // Diferido a una microtarea porque cargarMetricas hace setState de forma sincrónica
+    // (react-hooks/set-state-in-effect).
     void Promise.resolve().then(() => cargarMetricas());
   }, [cargarMetricas]);
 

@@ -22,15 +22,15 @@ export default function PedidoAsistidoModal({ abierto, mesas, mesaInicialId, onC
   const [seleccionadas, setSeleccionadas] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
-  const [aperturaPrevia, setAperturaPrevia] = useState({ abierto: false, mesaInicialId, mesas });
+  const [aperturaPrevia, setAperturaPrevia] = useState({ abierto: false, mesaInicialId });
 
-  // Al abrir (o si cambian las mesas con el modal abierto) se preselecciona la mesa.
-  // Se ajusta durante el render en lugar de en un efecto para evitar un render extra.
-  if (aperturaPrevia.abierto !== abierto || aperturaPrevia.mesaInicialId !== mesaInicialId || aperturaPrevia.mesas !== mesas) {
-    setAperturaPrevia({ abierto, mesaInicialId, mesas });
+  // Al abrir se parte de la mesa inicial. Se ajusta durante el render en lugar de en un
+  // efecto para evitar un render extra. No se compara `mesas`: los padres pasan un array
+  // nuevo en cada render (SSE, polling) y eso pisaría la mesa que eligió el mozo.
+  if (aperturaPrevia.abierto !== abierto || aperturaPrevia.mesaInicialId !== mesaInicialId) {
+    setAperturaPrevia({ abierto, mesaInicialId });
     if (abierto) {
-      const mesaInicialValida = mesas.some((mesa) => mesa.id === mesaInicialId);
-      setMesaId(mesaInicialValida ? mesaInicialId ?? '' : mesas[0]?.id ?? '');
+      setMesaId(mesaInicialId ?? '');
       setError('');
     }
   }
@@ -42,7 +42,7 @@ export default function PedidoAsistidoModal({ abierto, mesas, mesaInicialId, onC
       setArticulos(visibles);
       setArticuloId((actual) => actual || visibles[0]?.id || '');
     }).catch((err: unknown) => setError(getErrorMessage(err, 'No pudimos cargar la carta.')));
-  }, [abierto, mesas]);
+  }, [abierto]);
 
   useEffect(() => {
     if (!articuloId) return;
@@ -50,7 +50,8 @@ export default function PedidoAsistidoModal({ abierto, mesas, mesaInicialId, onC
   }, [articuloId]);
 
   const articulo = useMemo(() => articulos.find((a) => a.id === articuloId), [articuloId, articulos]);
-  const mesaSeleccionada = mesaId || mesaInicialId || mesas[0]?.id || '';
+  // Si la mesa elegida deja de estar activa, se cae a la primera disponible.
+  const mesaSeleccionada = mesas.some((mesa) => mesa.id === mesaId) ? mesaId : mesas[0]?.id ?? '';
   if (!abierto) return null;
 
   const enviar = async (event: React.FormEvent) => {
